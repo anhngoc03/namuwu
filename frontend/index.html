@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <base target="_top">
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Henlo human</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Fredoka:wght@400;600;700&family=Baloo+2:wght@500;700&display=swap" rel="stylesheet">
-  <?!= include('Stylesheet'); ?>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -27,7 +28,7 @@
     <div class="login-left">
       <!-- Drive image (must be shared as "Anyone with the link"). If this
            still fails to load, download the image and re-upload it somewhere
-           else (e.g. an Apps Script HtmlOutput blob, imgur, or your own host)
+           else (e.g. imgur, Cloudflare Images, or your own host)
            and paste that URL here instead. -->
       <img id="login-img"
            src="https://lh3.googleusercontent.com/d/1P3sWFps-Jrqwuj5WFaHfNiaIcu4E0thw=w1000"
@@ -544,6 +545,12 @@
     </div>
   </div>
 
-  <?!= include('JavaScript'); ?>
+  <!--
+    THỨ TỰ SCRIPT RẤT QUAN TRỌNG:
+    1) gas-bridge.js  — định nghĩa window.google.script.run (shim gọi fetch())
+    2) app.js         — code gốc, dùng google.script.run y hệt bản Apps Script cũ
+  -->
+  <script src="gas-bridge.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

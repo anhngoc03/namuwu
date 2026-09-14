@@ -1,6 +1,15 @@
 /**
- * "Henlo human" — personal web app
+ * "Henlo human" — personal web app (BACKEND API ONLY)
  * Backed by Google Sheet: 13-sKgLhvfS2Vx0GO_o4d6xbu0SFX5HNlA4pE6orD0Og
+ *
+ * KIẾN TRÚC MỚI:
+ *   - Frontend  : Cloudflare Pages (HTML/CSS/JS tĩnh, gọi API bằng fetch())
+ *   - Backend   : Google Apps Script Web App (file này) — chỉ trả JSON, KHÔNG render HTML nữa
+ *   - Database  : Google Sheets (không đổi)
+ *
+ * Toàn bộ hàm nghiệp vụ bên dưới (checkPassword, getAccountsData, ...) được giữ
+ * NGUYÊN VẸN 100% so với bản gốc — chỉ thêm phần "API ROUTER" ở cuối file để
+ * doGet/doPost nhận request từ frontend và trả về JSON thay vì render HTML.
  *
  * Sheets used:
  *  - Pass        : Menu | Pass          (rows: "General" -> main login pass, "DS_accounts" -> accounts pass)
@@ -10,17 +19,9 @@
 
 const SHEET_ID = '13-sKgLhvfS2Vx0GO_o4d6xbu0SFX5HNlA4pE6orD0Og';
 
-function doGet() {
-  return HtmlService.createTemplateFromFile('Index')
-    .evaluate()
-    .setTitle('Henlo human')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-}
-
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
-}
+// ⚠️ Đổi URL này thành đúng domain Cloudflare Pages của bạn sau khi deploy frontend.
+// Dùng '*' trong lúc phát triển/test, nhưng nên giới hạn lại domain thật khi lên production.
+const ALLOWED_ORIGIN = '*';
 
 function getSS_() {
   return SpreadsheetApp.openById(SHEET_ID);
@@ -436,4 +437,105 @@ function resetEatingData() {
   for (let i = 1; i <= 31; i++) rows.push(['', '', '', '']);
   sh.getRange(2, 2, 31, 4).setValues(rows);
   return getEatingData();
+}
+
+/* ============================================================
+ *  API ROUTER  (PHẦN MỚI — thay thế cho doGet render HTML cũ)
+ *  Frontend (Cloudflare Pages) gọi vào đây bằng fetch() dạng:
+ *     POST {exec-url}
+ *     body: JSON.stringify({ action: 'tenHam', args: [tham_so_1, tham_so_2, ...] })
+ *
+ *  Response luôn có dạng:
+ *     { ok: true,  data: <kết quả trả về của hàm> }
+ *     { ok: false, error: '<thông báo lỗi>' }
+ * ============================================================ */
+
+// Danh sách "trắng" các hàm được phép gọi từ frontend — ánh xạ tên (string) -> function.
+// Ánh xạ tường minh (không dùng eval / global lookup) để đảm bảo an toàn.
+function getActionMap_() {
+  return {
+    // AUTH
+    checkPassword: checkPassword,
+    // ACCOUNTS
+    getAccountsData: getAccountsData,
+    addAccountRow: addAccountRow,
+    updateAccountRow: updateAccountRow,
+    saveAccountType: saveAccountType,
+    // SYMBOLS
+    getSymbolsData: getSymbolsData,
+    addSymbol: addSymbol,
+    addSymbolsBatch: addSymbolsBatch,
+    // SAVING
+    getSavingData: getSavingData,
+    saveSavingDays: saveSavingDays,
+    resetSaving: resetSaving,
+    // MEMORY MATCH LEADERBOARD
+    getLeaderboard: getLeaderboard,
+    submitScore: submitScore,
+    // MOCHI FLY LEADERBOARD
+    getMochiLeaderboard: getMochiLeaderboard,
+    submitMochiScore: submitMochiScore,
+    // ICD LOOKUP
+    getIcdData: getIcdData,
+    addIcdRow: addIcdRow,
+    updateIcdRow: updateIcdRow,
+    // EATING TRACKER
+    getEatingData: getEatingData,
+    saveEatingDay: saveEatingDay,
+    resetEatingData: resetEatingData
+  };
+}
+
+// POST — dùng cho MỌI lời gọi từ frontend (kể cả các hàm chỉ đọc dữ liệu).
+// Dùng POST cho tất cả để tránh giới hạn độ dài URL của GET khi tham số là mảng/object lớn
+// (ví dụ: saveAccountType với danh sách rows, addSymbolsBatch với danh sách items, ...).
+function doPost(e) {
+  return handleApiRequest_(e);
+}
+
+// GET — hỗ trợ thêm để tiện test nhanh trên trình duyệt:
+//   {exec-url}?action=getSymbolsData&args=[]
+// (KHÔNG bắt buộc dùng ở frontend chính thức — frontend luôn dùng POST)
+function doGet(e) {
+  return handleApiRequest_(e);
+}
+
+function handleApiRequest_(e) {
+  let action = '';
+  try {
+    let args = [];
+
+    if (e && e.postData && e.postData.contents) {
+      // Request dạng POST — body là JSON: { action, args }
+      const body = JSON.parse(e.postData.contents);
+      action = body.action;
+      args = body.args || [];
+    } else if (e && e.parameter && e.parameter.action) {
+      // Request dạng GET — ?action=...&args=[...]
+      action = e.parameter.action;
+      args = e.parameter.args ? JSON.parse(e.parameter.args) : [];
+    } else {
+      throw new Error('Thiếu tham số "action"');
+    }
+
+    const actionMap = getActionMap_();
+    const fn = actionMap[action];
+    if (typeof fn !== 'function') {
+      throw new Error('Action không hợp lệ: ' + action);
+    }
+
+    const result = fn.apply(null, args);
+    return jsonOutput_({ ok: true, data: (result === undefined ? null : result) });
+  } catch (err) {
+    return jsonOutput_({ ok: false, error: err && err.message ? err.message : String(err) });
+  }
+}
+
+function jsonOutput_(obj) {
+  // ContentService trả JSON — Apps Script Web App tự động cho phép gọi cross-origin (CORS)
+  // khi request là "simple request" (POST với Content-Type mặc định text/plain từ fetch()),
+  // nên KHÔNG cần/khÔng thể set thêm header Access-Control-Allow-Origin thủ công ở đây.
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
 }
