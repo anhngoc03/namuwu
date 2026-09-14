@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Fredoka:wght@400;600;700&family=Baloo+2:wght@500;700&display=swap" rel="stylesheet">
+  <?!= include('Stylesheet'); ?>
+</head>
+<body>
+
+  <div id="flower-field"></div>
+  <div id="toast" class="toast"></div>
+  <div id="footer-credit">created by namu •˖*</div>
+
+  <!-- ================= LOADING OVERLAY ================= -->
+  <div id="loading-overlay" class="loading-overlay">
+    <div class="loading-box">
+      <div class="loading-flowers">
+        <span>✿</span><span>✿</span><span>✿</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= LOGIN SCREEN ================= -->
+  <div id="login-screen" class="screen active">
+    <div class="login-left">
+      <!-- Drive image (must be shared as "Anyone with the link"). If this
+           still fails to load, download the image and re-upload it somewhere
+           else (e.g. an Apps Script HtmlOutput blob, imgur, or your own host)
+           and paste that URL here instead. -->
+      <img id="login-img"
+           src="https://lh3.googleusercontent.com/d/1P3sWFps-Jrqwuj5WFaHfNiaIcu4E0thw=w1000"
+           data-fallback1="https://drive.google.com/thumbnail?id=1P3sWFps-Jrqwuj5WFaHfNiaIcu4E0thw&sz=w1000"
+           data-fallback2="https://drive.google.com/uc?export=view&id=1P3sWFps-Jrqwuj5WFaHfNiaIcu4E0thw"
+           onerror="imgFallback(this)"
+           alt="Henlo human">
+    </div>
+    <div class="login-right">
+      <h1 class="brand-title brand-font">Henlo human</h1>
+      <p class="login-tagline">A little place for my little things ✿</p>
+      <div class="pw-label">Password</div>
+      <div id="login-boxes" class="pw-boxes">
+        <div class="pw-box"></div>
+        <div class="pw-box"></div>
+        <div class="pw-box"></div>
+        <div class="pw-box"></div>
+      </div>
+      <div id="login-pad" class="numpad"></div>
+      <div id="login-status" class="pw-status"></div>
+      <div class="pw-hint">My deadline isn't done, but I'm sure done ✿</div>
+    </div>
+  </div>
+
+  <!-- ================= APP SCREEN ================= -->
+  <div id="app-screen" class="screen">
+
+    <header class="navbar">
+      <div class="navbar-inner">
+        <button id="accounts-back" class="back-btn" style="display:none;">← Tools</button>
+        <button id="symbols-back" class="back-btn" style="display:none;">← Tools</button>
+        <button id="saving-back" class="back-btn" style="display:none;">← Tools</button>
+        <button id="datediff-back" class="back-btn" style="display:none;">← Tools</button>
+        <button id="icd-back" class="back-btn" style="display:none;">← Tools</button>
+        <button id="eating-back" class="back-btn" style="display:none;">← Tools</button>
+        <button id="memory-back" class="back-btn" style="display:none;">← Games</button>
+        <button id="mochi-back" class="back-btn" style="display:none;">← Games</button>
+
+        <div class="navbar-brand">Henlo human</div>
+        <nav class="navbar-links">
+          <button id="nav-home" class="navbar-link active" data-nav-section="home">Home</button>
+          <button id="nav-tools" class="navbar-link" data-nav-section="tools">Tools</button>
+          <button id="nav-games" class="navbar-link" data-nav-section="games">Games</button>
+        </nav>
+        <button id="logout-btn" class="navbar-logout" title="Log out">Exit ✿</button>
+      </div>
+    </header>
+
+    <main class="page-container">
+
+      <div id="menu-view" class="app-view">
+        <div class="home-hero">
+          <h1 class="hero-title brand-font">Henlo human</h1>
+          <p class="hero-subtitle">A little place for my little things ✿</p>
+        </div>
+
+        <section class="content-section tools">
+          <div class="section-header">
+            <h2 class="section-title">Tools</h2>
+            <p class="section-desc">Useful things for everyday use.</p>
+          </div>
+          <div class="nav-card-grid">
+            <button id="open-accounts" class="nav-card" data-accent="blue">
+              <span class="nav-card-emoji">'ㅅ'</span>
+              <div class="nav-card-body">
+                <div class="nav-card-title">Accounts</div>
+                <div class="nav-card-desc">Store and manage saved accounts</div>
+              </div>
+              <div class="nav-card-arrow">→</div>
+            </button>
+            <button id="open-symbols" class="nav-card" data-accent="lavender">
+              <span class="nav-card-emoji">✿</span>
+              <div class="nav-card-body">
+                <div class="nav-card-title">Symbols</div>
+                <div class="nav-card-desc">Copy useful symbols and kaomoji</div>
+              </div>
+              <div class="nav-card-arrow">→</div>
+            </button>
+            <button id="open-saving" class="nav-card" data-accent="green">
+              <span class="nav-card-emoji">⪩. .⪨</span>
+              <div class="nav-card-body">
+                <div class="nav-card-title">Saving</div>
+                <div class="nav-card-desc">A little day-by-day saving log</div>
+              </div>
+              <div class="nav-card-arrow">→</div>
+            </button>
+            <button id="open-datediff" class="nav-card" data-accent="blue">
+              <span class="nav-card-emoji">ִ ࣪𖤐</span>
+              <div class="nav-card-body">
+                <div class="nav-card-title">Day Counter</div>
+                <div class="nav-card-desc">Count the days between two dates</div>
+              </div>
+              <div class="nav-card-arrow">→</div>
+            </button>
+            <button id="open-icd" class="nav-card" data-accent="lavender">
+              <span class="nav-card-emoji">⚕</span>
+              <div class="nav-card-body">
+                <div class="nav-card-title">ICD Lookup</div>
+                <div class="nav-card-desc">Quickly search ICD codes</div>
+              </div>
+              <div class="nav-card-arrow">→</div>
+            </button>
+            <button id="open-eating" class="nav-card" data-accent="green">
+              <span class="nav-card-emoji">𐂐</span>
+              <div class="nav-card-body">
+                <div class="nav-card-title">Eating Tracker</div>
+                <div class="nav-card-desc">Track monthly spending on snacks</div>
+              </div>
+              <div class="nav-card-arrow">→</div>
+            </button>
+          </div>
+        </section>
+
+        <section class="content-section games">
+          <div class="section-header">
+            <h2 class="section-title">Games</h2>
+            <p class="section-desc">Take a little break.</p>
+          </div>
+          <div class="nav-card-grid">
+            <button id="open-memory" class="nav-card" data-accent="pink">
+              <span class="nav-card-emoji">🧁</span>
+              <div class="nav-card-body">
+                <div class="nav-card-title">Memory Match</div>
+                <div class="nav-card-desc">A tiny memory matching game</div>
+              </div>
+              <div class="nav-card-arrow">→</div>
+            </button>
+            <button id="open-mochi" class="nav-card" data-accent="pink">
+              <span class="nav-card-emoji">🍡</span>
+              <div class="nav-card-body">
+                <div class="nav-card-title">Mochi Fly</div>
+                <div class="nav-card-desc">A tiny flying game</div>
+              </div>
+              <div class="nav-card-arrow">→</div>
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <!-- -------- ACCOUNTS VIEW -------- -->
+      <div id="accounts-view" class="app-view" style="display:none;">
+        <div class="page-header">
+          <h2 class="page-title">Accounts</h2>
+          <p class="page-subtitle">Store and manage your saved accounts.</p>
+        </div>
+        <div class="types-row">
+          <label for="type-select">Types</label>
+          <select id="type-select"></select>
+          <button id="btn-add-type" class="pill-btn" style="margin-left:auto;">+ Add</button>
+        </div>
+        <div id="accounts-list"></div>
+      </div>
+
+      <!-- -------- SYMBOLS VIEW -------- -->
+      <div id="symbols-view" class="app-view" style="display:none;">
+        <div class="page-header">
+          <h2 class="page-title">Symbols</h2>
+          <p class="page-subtitle">Tap any symbol to copy it.</p>
+        </div>
+        <div class="symbols-topbar">
+          <span class="symbols-hint">Tap to copy ✿</span>
+          <button id="btn-open-add-symbol" class="pill-btn">Add</button>
+        </div>
+        <div id="symbols-small-grid" class="symbols-small-grid"></div>
+        <div id="symbols-animal-grid" class="symbols-animal-grid"></div>
+        <div id="symbols-medium-grid" class="symbols-medium-grid"></div>
+      </div>
+
+      <!-- -------- SAVING VIEW -------- -->
+      <div id="saving-view" class="app-view" style="display:none;">
+        <div class="page-header">
+          <h2 class="page-title">Saving</h2>
+          <p class="page-subtitle">Little by little, day by day.</p>
+        </div>
+
+        <div class="saving-top-row">
+          <div class="saving-picks-panel">
+            <div class="saving-picks-grid">
+              <div class="saving-pick-cell" id="saving-pick-0"></div>
+              <div class="saving-pick-cell" id="saving-pick-1"></div>
+              <div class="saving-pick-cell" id="saving-pick-2"></div>
+              <div class="saving-pick-cell" id="saving-pick-3"></div>
+              <div class="saving-pick-cell" id="saving-pick-4"></div>
+              <div class="saving-pick-cell saving-pick-sum" id="saving-pick-sum">0</div>
+            </div>
+            <button id="saving-clear" class="pill-btn secondary">Clear</button>
+          </div>
+
+          <div class="saving-random-box">
+            <div class="saving-random-label">Random Day</div>
+            <div id="saving-random-number" class="saving-random-number">--</div>
+            <button id="saving-random-btn" class="pill-btn">Random</button>
+          </div>
+        </div>
+
+        <div id="saving-days-grid" class="saving-days-grid"></div>
+
+        <div class="saving-bottom-row">
+          <div id="saving-total-box" class="saving-total-box" title="Total of all saved days">0</div>
+          <button id="saving-save" class="pill-btn">Save</button>
+          <button id="saving-reset" class="pill-btn secondary">Reset</button>
+        </div>
+      </div>
+
+      <!-- -------- DAY COUNT VIEW -------- -->
+      <div id="datediff-view" class="app-view" style="display:none;">
+        <div class="page-header">
+          <h2 class="page-title">Day Counter</h2>
+          <p class="page-subtitle">Count the days between two dates.</p>
+        </div>
+
+        <div id="loveday-line" class="loveday-line"></div>
+
+        <div class="datediff-panel">
+          <div class="datediff-field">
+            <label for="datediff-start">Start date</label>
+            <input type="date" id="datediff-start" autocomplete="off">
+          </div>
+
+          <button id="datediff-swap" class="datediff-swap" title="Swap dates">⇄</button>
+
+          <div class="datediff-field">
+            <label for="datediff-end">End date</label>
+            <input type="date" id="datediff-end">
+          </div>
+        </div>
+
+        <div class="datediff-result">
+          <div id="datediff-days" class="datediff-days">0</div>
+          <div class="datediff-days-label">days</div>
+        </div>
+        <div class="datediff-note">Just the days in between (start date doesn't count as day 1).</div>
+
+        <div class="datediff-ymd-box">
+          <div class="datediff-ymd-label">In years, months &amp; days</div>
+          <div id="datediff-ymd" class="datediff-ymd">0 years, 0 months, 0 days</div>
+        </div>
+      </div>
+
+      <!-- -------- MEMORY MATCH VIEW -------- -->
+      <div id="memory-view" class="app-view" style="display:none;">
+        <div id="memory-start-screen" class="memory-start-screen">
+          <div class="memory-start-title">Memory Match</div>
+          <div class="memory-start-subtitle">Game</div>
+          <button id="memory-start-btn" class="pill-btn">Start</button>
+        </div>
+
+        <div class="memory-stats" id="memory-stats" style="display:none;">
+          <div class="memory-stat">Time: <span id="memory-timer">00:00</span></div>
+          <div class="memory-stat">Moves: <span id="memory-moves">0</span></div>
+          <div class="memory-stat">Matches: <span id="memory-matches">0</span>/10</div>
+          <button id="memory-newgame" class="pill-btn secondary">New Game</button>
+        </div>
+
+        <div id="memory-grid" class="memory-grid" style="display:none;"></div>
+      </div>
+
+      <!-- -------- MOCHI FLY VIEW -------- -->
+      <div id="mochi-view" class="app-view" style="display:none;">
+        <div id="mochi-start-screen" class="memory-start-screen">
+          <div class="memory-start-title">🍡 Mochi Fly</div>
+          <div class="memory-start-subtitle">Game</div>
+
+          <div class="mochi-color-picker">
+            <button class="mochi-color-swatch selected" data-color="pink" style="background:#E36D9B;" title="Watermelon mochi"></button>
+            <button class="mochi-color-swatch" data-color="yellow" style="background:#FFF183;" title="Maize mochi"></button>
+            <button class="mochi-color-swatch" data-color="teal" style="background:#10B183;" title="Emerald mochi"></button>
+          </div>
+
+          <table class="memory-leaderboard">
+            <thead><tr><th>No.</th><th>Name</th><th>Score</th></tr></thead>
+            <tbody id="mochi-leaderboard-body"></tbody>
+          </table>
+
+          <button id="mochi-start-btn" class="pill-btn">Start</button>
+        </div>
+
+        <div id="mochi-game-wrap" class="mochi-game-wrap" style="display:none;">
+          <div class="mochi-topbar">
+            <div class="mochi-stat">Score: <span id="mochi-score">0</span></div>
+            <div class="mochi-stat">Best: <span id="mochi-best">0</span></div>
+            <div class="mochi-icon-group">
+              <button id="mochi-music-btn" class="mochi-icon-btn" title="Music">♫</button>
+              <button id="mochi-pause-btn" class="mochi-icon-btn" title="Pause">⏸</button>
+            </div>
+          </div>
+          <div class="mochi-canvas-wrap">
+            <canvas id="mochi-canvas"></canvas>
+            <div id="mochi-pause-overlay" class="mochi-pause-overlay" style="display:none;">
+              <div class="mochi-pause-text">Paused</div>
+              <button id="mochi-resume-btn" class="pill-btn">Resume</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- -------- ICD LOOKUP VIEW -------- -->
+      <div id="icd-view" class="app-view" style="display:none;">
+        <div class="page-header">
+          <h2 class="page-title">ICD Lookup</h2>
+          <p class="page-subtitle">Quickly search by ICD code or diagnosis name</p>
+        </div>
+
+        <div class="icd-search-wrap">
+          <input type="text" id="icd-search" class="icd-search-input" placeholder="Search ICD code or diagnosis..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        </div>
+
+        <div class="icd-toolbar">
+          <span id="icd-result-count" class="icd-result-count"></span>
+          <button id="icd-add-btn" class="icd-add-link">+ Add new</button>
+        </div>
+
+        <div id="icd-list"></div>
+      </div>
+
+
+      <!-- -------- EATING TRACKER VIEW -------- -->
+      <div id="eating-view" class="app-view" style="display:none;">
+        <div class="page-header">
+          <h2 class="page-title">Eating Tracker</h2>
+          <p class="page-subtitle">A little log for little treats.</p>
+        </div>
+
+        <div class="eating-stats">
+          <div class="eating-stat-card">
+            <div class="eating-stat-label">Yakult</div>
+            <div class="eating-stat-value" id="eating-stat-yakult">0 times</div>
+          </div>
+          <div class="eating-stat-card">
+            <div class="eating-stat-label">Bubble Tea</div>
+            <div class="eating-stat-value" id="eating-stat-bubble">0 times — 0</div>
+          </div>
+          <div class="eating-stat-card">
+            <div class="eating-stat-label">Eating Out</div>
+            <div class="eating-stat-value" id="eating-stat-out">0 times — 0</div>
+          </div>
+          <div class="eating-stat-card total">
+            <div class="eating-stat-label">Total Spent</div>
+            <div class="eating-stat-value" id="eating-stat-total">0</div>
+          </div>
+          <div class="eating-stat-card">
+            <div class="eating-stat-label">Days Tracked</div>
+            <div class="eating-stat-value" id="eating-stat-days">0 / 31</div>
+          </div>
+        </div>
+
+        <div class="eating-toolbar">
+          <button id="eating-reset-btn" class="pill-btn secondary">Reset</button>
+        </div>
+
+        <div id="eating-calendar" class="eating-calendar"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ================= MODAL: Eating day entry ================= -->
+  <div id="eating-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="eating-modal-title">Day 1</h3>
+        <button id="eating-modal-close" class="modal-close">✕</button>
+      </div>
+      <label>Yakult</label>
+      <div class="eating-yakult-toggle">
+        <button type="button" id="eating-yakult-yes" class="eating-toggle-btn">Yes</button>
+        <button type="button" id="eating-yakult-no" class="eating-toggle-btn">No</button>
+      </div>
+      <label for="eating-field-bubble">Bubble Tea</label>
+      <input type="text" id="eating-field-bubble" inputmode="numeric" placeholder="0" autocomplete="off" style="margin-bottom:10px;">
+      <label for="eating-field-out">Eating Out</label>
+      <input type="text" id="eating-field-out" inputmode="numeric" placeholder="0" autocomplete="off" style="margin-bottom:14px;">
+      <div class="eating-daily-total">Daily Total: <span id="eating-daily-total">0</span></div>
+      <div class="modal-actions">
+        <button id="eating-modal-cancel" class="pill-btn secondary">Cancel</button>
+        <button id="eating-modal-save" class="pill-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: Eating reset confirmation ================= -->
+  <div id="eating-reset-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Reset Data</h3>
+        <button id="eating-reset-close" class="modal-close">✕</button>
+      </div>
+      <p style="text-align:center; margin:0 0 16px;">Are you sure you want to reset this month's data?</p>
+      <div class="modal-actions">
+        <button id="eating-reset-cancel" class="pill-btn secondary">Cancel</button>
+        <button id="eating-reset-confirm" class="pill-btn">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: Mochi Fly result / leaderboard ================= -->
+  <div id="mochi-result-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Game Over (｡•́︿•̀｡)</h3>
+        <button id="mochi-result-close" class="modal-close">✕</button>
+      </div>
+
+      <div class="memory-result-time">Score: <span id="mochi-result-score">0</span></div>
+      <div id="mochi-newrecord" class="mochi-newrecord" style="display:none;">New record (● ˃̶͈̀ロ˂̶͈́)੭ꠥ⁾⁾</div>
+
+      <div class="field-row">
+        <input type="text" id="mochi-player-name" placeholder="Your name" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <button id="mochi-save-score" class="pill-btn">Save Score</button>
+      </div>
+
+      <table class="memory-leaderboard">
+        <thead><tr><th>No.</th><th>Name</th><th>Score</th></tr></thead>
+        <tbody id="mochi-result-leaderboard-body"></tbody>
+      </table>
+
+      <div class="modal-actions">
+        <button id="mochi-result-newgame" class="pill-btn secondary">New Game</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: Accounts password gate ================= -->
+  <div id="accounts-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Password</h3>
+        <button id="acc-gate-close" class="modal-close">✕</button>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:center; gap:14px;">
+        <div id="acc-gate-boxes" class="pw-boxes">
+          <div class="pw-box"></div><div class="pw-box"></div><div class="pw-box"></div><div class="pw-box"></div>
+        </div>
+        <div id="acc-gate-pad" class="numpad"></div>
+        <div id="acc-gate-status" class="pw-status"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: Edit type ================= -->
+  <div id="edit-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="account-modal-title">Add Account</h3>
+        <button id="edit-close" class="modal-close">✕</button>
+      </div>
+      <input type="text" id="account-field-type" placeholder="Type" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:10px;">
+      <input type="text" id="account-field-of" placeholder="Of" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:10px;">
+      <input type="text" id="account-field-account" placeholder="Account" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:10px;">
+      <input type="text" id="account-field-password" placeholder="Password" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:10px;">
+      <input type="text" id="account-field-note" placeholder="Note" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:14px;">
+      <div class="modal-actions">
+        <button id="edit-save" class="pill-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: Add symbol ================= -->
+  <div id="symbol-add-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Add Symbol</h3>
+        <button id="symbol-add-close" class="modal-close">✕</button>
+      </div>
+      <div id="symbol-add-rows"></div>
+      <div class="modal-actions">
+        <button id="symbol-add-more" class="pill-btn secondary">Add</button>
+        <button id="symbol-add-save" class="pill-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: Add/Edit ICD entry ================= -->
+  <div id="icd-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="icd-modal-title">Add ICD Entry</h3>
+        <button id="icd-modal-close" class="modal-close">✕</button>
+      </div>
+      <input type="text" id="icd-field-code" placeholder="ICD code" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:10px;">
+      <input type="text" id="icd-field-name" placeholder="Name" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:10px;">
+      <input type="text" id="icd-field-note" placeholder="Note" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:14px;">
+      <div class="modal-actions">
+        <button id="icd-save-btn" class="pill-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: Memory Match result / leaderboard ================= -->
+  <div id="memory-result-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>You Win! (ദ്ദി˙ᗜ˙)</h3>
+        <button id="memory-result-close" class="modal-close">✕</button>
+      </div>
+
+      <div class="memory-result-time">Your time: <span id="memory-result-time">00:00</span></div>
+
+      <div class="field-row">
+        <input type="text" id="memory-player-name" placeholder="Your name" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <button id="memory-save-score" class="pill-btn">Save Score</button>
+      </div>
+
+      <table class="memory-leaderboard">
+        <thead>
+          <tr><th>No.</th><th>Name</th><th>Time</th><th>Moves</th></tr>
+        </thead>
+        <tbody id="memory-leaderboard-body"></tbody>
+      </table>
+
+      <div class="modal-actions">
+        <button id="memory-result-newgame" class="pill-btn secondary">New Game</button>
+      </div>
+    </div>
+  </div>
+
+  <?!= include('JavaScript'); ?>
+</body>
+</html>
