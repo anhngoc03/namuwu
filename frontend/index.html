@@ -23,38 +23,8 @@
     </div>
   </div>
 
-  <!-- ================= LOGIN SCREEN ================= -->
-  <div id="login-screen" class="screen active">
-    <div class="login-left">
-      <!-- Drive image (must be shared as "Anyone with the link"). If this
-           still fails to load, download the image and re-upload it somewhere
-           else (e.g. imgur, Cloudflare Images, or your own host)
-           and paste that URL here instead. -->
-      <img id="login-img"
-           src="https://lh3.googleusercontent.com/d/1P3sWFps-Jrqwuj5WFaHfNiaIcu4E0thw=w1000"
-           data-fallback1="https://drive.google.com/thumbnail?id=1P3sWFps-Jrqwuj5WFaHfNiaIcu4E0thw&sz=w1000"
-           data-fallback2="https://drive.google.com/uc?export=view&id=1P3sWFps-Jrqwuj5WFaHfNiaIcu4E0thw"
-           onerror="imgFallback(this)"
-           alt="Henlo human">
-    </div>
-    <div class="login-right">
-      <h1 class="brand-title brand-font">Henlo human</h1>
-      <p class="login-tagline">A little place for my little things ✿</p>
-      <div class="pw-label">Password</div>
-      <div id="login-boxes" class="pw-boxes">
-        <div class="pw-box"></div>
-        <div class="pw-box"></div>
-        <div class="pw-box"></div>
-        <div class="pw-box"></div>
-      </div>
-      <div id="login-pad" class="numpad"></div>
-      <div id="login-status" class="pw-status"></div>
-      <div class="pw-hint">My deadline isn't done, but I'm sure done ✿</div>
-    </div>
-  </div>
-
   <!-- ================= APP SCREEN ================= -->
-  <div id="app-screen" class="screen">
+  <div id="app-screen" class="screen active">
 
     <header class="navbar">
       <div class="navbar-inner">
@@ -73,17 +43,34 @@
           <button id="nav-tools" class="navbar-link" data-nav-section="tools">Tools</button>
           <button id="nav-games" class="navbar-link" data-nav-section="games">Games</button>
         </nav>
-        <button id="logout-btn" class="navbar-logout" title="Log out">Exit ✿</button>
       </div>
     </header>
 
     <main class="page-container">
 
       <div id="menu-view" class="app-view">
-        <div class="home-hero">
-          <h1 class="hero-title brand-font">Henlo human</h1>
-          <p class="hero-subtitle">A little place for my little things ✿</p>
-        </div>
+        <section class="home-section">
+          <div class="home-intro">
+            <img id="home-login-img" class="home-intro-img"
+                 src="https://lh3.googleusercontent.com/d/1P3sWFps-Jrqwuj5WFaHfNiaIcu4E0thw=w1000"
+                 data-fallback1="https://drive.google.com/thumbnail?id=1P3sWFps-Jrqwuj5WFaHfNiaIcu4E0thw&sz=w1000"
+                 data-fallback2="https://drive.google.com/uc?export=view&id=1P3sWFps-Jrqwuj5WFaHfNiaIcu4E0thw"
+                 onerror="imgFallback(this)"
+                 alt="Henlo human">
+            <p class="home-intro-tagline">My deadline isn't done, but I'm sure done ✿</p>
+          </div>
+
+          <div class="home-todo-panel">
+            <div class="home-todo-header">
+              <h2 class="home-todo-title">TO DO LIST</h2>
+              <div class="home-todo-toolbar">
+                <button id="home-add-btn" class="pill-btn">+ Add</button>
+                <button id="home-reset-btn" class="pill-btn secondary">Reset</button>
+              </div>
+            </div>
+            <div id="home-todo-list" class="home-todo-list"></div>
+          </div>
+        </section>
 
         <section class="content-section tools">
           <div class="section-header">
@@ -383,6 +370,19 @@
       </div>
 
     </main>
+  </div>
+
+  <!-- ================= MODAL: Home reset confirmation ================= -->
+  <div id="home-reset-modal" class="modal-overlay">
+    <div class="modal-box home-reset-box">
+      <div class="modal-header" style="padding-top:26px;">
+        <h3>ʕʘ‿ʘʔ You sure?</h3>
+      </div>
+      <div class="modal-actions">
+        <button id="home-reset-nope" class="pill-btn secondary">Nope</button>
+        <button id="home-reset-yah" class="pill-btn">Yah</button>
+      </div>
+    </div>
   </div>
 
   <!-- ================= MODAL: Eating day entry ================= -->
