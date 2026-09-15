@@ -107,7 +107,18 @@ button:disabled{ opacity:0.45; cursor:not-allowed; transform:none !important; }
 
 /* ---------- floating flower background ---------- */
 #flower-field{ position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
-.bg-flower{ position:absolute; font-size:28px; opacity:0.35; user-select:none; }
+.bg-flower{
+  position:absolute; font-size:28px; opacity:0.35; user-select:none;
+  animation-name:flowerDrift; animation-timing-function:ease-in-out; animation-iteration-count:infinite;
+  will-change:transform;
+}
+@keyframes flowerDrift{
+  0%   { transform:translate(0,0)        rotate(0deg); }
+  25%  { transform:translate(10px,-16px) rotate(6deg); }
+  50%  { transform:translate(-6px,-26px) rotate(0deg); }
+  75%  { transform:translate(-14px,-8px) rotate(-6deg); }
+  100% { transform:translate(0,0)        rotate(0deg); }
+}
 
 .screen{ position:relative; z-index:1; min-height:100vh; display:none; }
 .screen.active{ display:block; }
@@ -233,12 +244,97 @@ button:disabled{ opacity:0.45; cursor:not-allowed; transform:none !important; }
 .page-subtitle{ font-size:14px; color:var(--ink); opacity:0.6; margin:4px 0 0; }
 
 /* ============================================================
-   HOME
+   HOME — TO DO LIST
    ============================================================ */
 #menu-view{ width:100%; }
-.home-hero{ text-align:center; margin:var(--sp-10) 0; }
-.hero-title{ font-size:42px; color:var(--pink-deep); }
-.hero-subtitle{ font-size:15px; color:var(--ink); opacity:0.6; margin:8px 0 0; }
+.home-section{ width:100%; max-width:760px; margin:0 auto; }
+
+.home-intro{
+  display:flex; align-items:center; gap:var(--sp-5);
+  justify-content:center; text-align:left;
+  margin:var(--sp-6) 0 var(--sp-8);
+}
+.home-intro-img{
+  width:96px; height:96px; object-fit:cover; border-radius:50%;
+  border:4px solid var(--white); box-shadow:var(--shadow-card);
+  flex:0 0 auto;
+}
+.home-intro-tagline{
+  font-size:15px; font-weight:700; color:var(--pink-deep);
+  max-width:300px; margin:0; line-height:1.5;
+}
+
+.home-todo-panel{
+  background:var(--white); border-radius:var(--r-xl); padding:var(--sp-6);
+  box-shadow:var(--shadow-card);
+}
+.home-todo-header{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--sp-3); margin-bottom:var(--sp-5); }
+.home-todo-title{
+  font-size:20px; font-weight:800; letter-spacing:1.5px; color:var(--pink-deep);
+}
+.home-todo-toolbar{ display:flex; gap:10px; }
+
+.home-todo-list{ display:flex; flex-direction:column; gap:10px; }
+
+.todo-item{
+  display:flex; align-items:center; gap:12px;
+  background:var(--cream); border-radius:var(--r-md); padding:12px 14px;
+  box-shadow:var(--shadow-sm);
+  animation:levelComponentEnter var(--dur-component) var(--ease-soft) both;
+}
+.todo-item.editing{ background:var(--white); border:2px dashed var(--pink); padding:10px 12px; }
+
+/* pastel round checkbox with a pop-in checkmark */
+.todo-check{
+  width:26px; height:26px; border-radius:50%; flex:0 0 auto;
+  border:2.5px solid var(--pink); background:var(--white);
+  position:relative; cursor:pointer;
+  transition:background .25s ease, border-color .25s ease, transform .15s ease;
+}
+.todo-check:active{ transform:scale(0.88); }
+.todo-check::after{
+  content:'✓'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-size:14px; font-weight:800; color:var(--white);
+  opacity:0; transform:scale(0.4);
+  transition:opacity .2s ease, transform .3s cubic-bezier(.34,1.56,.64,1);
+}
+.todo-check.checked{ background:var(--pink-deep); border-color:var(--pink-deep); }
+.todo-check.checked::after{ opacity:1; transform:scale(1); }
+
+/* strike-through that "draws" itself across the text when checked */
+.todo-content-text{
+  position:relative; display:inline-block; flex:1;
+  font-size:15px; font-weight:600; color:var(--ink);
+  transition:opacity .3s ease .1s;
+}
+.todo-content-text::after{
+  content:''; position:absolute; left:0; top:50%; height:2px;
+  background:var(--pink-deep); width:0%;
+  transition:width .4s var(--ease-soft);
+}
+.todo-item.checked .todo-content-text{ opacity:0.5; }
+.todo-item.checked .todo-content-text::after{ width:100%; }
+
+.todo-item > .todo-content-text{ flex:1; }
+.todo-deadline{
+  flex:0 0 auto; font-size:12px; font-weight:800; color:var(--pink-deep);
+  background:var(--white); border-radius:var(--r-pill); padding:4px 10px; white-space:nowrap;
+}
+.todo-item.checked .todo-deadline{ opacity:0.55; }
+.todo-edit-btn{ flex:0 0 auto; }
+
+.todo-edit-row{ display:flex; align-items:center; gap:8px; width:100%; flex-wrap:wrap; }
+.todo-edit-row .todo-content-input{ flex:1 1 180px; min-width:0; }
+.todo-edit-row .todo-deadline-input{ flex:0 0 auto; width:150px; }
+.todo-cancel-btn{
+  flex:0 0 auto; background:none; border:none; box-shadow:none;
+  font-size:14px; color:var(--ink); opacity:0.4; cursor:pointer; padding:4px;
+}
+.todo-cancel-btn:hover{ opacity:0.8; transform:translateY(-2px); }
+.todo-edit-row .todo-save-btn{ flex:0 0 auto; padding:9px 18px; font-size:14px; }
+
+.home-reset-box{ max-width:300px; text-align:center; }
+.home-reset-box .modal-header h3{ font-size:19px; }
 
 .content-section{ margin-bottom:var(--sp-10); }
 .section-header{ margin-bottom:var(--sp-5); }
@@ -714,8 +810,12 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
   .back-btn{ font-size:13px; padding:6px 2px; flex:0 0 100%; order:-1; }
   .page-container{ padding:calc(var(--navbar-h) + var(--sp-4)) var(--sp-4) 60px; }
 
-  .home-hero{ margin:var(--sp-6) 0; }
-  .hero-title{ font-size:30px; }
+  .home-intro{ flex-direction:column; text-align:center; margin:var(--sp-4) 0 var(--sp-6); }
+  .home-intro-img{ width:76px; height:76px; }
+  .home-intro-tagline{ max-width:100%; font-size:14px; }
+  .home-todo-panel{ padding:var(--sp-4); }
+  .home-todo-title{ font-size:17px; }
+  .todo-edit-row .todo-deadline-input{ width:130px; }
   .nav-card-grid{ grid-template-columns:1fr; }
   .nav-card{ padding:var(--sp-4); }
 
