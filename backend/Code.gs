@@ -439,6 +439,94 @@ function resetEatingData() {
   return getEatingData();
 }
 
+/* --------------------------- HOME TO DO LIST ------------------------------ */
+// Sheet "Home": Check | Todolist | Deadline.
+// Mục mới thêm luôn được chèn vào ngay ROW 2 (ngay dưới header) => hiển thị TRÊN CÙNG
+// danh sách. Tích chọn / sửa nội dung không làm đổi vị trí dòng.
+
+function ensureHomeSheet_() {
+  const ss = getSS_();
+  let sh = ss.getSheetByName('Home');
+  if (!sh) {
+    sh = ss.insertSheet('Home');
+    sh.getRange(1, 1, 1, 3).setValues([['Check', 'Todolist', 'Deadline']]);
+  }
+  return sh;
+}
+
+// Chuyển giá trị deadline dạng chuỗi 'yyyy-MM-dd' (từ <input type="date"> ở frontend)
+// thành một Date thật để lưu vào ô Sheet (giúp ô hiển thị đẹp/sort được trên Sheets).
+function toDateCell_(dateStr) {
+  if (!dateStr) return '';
+  const parts = String(dateStr).split('-');
+  if (parts.length === 3) {
+    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  }
+  return dateStr;
+}
+
+// Chuyển ngược lại: giá trị đọc được từ ô Sheet (có thể là Date hoặc chuỗi hoặc rỗng)
+// thành chuỗi 'yyyy-MM-dd' để frontend gán thẳng vào <input type="date">.
+function fromDateCell_(cellValue) {
+  if (cellValue === '' || cellValue === null || cellValue === undefined) return '';
+  if (Object.prototype.toString.call(cellValue) === '[object Date]') {
+    return Utilities.formatDate(cellValue, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  return String(cellValue);
+}
+
+// Returns toàn bộ danh sách, đúng thứ tự đang có trên Sheet (mới nhất ở trên do addHomeItem chèn ở row 2).
+function getHomeData() {
+  const sh = ensureHomeSheet_();
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return [];
+  const data = sh.getRange(2, 1, lastRow - 1, 3).getValues();
+  const list = [];
+  data.forEach(function (r, i) {
+    // Bỏ qua dòng hoàn toàn trống (phòng khi có dòng thừa trên sheet).
+    if (r[1] === '' && r[2] === '' && r[0] !== true) return;
+    list.push({
+      row: i + 2,
+      checked: r[0] === true,
+      todolist: r[1] || '',
+      deadline: fromDateCell_(r[2])
+    });
+  });
+  return list;
+}
+
+// Thêm 1 mục mới lên ĐẦU danh sách (chèn ngay dưới header). Trả về danh sách đầy đủ đã cập nhật.
+function addHomeItem(todolist, deadline) {
+  const sh = ensureHomeSheet_();
+  sh.insertRowBefore(2);
+  sh.getRange(2, 1, 1, 3).setValues([[false, todolist || '', toDateCell_(deadline)]]);
+  return getHomeData();
+}
+
+// Sửa nội dung + deadline của 1 dòng có sẵn (không đổi trạng thái Check, không đổi vị trí).
+function updateHomeItem(rowNumber, todolist, deadline) {
+  const sh = ensureHomeSheet_();
+  sh.getRange(rowNumber, 2, 1, 2).setValues([[todolist || '', toDateCell_(deadline)]]);
+  return getHomeData();
+}
+
+// Bật/tắt trạng thái tích chọn của 1 dòng (không đổi vị trí).
+function toggleHomeCheck(rowNumber, checked) {
+  const sh = ensureHomeSheet_();
+  sh.getRange(rowNumber, 1, 1, 1).setValue(checked ? true : false);
+  return getHomeData();
+}
+
+// Xoá sạch toàn bộ dữ liệu (giữ lại header). Trả về danh sách rỗng.
+function resetHomeData() {
+  const sh = ensureHomeSheet_();
+  const lastRow = sh.getLastRow();
+  if (lastRow > 1) {
+    sh.deleteRows(2, lastRow - 1);
+  }
+  return [];
+}
+
 /* ============================================================
  *  API ROUTER  (PHẦN MỚI — thay thế cho doGet render HTML cũ)
  *  Frontend (Cloudflare Pages) gọi vào đây bằng fetch() dạng:
@@ -482,7 +570,13 @@ function getActionMap_() {
     // EATING TRACKER
     getEatingData: getEatingData,
     saveEatingDay: saveEatingDay,
-    resetEatingData: resetEatingData
+    resetEatingData: resetEatingData,
+    // HOME TO DO LIST
+    getHomeData: getHomeData,
+    addHomeItem: addHomeItem,
+    updateHomeItem: updateHomeItem,
+    toggleHomeCheck: toggleHomeCheck,
+    resetHomeData: resetHomeData
   };
 }
 
