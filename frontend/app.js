@@ -30,6 +30,9 @@ function scatterFlowers() {
     el.style.fontSize = (16 + Math.random() * 26) + 'px';
     el.style.transform = 'rotate(' + Math.floor(Math.random() * 360) + 'deg)';
     el.style.opacity = (0.18 + Math.random() * 0.3).toFixed(2);
+    // Trôi nhẹ nhàng, ngẫu nhiên, mỗi bông một nhịp riêng để không đều tăm tắp.
+    el.style.animationDuration = (9 + Math.random() * 10).toFixed(1) + 's';
+    el.style.animationDelay = (-Math.random() * 12).toFixed(1) + 's';
     field.appendChild(el);
   }
 }
@@ -175,24 +178,25 @@ function setNavActive(section) {
   });
 }
 
-// Controls which part of the Home tab is visible: 'home' = hero only (nothing else),
-// 'tools' = only the Tools cards, 'games' = only the Games cards.
+// Controls which part of the Home tab is visible: 'home' = To Do List section only,
+// 'tools' = only the Tools cards, 'games' = only the Games cards. Each is exclusive now.
 var currentHomeSection_ = 'home';
 function showHomeSection(section) {
   currentHomeSection_ = section;
-  var hero = document.querySelector('.home-hero');
+  var home = document.querySelector('.home-section');
   var tools = document.querySelector('.content-section.tools');
   var games = document.querySelector('.content-section.games');
   if (section === 'home') {
-    if (hero) hero.style.display = '';
-    if (tools) tools.style.display = '';
-    if (games) games.style.display = '';
+    if (home) home.style.display = '';
+    if (tools) tools.style.display = 'none';
+    if (games) games.style.display = 'none';
+    loadHomeData();
   } else if (section === 'tools') {
-    if (hero) hero.style.display = 'none';
+    if (home) home.style.display = 'none';
     if (tools) tools.style.display = '';
     if (games) games.style.display = 'none';
   } else if (section === 'games') {
-    if (hero) hero.style.display = 'none';
+    if (home) home.style.display = 'none';
     if (tools) tools.style.display = 'none';
     if (games) games.style.display = '';
   }
@@ -237,33 +241,6 @@ function syncFixedHeaderOffsets() {
 function goHome(section) {
   showView('menu-view');
   showHomeSection(section);
-}
-
-/* ---------------------------------------------------------------- */
-/* LOGIN                                                              */
-/* ---------------------------------------------------------------- */
-var loginPad;
-function initLogin() {
-  loginPad = PassCode('login-boxes', 'login-pad', function (code, resetFn) {
-    showLoading();
-    google.script.run
-      .withSuccessHandler(function (ok) {
-        hideLoading();
-        if (ok) {
-          loginPad.showSuccess('Login successful (๑ᵔ⌔ᵔ๑)');
-          setTimeout(function () { showScreen('app-screen'); syncFixedHeaderOffsets(); }, 550);
-        } else {
-          loginPad.showError('Incorrect password ʕ´-ก̀ʔᐝ');
-          loginPad.errorShake();
-        }
-      })
-      .withFailureHandler(function (err) {
-        hideLoading();
-        loginPad.showError('Something went wrong ʕ´-ก̀ʔᐝ');
-        resetFn();
-      })
-      .checkPassword('General', code);
-  }, 'login-status');
 }
 
 /* ---------------------------------------------------------------- */
@@ -1801,12 +1778,156 @@ function confirmEatingReset() {
 }
 
 /* ---------------------------------------------------------------- */
+/* HOME — TO DO LIST                                                   */
+/* ---------------------------------------------------------------- */
+var homeData = [];          // [{ row, checked, todolist, deadline }]
+var homeEditingRow = null;  // null = không có dòng nào đang sửa | 'new' = dòng vừa Add chưa lưu | <rowNumber> = đang sửa dòng đó
+
+function loadHomeData() {
+  google.script.run
+    .withSuccessHandler(function (list) {
+      homeData = list;
+      homeEditingRow = null;
+      renderHomeList();
+    })
+    .withFailureHandler(function (err) { toast('Error: ' + err.message); })
+    .getHomeData();
+}
+
+// 'yyyy-MM-dd' (giá trị input date) -> 'dd/mm/yyyy' để hiển thị.
+function homeFormatDeadline(dateStr) {
+  if (!dateStr) return '';
+  var parts = String(dateStr).split('-');
+  if (parts.length !== 3) return dateStr;
+  return parts[2] + '/' + parts[1] + '/' + parts[0];
+}
+
+function homeOpenAdd() {
+  if (homeEditingRow !== null) { toast('Lưu dòng đang sửa trước đã ✿'); return; }
+  homeData.unshift({ row: null, checked: false, todolist: '', deadline: '' });
+  homeEditingRow = 'new';
+  renderHomeList();
+  var input = document.querySelector('.todo-item.editing .todo-content-input');
+  if (input) input.focus();
+}
+
+function homeOpenEdit(item) {
+  if (homeEditingRow !== null) { toast('Lưu dòng đang sửa trước đã ✿'); return; }
+  homeEditingRow = item.row;
+  renderHomeList();
+  var input = document.querySelector('.todo-item.editing .todo-content-input');
+  if (input) input.focus();
+}
+
+// Huỷ chỉnh sửa: nếu là dòng Add mới chưa lưu thì bỏ hẳn dòng đó, nếu là dòng có sẵn thì chỉ đóng ô nhập.
+function homeCancelEdit() {
+  if (homeEditingRow === 'new') homeData.shift();
+  homeEditingRow = null;
+  renderHomeList();
+}
+
+function homeToggleCheck(item) {
+  var next = !item.checked;
+  item.checked = next; // optimistic — animation gạch ngang chạy ngay, không cần chờ server
+  renderHomeList();
+  google.script.run
+    .withSuccessHandler(function (list) { homeData = list; })
+    .withFailureHandler(function (err) {
+      item.checked = !next;
+      renderHomeList();
+      toast('Error: ' + err.message);
+    })
+    .toggleHomeCheck(item.row, next);
+}
+
+function homeSaveItem(item) {
+  var editingEl = document.querySelector('.todo-item.editing');
+  if (!editingEl) return;
+  var content = editingEl.querySelector('.todo-content-input').value.trim();
+  var deadline = editingEl.querySelector('.todo-deadline-input').value;
+  if (!content) { toast('Nhập nội dung việc cần làm đã ✿'); return; }
+
+  var onDone = function (list) {
+    hideLoading();
+    homeData = list;
+    homeEditingRow = null;
+    renderHomeList();
+  };
+  var onFail = function (err) { hideLoading(); toast('Error: ' + err.message); };
+
+  showLoading();
+  if (item.row === null) {
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(onFail).addHomeItem(content, deadline);
+  } else {
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(onFail).updateHomeItem(item.row, content, deadline);
+  }
+}
+
+function homeConfirmReset() {
+  document.getElementById('home-reset-modal').classList.remove('active');
+  google.script.run
+    .withSuccessHandler(function (list) {
+      homeData = list;
+      homeEditingRow = null;
+      renderHomeList();
+    })
+    .withFailureHandler(function (err) { toast('Error: ' + err.message); })
+    .resetHomeData();
+}
+
+function renderHomeList() {
+  var container = document.getElementById('home-todo-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (homeData.length === 0) {
+    container.innerHTML = '<div class="empty-state"><span class="empty-icon">✿</span>Chưa có việc nào cả, thêm mới thôi!</div>';
+    return;
+  }
+
+  homeData.forEach(function (item) {
+    var isEditing = homeEditingRow !== null &&
+      ((homeEditingRow === 'new' && item.row === null) || homeEditingRow === item.row);
+
+    var el = document.createElement('div');
+    el.className = 'todo-item' + (item.checked ? ' checked' : '') + (isEditing ? ' editing' : '');
+
+    if (isEditing) {
+      el.innerHTML =
+        '<div class="todo-edit-row">' +
+          '<input type="text" class="todo-content-input" placeholder="Nhập việc cần làm..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">' +
+          '<input type="date" class="todo-deadline-input">' +
+          '<button class="todo-cancel-btn" title="Huỷ">✕</button>' +
+          '<button class="todo-save-btn pill-btn">Save</button>' +
+        '</div>';
+      var contentInput = el.querySelector('.todo-content-input');
+      var deadlineInput = el.querySelector('.todo-deadline-input');
+      contentInput.value = item.todolist || '';
+      deadlineInput.value = item.deadline || '';
+      contentInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') homeSaveItem(item); });
+      el.querySelector('.todo-save-btn').onclick = function () { homeSaveItem(item); };
+      el.querySelector('.todo-cancel-btn').onclick = homeCancelEdit;
+    } else {
+      el.innerHTML =
+        '<div class="todo-check' + (item.checked ? ' checked' : '') + '" title="Đánh dấu hoàn thành"></div>' +
+        '<span class="todo-content-text">' + icdEscape(item.todolist || '(chưa có nội dung)') + '</span>' +
+        (item.deadline ? '<span class="todo-deadline">' + homeFormatDeadline(item.deadline) + '</span>' : '') +
+        '<button class="todo-edit-btn acc-edit-icon-btn" title="Edit">✎</button>';
+      el.querySelector('.todo-check').onclick = function () { homeToggleCheck(item); };
+      el.querySelector('.todo-edit-btn').onclick = function () { homeOpenEdit(item); };
+    }
+
+    container.appendChild(el);
+  });
+}
+
+/* ---------------------------------------------------------------- */
 /* INIT                                                               */
 /* ---------------------------------------------------------------- */
 document.addEventListener('DOMContentLoaded', function () {
   scatterFlowers();
-  initLogin();
-  showScreen('login-screen');
+  syncFixedHeaderOffsets();
+  showHomeSection('home');
   window.addEventListener('resize', syncFixedHeaderOffsets);
 
   document.getElementById('nav-home').onclick = function () { goHome('home'); };
@@ -1902,21 +2023,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.getElementById('acc-gate-close').onclick = function () { document.getElementById('accounts-modal').classList.remove('active'); };
 
-  document.getElementById('logout-btn').onclick = function () {
-    stopSymbolsPolling();
-    memoryStopTimer();
-    mochiStopMusic();
-    cancelAnimationFrame(mochiRAF);
-    mochiState = 'idle';
-    accountsData = {};
-    currentType = null;
-    savingPendingDays.forEach(function (day) {
-      var cell = savingDayCells[day];
-      if (cell) cell.classList.remove('pending');
-    });
-    savingPendingDays = [];
-    goHome('home');
-    if (loginPad) { loginPad.reset(); loginPad.clearStatus(); }
-    showScreen('login-screen');
-  };
+  document.getElementById('home-add-btn').onclick = homeOpenAdd;
+  document.getElementById('home-reset-btn').onclick = function () { document.getElementById('home-reset-modal').classList.add('active'); };
+  document.getElementById('home-reset-nope').onclick = function () { document.getElementById('home-reset-modal').classList.remove('active'); };
+  document.getElementById('home-reset-yah').onclick = homeConfirmReset;
 });
