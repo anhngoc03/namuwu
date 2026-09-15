@@ -1881,8 +1881,7 @@ function renderHomeList() {
   container.innerHTML = '';
 
   if (homeData.length === 0) {
-    container.innerHTML = '<div class="empty-state"><span class="empty-icon">✿</span>Chưa có việc nào cả, thêm mới thôi!</div>';
-    return;
+    container.innerHTML = '<div class="empty-state"><span class="empty-icon" style="white-space:nowrap;">𓆝 𓆟 𓆞 𓆝 𓆟</span>Add something, I\'m bored</div>';
   }
 
   homeData.forEach(function (item) {
