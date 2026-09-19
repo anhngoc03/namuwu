@@ -241,6 +241,36 @@ async function resetEatingData(env) {
   return getEatingData(env);
 }
 
+/* --------------------------- MINESWEEPER LEADERBOARD ------------------------------ */
+// Bảng minesweeper_leaderboard: id | difficulty ('easy'/'normal'/'hard') | name | time.
+// Top 5 riêng theo từng difficulty, xếp theo thời gian nhanh nhất.
+
+async function getMinesweeperLeaderboard(env, [difficulty]) {
+  const rows = await sb(
+    env,
+    `minesweeper_leaderboard?select=name,time&difficulty=eq.${encodeURIComponent(difficulty)}&order=time.asc&limit=5`
+  );
+  return rows;
+}
+
+async function submitMinesweeperScore(env, [difficulty, name, time]) {
+  await sb(env, 'minesweeper_leaderboard', {
+    method: 'POST',
+    body: JSON.stringify([{ difficulty, name: String(name || '').trim() || 'Anonymous', time: Number(time) }])
+  });
+  const all = await sb(
+    env,
+    `minesweeper_leaderboard?select=id,name,time&difficulty=eq.${encodeURIComponent(difficulty)}&order=time.asc`
+  );
+  const top5 = all.slice(0, 5);
+  const rest = all.slice(5);
+  if (rest.length) {
+    const ids = rest.map((r) => r.id).join(',');
+    await sb(env, `minesweeper_leaderboard?id=in.(${ids})`, { method: 'DELETE', prefer: 'return=minimal' });
+  }
+  return top5.map(({ name, time }) => ({ name, time }));
+}
+
 /* --------------------------- HOME TO DO LIST ------------------------------ */
 
 async function getHomeData(env) {
@@ -303,6 +333,8 @@ const ACTIONS = {
   submitScore,
   getMochiLeaderboard,
   submitMochiScore,
+  getMinesweeperLeaderboard,
+  submitMinesweeperScore,
   getIcdData,
   addIcdRow,
   updateIcdRow,
