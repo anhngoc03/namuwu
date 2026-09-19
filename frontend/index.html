@@ -4,8 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Henlo human</title>
-  <link rel="icon" type="image/png" href="https://lh3.googleusercontent.com/d/1iK8GRYnBu70xuTrNfgRTSDxRwpYr6_Lq=w64">
-  <link rel="apple-touch-icon" href="https://lh3.googleusercontent.com/d/1iK8GRYnBu70xuTrNfgRTSDxRwpYr6_Lq=w180">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Fredoka:wght@400;600;700&family=Baloo+2:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
@@ -30,20 +28,12 @@
 
     <header class="navbar">
       <div class="navbar-inner">
-        <button id="accounts-back" class="back-btn" style="display:none;">← Tools</button>
-        <button id="symbols-back" class="back-btn" style="display:none;">← Tools</button>
-        <button id="saving-back" class="back-btn" style="display:none;">← Tools</button>
-        <button id="datediff-back" class="back-btn" style="display:none;">← Tools</button>
-        <button id="icd-back" class="back-btn" style="display:none;">← Tools</button>
-        <button id="eating-back" class="back-btn" style="display:none;">← Tools</button>
-        <button id="memory-back" class="back-btn" style="display:none;">← Games</button>
-        <button id="mochi-back" class="back-btn" style="display:none;">← Games</button>
-
         <div class="navbar-brand">Henlo human</div>
         <nav class="navbar-links">
           <button id="nav-home" class="navbar-link active" data-nav-section="home">Home</button>
           <button id="nav-tools" class="navbar-link" data-nav-section="tools">Tools</button>
           <button id="nav-games" class="navbar-link" data-nav-section="games">Games</button>
+          <span id="navbar-underline" class="navbar-underline"></span>
         </nav>
       </div>
     </header>
@@ -150,6 +140,14 @@
               <div class="nav-card-body">
                 <div class="nav-card-title">Mochi Fly</div>
                 <div class="nav-card-desc">A tiny flying game</div>
+              </div>
+              <div class="nav-card-arrow">→</div>
+            </button>
+            <button id="open-minesweeper" class="nav-card" data-accent="pink">
+              <span class="nav-card-emoji">🌷</span>
+              <div class="nav-card-body">
+                <div class="nav-card-title">Minesweeper</div>
+                <div class="nav-card-desc">Flag them all, dig safely</div>
               </div>
               <div class="nav-card-arrow">→</div>
             </button>
@@ -311,6 +309,39 @@
               <button id="mochi-resume-btn" class="pill-btn">Resume</button>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- -------- MINESWEEPER VIEW -------- -->
+      <div id="minesweeper-view" class="app-view" style="display:none;">
+        <div id="ms-start-screen" class="memory-start-screen">
+          <div class="memory-start-title">🌷 Minesweeper</div>
+          <div class="memory-start-subtitle">Game</div>
+
+          <div class="ms-difficulty-buttons">
+            <button class="ms-diff-btn selected" data-difficulty="easy">Easy</button>
+            <button class="ms-diff-btn" data-difficulty="normal">Normal</button>
+            <button class="ms-diff-btn" data-difficulty="hard">Hard</button>
+          </div>
+
+          <div class="ms-best-time">Best: <span id="ms-best-time-value">--:--</span></div>
+
+          <button id="ms-start-btn" class="pill-btn">Start</button>
+        </div>
+
+        <div id="ms-game-wrap" class="ms-game-wrap" style="display:none;">
+          <div class="ms-topbar">
+            <div class="mochi-stat">Mines: <span id="ms-mines-left">0</span></div>
+            <div class="mochi-stat">Time: <span id="ms-timer">00:00</span></div>
+            <button id="ms-newgame-btn" class="pill-btn secondary">New Game</button>
+          </div>
+
+          <div class="ms-mode-row">
+            <button id="ms-mode-open" class="ms-mode-btn selected">OPEN</button>
+            <button id="ms-mode-flag" class="ms-mode-btn">🌷 FLAG</button>
+          </div>
+
+          <div id="ms-board" class="ms-board"></div>
         </div>
       </div>
 
@@ -543,6 +574,44 @@
 
       <div class="modal-actions">
         <button id="memory-result-newgame" class="pill-btn secondary">New Game</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: Minesweeper win / leaderboard ================= -->
+  <div id="ms-win-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>You Win! (ദ്ദി˙ᗜ˙)</h3>
+        <button id="ms-win-close" class="modal-close">✕</button>
+      </div>
+
+      <div class="memory-result-time">Your time: <span id="ms-win-time">00:00</span></div>
+
+      <div class="field-row">
+        <input type="text" id="ms-player-name" placeholder="Your name" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <button id="ms-save-score" class="pill-btn">Save Score</button>
+      </div>
+
+      <table class="memory-leaderboard">
+        <thead><tr><th>No.</th><th>Name</th><th>Time</th></tr></thead>
+        <tbody id="ms-win-leaderboard-body"></tbody>
+      </table>
+
+      <div class="modal-actions">
+        <button id="ms-win-newgame" class="pill-btn secondary">New Game</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: Minesweeper lose ================= -->
+  <div id="ms-lose-modal" class="modal-overlay">
+    <div class="modal-box ms-lose-box">
+      <div class="modal-header" style="padding-top:26px;">
+        <h3>Haha ৻(ˊᗜˋ)৻ Loserrrr</h3>
+      </div>
+      <div class="modal-actions">
+        <button id="ms-lose-tryagain" class="pill-btn">Try Again</button>
       </div>
     </div>
   </div>
