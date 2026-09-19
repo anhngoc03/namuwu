@@ -202,7 +202,7 @@ button:disabled{ opacity:0.45; cursor:not-allowed; transform:none !important; }
   font-family:'Hillos','Fredoka','Baloo 2',sans-serif; font-weight:700;
   font-size:20px; color:var(--pink-deep); white-space:nowrap;
 }
-.navbar-links{ display:flex; gap:var(--sp-5); flex:1; }
+.navbar-links{ display:flex; gap:var(--sp-5); flex:1; position:relative; }
 .navbar-link{
   background:none; border:none; box-shadow:none; padding:6px 2px;
   font-family:inherit; font-size:14px; font-weight:700; color:var(--ink); opacity:0.55;
@@ -211,9 +211,13 @@ button:disabled{ opacity:0.45; cursor:not-allowed; transform:none !important; }
 .navbar-link:hover{ opacity:0.85; transform:none; }
 .navbar-link:active{ transform:none; }
 .navbar-link.active{ opacity:1; color:var(--pink-deep); }
-.navbar-link.active::after{
-  content:''; position:absolute; left:0; right:0; bottom:-14px;
-  height:3px; border-radius:2px; background:var(--pink-deep);
+/* One shared bar that SLIDES between links (instead of each link drawing its own
+   underline) — position/width set from JS (updateNavUnderline) whenever the active
+   tab changes, and 'transition' here is what actually animates the slide. */
+.navbar-underline{
+  position:absolute; left:0; bottom:-14px; width:0; height:3px; border-radius:2px;
+  background:var(--pink-deep);
+  transition:left var(--dur-section) var(--ease-soft), width var(--dur-section) var(--ease-soft);
 }
 .navbar-logout{
   background:var(--white); border:none; box-shadow:var(--shadow);
@@ -227,17 +231,6 @@ button:disabled{ opacity:0.45; cursor:not-allowed; transform:none !important; }
   max-width:1160px; margin:0 auto;
   padding:calc(var(--navbar-h) + var(--sp-6)) var(--sp-5) 80px;
 }
-
-/* back button now sits as a normal item inside the single fixed navbar row, left of the brand */
-.back-btn{
-  flex:0 0 auto;
-  background:none; border:none; box-shadow:none;
-  padding:6px 2px; margin:0;
-  font-family:inherit; font-size:14px; font-weight:700; color:var(--ink); opacity:0.65;
-  cursor:pointer;
-}
-.back-btn:hover{ opacity:1; transform:none; }
-.back-btn:active{ transform:none; }
 
 .page-header{ margin-bottom:var(--sp-6); }
 .page-title{ font-size:26px; font-weight:800; color:var(--pink-deep); }
@@ -703,6 +696,71 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
 .mochi-newrecord{ text-align:center; font-weight:800; color:var(--pink-deep); margin-bottom:var(--sp-3); }
 
 /* ============================================================
+   MINESWEEPER
+   ============================================================ */
+#minesweeper-view{ width:100%; max-width:640px; margin:0 auto; }
+#ms-start-screen{ padding:36px 20px; }
+
+.ms-difficulty-buttons{ display:flex; gap:10px; justify-content:center; margin:4px 0 4px; }
+.ms-diff-btn{
+  border:2px solid var(--pink); background:var(--white); color:var(--ink);
+  border-radius:var(--r-pill); padding:8px 18px; font-family:inherit; font-weight:700; font-size:14px;
+  cursor:pointer; box-shadow:none;
+}
+.ms-diff-btn.selected{ background:var(--pink-deep); border-color:var(--pink-deep); color:var(--white); }
+
+.ms-best-time{ font-size:14px; font-weight:700; color:var(--ink); opacity:0.7; margin:6px 0 4px; }
+
+.ms-game-wrap{ width:100%; }
+.ms-topbar{
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  background:var(--white); border-radius:var(--r-md); padding:10px 16px;
+  box-shadow:var(--shadow-card); margin-bottom:10px;
+}
+.ms-topbar .pill-btn{ margin-left:auto; }
+
+.ms-mode-row{ display:flex; gap:8px; margin-bottom:10px; }
+.ms-mode-btn{
+  flex:1; border:2px solid var(--blue); background:var(--white); color:var(--ink);
+  border-radius:var(--r-pill); padding:9px 0; font-family:inherit; font-weight:700; font-size:14px; cursor:pointer;
+}
+.ms-mode-btn.selected{ background:var(--blue-deep); border-color:var(--blue-deep); color:var(--white); }
+
+.ms-board{
+  display:grid; gap:3px;
+  background:var(--white); border-radius:var(--r-lg); padding:10px;
+  box-shadow:var(--shadow-card);
+}
+.ms-cell{
+  aspect-ratio:1/1; border-radius:6px;
+  background:var(--cream); border:1px solid rgba(90,74,74,0.08);
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:800; cursor:pointer; user-select:none;
+  animation:levelComponentEnter var(--dur-component) var(--ease-soft) both;
+}
+.ms-cell:hover{ transform:none; background:#fff7ee; }
+.ms-cell:active{ transform:none; }
+.ms-cell.revealed{
+  background:var(--white); border-color:rgba(90,74,74,0.06); cursor:default;
+  animation:levelComponentEnter 160ms var(--ease-soft) both;
+}
+.ms-cell.revealed:hover{ background:var(--white); }
+.ms-cell.flagged{ font-size:12px; }
+.ms-cell.mine{ background:#ffe3e3; }
+
+.ms-cell.ms-num-1{ color:var(--blue-deep); }
+.ms-cell.ms-num-2{ color:var(--green-deep); }
+.ms-cell.ms-num-3{ color:var(--pink-deep); }
+.ms-cell.ms-num-4{ color:var(--lavender-deep); }
+.ms-cell.ms-num-5{ color:#b5654f; }
+.ms-cell.ms-num-6{ color:#3a9e9e; }
+.ms-cell.ms-num-7{ color:var(--ink); }
+.ms-cell.ms-num-8{ color:#8a7a7a; }
+
+.ms-lose-box{ max-width:320px; text-align:center; }
+.ms-lose-box .modal-header h3{ font-size:19px; }
+
+/* ============================================================
    ICD LOOKUP
    ============================================================ */
 #icd-view{ width:100%; max-width:680px; margin:0 auto; }
@@ -807,7 +865,6 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
   .navbar-links{ gap:var(--sp-4); }
   .navbar-link{ font-size:13px; }
   .navbar-logout{ padding:7px 14px; font-size:13px; }
-  .back-btn{ font-size:13px; padding:6px 2px; flex:0 0 100%; order:-1; }
   .page-container{ padding:calc(var(--navbar-h) + var(--sp-4)) var(--sp-4) 60px; }
 
   .home-intro{ flex-direction:column; text-align:center; margin:var(--sp-4) 0 var(--sp-6); }
@@ -852,6 +909,13 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
   .mochi-stat{ font-size:12px; }
   .mochi-icon-btn{ width:32px; height:32px; font-size:13px; }
   .mochi-pause-text{ font-size:20px; }
+
+  #ms-start-screen{ padding:26px 14px; }
+  .ms-diff-btn{ padding:7px 14px; font-size:13px; }
+  .ms-cell{ font-size:11px; border-radius:4px; }
+  .ms-cell.flagged{ font-size:10px; }
+  .ms-topbar{ padding:8px 12px; gap:8px; }
+  .ms-mode-btn{ font-size:13px; padding:8px 0; }
 
   .icd-search-input{ font-size:15px; padding:13px 16px; }
   .icd-code-btn{ font-size:15px; }
