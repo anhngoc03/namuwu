@@ -170,12 +170,24 @@ var NAV_SECTION_MAP_ = {
   'menu-view': 'home',
   'accounts-view': 'tools', 'symbols-view': 'tools', 'saving-view': 'tools',
   'datediff-view': 'tools', 'icd-view': 'tools', 'eating-view': 'tools',
-  'memory-view': 'games', 'mochi-view': 'games'
+  'memory-view': 'games', 'mochi-view': 'games', 'minesweeper-view': 'games'
 };
 function setNavActive(section) {
   document.querySelectorAll('.navbar-link').forEach(function (el) {
     el.classList.toggle('active', el.dataset.navSection === section);
   });
+  updateNavUnderline();
+}
+
+// Slides the shared underline bar to sit under whichever nav link is currently active.
+function updateNavUnderline() {
+  var activeLink = document.querySelector('.navbar-link.active');
+  var underline = document.getElementById('navbar-underline');
+  if (!activeLink || !underline) return;
+  var linkRect = activeLink.getBoundingClientRect();
+  var containerRect = activeLink.parentElement.getBoundingClientRect();
+  underline.style.width = linkRect.width + 'px';
+  underline.style.left = (linkRect.left - containerRect.left) + 'px';
 }
 
 // Controls which part of the Home tab is visible: 'home' = To Do List section only,
@@ -203,13 +215,6 @@ function showHomeSection(section) {
   setNavActive(section);
 }
 
-// Which back-button belongs to each view — only that one gets shown, inside the navbar.
-var BACK_BTN_MAP_ = {
-  'accounts-view': 'accounts-back', 'symbols-view': 'symbols-back', 'saving-view': 'saving-back',
-  'datediff-view': 'datediff-back', 'icd-view': 'icd-back', 'eating-view': 'eating-back',
-  'memory-view': 'memory-back', 'mochi-view': 'mochi-back'
-};
-
 function showView(id) {
   document.querySelectorAll('.app-view').forEach(function (v) { v.style.display = 'none'; });
   document.getElementById(id).style.display = 'block';
@@ -217,13 +222,6 @@ function showView(id) {
     showHomeSection(currentHomeSection_);
   } else {
     setNavActive(NAV_SECTION_MAP_[id] || 'home');
-  }
-
-  document.querySelectorAll('.back-btn').forEach(function (b) { b.style.display = 'none'; });
-  var backId = BACK_BTN_MAP_[id];
-  if (backId) {
-    var backEl = document.getElementById(backId);
-    if (backEl) backEl.style.display = '';
   }
 
   syncFixedHeaderOffsets();
@@ -238,7 +236,17 @@ function syncFixedHeaderOffsets() {
 }
 
 // Goes to the Home tab showing a specific section ('home' | 'tools' | 'games').
+// Since there's no per-view back button anymore, this is the ONLY way to leave any
+// tool/game view — so it also doubles as a general "cleanup whatever might still be
+// running" step (stopping timers/music/polling), regardless of which view you're
+// actually leaving. Harmless no-op for anything that wasn't running.
 function goHome(section) {
+  stopSymbolsPolling();
+  memoryStopTimer();
+  if (typeof mochiStopMusic === 'function') mochiStopMusic();
+  if (typeof mochiRAF !== 'undefined' && mochiRAF) cancelAnimationFrame(mochiRAF);
+  if (typeof mochiState !== 'undefined') mochiState = 'idle';
+  if (typeof msStopTimer === 'function') msStopTimer();
   showView('menu-view');
   showHomeSection(section);
 }
@@ -1881,7 +1889,8 @@ function renderHomeList() {
   container.innerHTML = '';
 
   if (homeData.length === 0) {
-    container.innerHTML = '<div class="empty-state"><span class="empty-icon" style="white-space:nowrap;">𓆝 𓆟 𓆞 𓆝 𓆟</span>Add something, I\'m bored</div>';
+    container.innerHTML = '<div class="empty-state"><span class="empty-icon">✿</span>Chưa có việc nào cả, thêm mới thôi!</div>';
+    return;
   }
 
   homeData.forEach(function (item) {
@@ -1921,6 +1930,414 @@ function renderHomeList() {
 }
 
 /* ---------------------------------------------------------------- */
+/* MINESWEEPER                                                        */
+/* ---------------------------------------------------------------- */
+var MS_CONFIG = {
+  easy:   { cols: 9,  rows: 9,  mines: 5,  safe: true },
+  normal: { cols: 16, rows: 16, mines: 20, safe: true },
+  hard:   { cols: 16, rows: 20, mines: 50, safe: false }
+};
+
+var msDifficulty = 'easy';
+var msRows = 0, msCols = 0, msMineCount = 0, msSafeFirstClick = true;
+var msBoard = [];       // [row][col] = { mine, revealed, flagged, adjacent }
+var msCellEls = [];     // [row][col] = DOM element, built once per game
+var msMinesPlaced = false;
+var msMode = 'open';    // 'open' | 'flag' — for the mobile OPEN/FLAG toggle
+var msState = 'idle';   // idle | playing | won | lost
+var msFlagCount = 0;
+var msRevealedSafeCount = 0;
+var msTotalSafeCells = 0;
+var msTimerInterval = null;
+var msTimerStarted = false;
+var msStartTime = null;
+var msElapsedSeconds = 0;
+var msScoreSaved = false;
+
+function openMinesweeper() {
+  showView('minesweeper-view');
+  msShowStartScreen();
+}
+
+function msShowStartScreen() {
+  msStopTimer();
+  msState = 'idle';
+  document.getElementById('ms-start-screen').style.display = 'flex';
+  document.getElementById('ms-game-wrap').style.display = 'none';
+  msLoadBestTime();
+}
+
+function msSelectDifficulty(diff) {
+  msDifficulty = diff;
+  document.querySelectorAll('.ms-diff-btn').forEach(function (b) {
+    b.classList.toggle('selected', b.dataset.difficulty === diff);
+  });
+  msLoadBestTime();
+}
+
+function msLoadBestTime() {
+  var el = document.getElementById('ms-best-time-value');
+  el.textContent = '--:--';
+  google.script.run
+    .withSuccessHandler(function (list) {
+      el.textContent = (list && list.length) ? msFormatTime(list[0].time) : 'No record';
+    })
+    .withFailureHandler(function () { el.textContent = '--:--'; })
+    .getMinesweeperLeaderboard(msDifficulty);
+}
+
+function msFormatTime(totalSeconds) {
+  var m = Math.floor(totalSeconds / 60);
+  var s = totalSeconds % 60;
+  return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+}
+
+function msSetMode(mode) {
+  msMode = mode;
+  document.getElementById('ms-mode-open').classList.toggle('selected', mode === 'open');
+  document.getElementById('ms-mode-flag').classList.toggle('selected', mode === 'flag');
+}
+
+function msStartGame() {
+  document.getElementById('ms-win-modal').classList.remove('active');
+  document.getElementById('ms-lose-modal').classList.remove('active');
+  document.getElementById('ms-start-screen').style.display = 'none';
+  document.getElementById('ms-game-wrap').style.display = 'block';
+
+  var cfg = MS_CONFIG[msDifficulty];
+  msRows = cfg.rows; msCols = cfg.cols; msMineCount = cfg.mines; msSafeFirstClick = cfg.safe;
+  msMinesPlaced = false;
+  msTimerStarted = false;
+  msFlagCount = 0;
+  msRevealedSafeCount = 0;
+  msTotalSafeCells = msRows * msCols - msMineCount;
+  msScoreSaved = false;
+  msState = 'playing';
+  msSetMode('open');
+  msStopTimer();
+
+  msBoard = [];
+  for (var r = 0; r < msRows; r++) {
+    var row = [];
+    for (var c = 0; c < msCols; c++) row.push({ mine: false, revealed: false, flagged: false, adjacent: 0 });
+    msBoard.push(row);
+  }
+
+  // Hard mode has no safe first click — place mines right away (no exclusion zone).
+  if (!msSafeFirstClick) {
+    msPlaceMines(-1, -1);
+    msMinesPlaced = true;
+  }
+
+  document.getElementById('ms-mines-left').textContent = msMineCount;
+  document.getElementById('ms-timer').textContent = '00:00';
+  msElapsedSeconds = 0;
+
+  msRenderBoard();
+}
+
+function msRenderBoard() {
+  var boardEl = document.getElementById('ms-board');
+  boardEl.innerHTML = '';
+  boardEl.style.gridTemplateColumns = 'repeat(' + msCols + ', 1fr)';
+  msCellEls = [];
+  for (var r = 0; r < msRows; r++) {
+    var rowEls = [];
+    for (var c = 0; c < msCols; c++) {
+      var cell = document.createElement('div');
+      cell.className = 'ms-cell';
+      cell.onclick = (function (rr, cc) { return function () { msHandleCellClick(rr, cc); }; })(r, c);
+      cell.oncontextmenu = (function (rr, cc) { return function (e) { e.preventDefault(); msToggleFlag(rr, cc); }; })(r, c);
+      boardEl.appendChild(cell);
+      rowEls.push(cell);
+    }
+    msCellEls.push(rowEls);
+  }
+}
+
+function msHandleCellClick(r, c) {
+  if (msState !== 'playing') return;
+  if (msMode === 'flag') msToggleFlag(r, c);
+  else msOpenCell(r, c);
+}
+
+function msToggleFlag(r, c) {
+  if (msState !== 'playing') return;
+  var cell = msBoard[r][c];
+  if (cell.revealed) return;
+  cell.flagged = !cell.flagged;
+  msFlagCount += cell.flagged ? 1 : -1;
+  document.getElementById('ms-mines-left').textContent = msMineCount - msFlagCount;
+  msRenderCell(r, c);
+  msPlaySfx(cell.flagged ? 'flag' : 'unflag');
+}
+
+function msOpenCell(r, c) {
+  var cell = msBoard[r][c];
+  if (cell.revealed || cell.flagged) return;
+
+  if (!msTimerStarted) { msTimerStarted = true; msStartTimer(); }
+  if (!msMinesPlaced) { msPlaceMines(r, c); msMinesPlaced = true; }
+
+  cell = msBoard[r][c];
+  if (cell.mine) {
+    msPlaySfx('lose');
+    msRevealAllMines();
+    msGameOver(false);
+    return;
+  }
+
+  msPlaySfx('dig');
+  msFloodReveal(r, c);
+
+  if (msRevealedSafeCount >= msTotalSafeCells) msGameOver(true);
+}
+
+// Places mines anywhere except (optionally) a 3x3 zone centered on the first click,
+// so Easy/Normal's very first move can never be an instant loss. Then computes each
+// safe cell's adjacent-mine count.
+function msPlaceMines(excludeR, excludeC) {
+  var cells = [];
+  for (var r = 0; r < msRows; r++) {
+    for (var c = 0; c < msCols; c++) {
+      var inSafeZone = msSafeFirstClick && excludeR >= 0 &&
+        Math.abs(r - excludeR) <= 1 && Math.abs(c - excludeC) <= 1;
+      if (!inSafeZone) cells.push([r, c]);
+    }
+  }
+  for (var i = cells.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = cells[i]; cells[i] = cells[j]; cells[j] = tmp;
+  }
+  cells.slice(0, msMineCount).forEach(function (pos) { msBoard[pos[0]][pos[1]].mine = true; });
+
+  for (var r2 = 0; r2 < msRows; r2++) {
+    for (var c2 = 0; c2 < msCols; c2++) {
+      if (msBoard[r2][c2].mine) continue;
+      var count = 0;
+      for (var dr = -1; dr <= 1; dr++) {
+        for (var dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          var nr = r2 + dr, nc = c2 + dc;
+          if (nr >= 0 && nr < msRows && nc >= 0 && nc < msCols && msBoard[nr][nc].mine) count++;
+        }
+      }
+      msBoard[r2][c2].adjacent = count;
+    }
+  }
+}
+
+// Reveals the clicked cell and, if it's a 0, ripples outward to reveal the whole
+// connected empty region — one "layer" (BFS depth) at a time with a small delay,
+// so a big open area animates in like a gentle ripple instead of popping instantly.
+function msFloodReveal(startR, startC) {
+  var visited = {};
+  var layers = [];
+  var queue = [[startR, startC, 0]];
+  visited[startR + '_' + startC] = true;
+
+  while (queue.length) {
+    var item = queue.shift();
+    var r = item[0], c = item[1], depth = item[2];
+    if (!layers[depth]) layers[depth] = [];
+    layers[depth].push([r, c]);
+
+    if (msBoard[r][c].adjacent === 0) {
+      for (var dr = -1; dr <= 1; dr++) {
+        for (var dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          var nr = r + dr, nc = c + dc;
+          if (nr < 0 || nr >= msRows || nc < 0 || nc >= msCols) continue;
+          var key = nr + '_' + nc;
+          if (visited[key]) continue;
+          var ncell = msBoard[nr][nc];
+          if (ncell.mine || ncell.flagged || ncell.revealed) continue;
+          visited[key] = true;
+          queue.push([nr, nc, depth + 1]);
+        }
+      }
+    }
+  }
+
+  layers.forEach(function (layerCells, depth) {
+    setTimeout(function () {
+      layerCells.forEach(function (pos) {
+        var r = pos[0], c = pos[1];
+        var cell = msBoard[r][c];
+        if (cell.revealed) return;
+        cell.revealed = true;
+        msRevealedSafeCount++;
+        msRenderCell(r, c);
+      });
+    }, depth * 35);
+  });
+}
+
+function msRevealAllMines() {
+  for (var r = 0; r < msRows; r++) {
+    for (var c = 0; c < msCols; c++) {
+      if (msBoard[r][c].mine) {
+        msBoard[r][c].revealed = true;
+        msRenderCell(r, c);
+      }
+    }
+  }
+}
+
+function msRenderCell(r, c) {
+  var cell = msBoard[r][c];
+  var el = msCellEls[r][c];
+  el.className = 'ms-cell';
+  el.textContent = '';
+  if (cell.revealed) {
+    el.classList.add('revealed');
+    if (cell.mine) {
+      el.classList.add('mine');
+      el.textContent = '💩';
+    } else if (cell.adjacent > 0) {
+      el.textContent = cell.adjacent;
+      el.classList.add('ms-num-' + cell.adjacent);
+    }
+  } else if (cell.flagged) {
+    el.classList.add('flagged');
+    el.textContent = '🌷';
+  }
+}
+
+function msStartTimer() {
+  msStartTime = Date.now();
+  clearInterval(msTimerInterval);
+  msTimerInterval = setInterval(function () {
+    msElapsedSeconds = Math.floor((Date.now() - msStartTime) / 1000);
+    document.getElementById('ms-timer').textContent = msFormatTime(msElapsedSeconds);
+  }, 1000);
+}
+
+function msStopTimer() {
+  clearInterval(msTimerInterval);
+  msTimerInterval = null;
+}
+
+function msGameOver(won) {
+  msState = won ? 'won' : 'lost';
+  msStopTimer();
+  if (won) {
+    msPlaySfx('win');
+    document.getElementById('ms-win-time').textContent = msFormatTime(msElapsedSeconds);
+    document.getElementById('ms-player-name').value = '';
+    msScoreSaved = false;
+    document.getElementById('ms-win-modal').classList.add('active');
+    msLoadLeaderboardInto('ms-win-leaderboard-body');
+  } else {
+    setTimeout(function () {
+      document.getElementById('ms-lose-modal').classList.add('active');
+    }, 400);
+  }
+}
+
+function msLoadLeaderboardInto(bodyId) {
+  google.script.run
+    .withSuccessHandler(function (list) { msRenderLeaderboard(list, bodyId); })
+    .withFailureHandler(function (err) { toast('Error: ' + err.message); })
+    .getMinesweeperLeaderboard(msDifficulty);
+}
+
+function msRenderLeaderboard(list, bodyId) {
+  var body = document.getElementById(bodyId);
+  body.innerHTML = '';
+  if (!list || list.length === 0) {
+    body.innerHTML = '<tr><td colspan="3" style="text-align:center;opacity:.6;">No scores yet ✿</td></tr>';
+    return;
+  }
+  list.forEach(function (item, i) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + (i + 1) + '</td><td>' + item.name + '</td><td>' + msFormatTime(item.time) + '</td>';
+    body.appendChild(tr);
+  });
+}
+
+function msSaveScore() {
+  if (msScoreSaved) { toast('Already saved this round'); return; }
+  var name = document.getElementById('ms-player-name').value.trim();
+  if (!name) { toast('Enter your name first'); return; }
+  showLoading();
+  google.script.run
+    .withSuccessHandler(function (list) {
+      hideLoading();
+      msScoreSaved = true;
+      msRenderLeaderboard(list, 'ms-win-leaderboard-body');
+      toast('Saved!');
+    })
+    .withFailureHandler(function (err) { hideLoading(); toast('Error: ' + err.message); })
+    .submitMinesweeperScore(msDifficulty, name, msElapsedSeconds);
+}
+
+/* -- Web Audio SFX (same lazy-context pattern as Memory Match / Mochi Fly) -- */
+var msAudioCtx = null;
+function msEnsureAudio() {
+  if (!msAudioCtx) {
+    try { msAudioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* no-op */ }
+  }
+  if (msAudioCtx && msAudioCtx.state === 'suspended') msAudioCtx.resume();
+}
+function msPlaySfx(type) {
+  msEnsureAudio();
+  if (!msAudioCtx) return;
+  var ctx = msAudioCtx, now = ctx.currentTime;
+
+  if (type === 'dig') {
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'triangle'; o.frequency.value = 480;
+    o.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.12, now + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+    o.start(now); o.stop(now + 0.1);
+  } else if (type === 'flag') {
+    var o2 = ctx.createOscillator(), g2 = ctx.createGain();
+    o2.type = 'sine';
+    o2.frequency.setValueAtTime(700, now);
+    o2.frequency.exponentialRampToValueAtTime(1000, now + 0.08);
+    o2.connect(g2); g2.connect(ctx.destination);
+    g2.gain.setValueAtTime(0.0001, now);
+    g2.gain.exponentialRampToValueAtTime(0.13, now + 0.01);
+    g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+    o2.start(now); o2.stop(now + 0.12);
+  } else if (type === 'unflag') {
+    var o3 = ctx.createOscillator(), g3 = ctx.createGain();
+    o3.type = 'sine';
+    o3.frequency.setValueAtTime(600, now);
+    o3.frequency.exponentialRampToValueAtTime(400, now + 0.08);
+    o3.connect(g3); g3.connect(ctx.destination);
+    g3.gain.setValueAtTime(0.0001, now);
+    g3.gain.exponentialRampToValueAtTime(0.1, now + 0.01);
+    g3.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+    o3.start(now); o3.stop(now + 0.12);
+  } else if (type === 'win') {
+    [523, 659, 784, 1047].forEach(function (f, i) {
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'triangle'; o.frequency.value = f;
+      o.connect(g); g.connect(ctx.destination);
+      var t = now + i * 0.1;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.13, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+      o.start(t); o.stop(t + 0.16);
+    });
+  } else if (type === 'lose') {
+    var o4 = ctx.createOscillator(), g4 = ctx.createGain();
+    o4.type = 'square';
+    o4.frequency.setValueAtTime(220, now);
+    o4.frequency.exponentialRampToValueAtTime(80, now + 0.3);
+    o4.connect(g4); g4.connect(ctx.destination);
+    g4.gain.setValueAtTime(0.0001, now);
+    g4.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
+    g4.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+    o4.start(now); o4.stop(now + 0.37);
+  }
+}
+
+/* ---------------------------------------------------------------- */
 /* INIT                                                               */
 /* ---------------------------------------------------------------- */
 document.addEventListener('DOMContentLoaded', function () {
@@ -1940,26 +2357,20 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('open-memory').onclick = openMemory;
   document.getElementById('open-mochi').onclick = openMochi;
   document.getElementById('open-icd').onclick = openIcd;
+  document.getElementById('open-minesweeper').onclick = openMinesweeper;
 
-  document.getElementById('accounts-back').onclick = function () { stopSymbolsPolling(); goHome('tools'); };
-  document.getElementById('symbols-back').onclick = function () { stopSymbolsPolling(); goHome('tools'); };
-  document.getElementById('saving-back').onclick = function () { goHome('tools'); };
-  document.getElementById('datediff-back').onclick = function () { goHome('tools'); };
-  document.getElementById('memory-back').onclick = function () { memoryStopTimer(); goHome('games'); };
   document.getElementById('memory-newgame').onclick = memoryNewGame;
   document.getElementById('memory-start-btn').onclick = memoryNewGame;
   document.getElementById('memory-result-newgame').onclick = memoryNewGame;
   document.getElementById('memory-save-score').onclick = memorySaveScore;
   document.getElementById('memory-result-close').onclick = function () { document.getElementById('memory-result-modal').classList.remove('active'); };
 
-  document.getElementById('icd-back').onclick = function () { goHome('tools'); };
   document.getElementById('icd-add-btn').onclick = function () { openIcdForm(null); };
   document.getElementById('icd-search').oninput = renderIcdList;
   document.getElementById('icd-save-btn').onclick = saveIcdEntry;
   document.getElementById('icd-modal-close').onclick = function () { document.getElementById('icd-modal').classList.remove('active'); };
 
   document.getElementById('open-eating').onclick = openEating;
-  document.getElementById('eating-back').onclick = function () { goHome('tools'); };
   document.getElementById('eating-reset-btn').onclick = openEatingReset;
   document.getElementById('eating-reset-cancel').onclick = function () { document.getElementById('eating-reset-modal').classList.remove('active'); };
   document.getElementById('eating-reset-close').onclick = function () { document.getElementById('eating-reset-modal').classList.remove('active'); };
@@ -1972,12 +2383,6 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('eating-field-bubble').oninput = function () { eatingFormatFieldLive(this); updateEatingDailyTotalPreview(); };
   document.getElementById('eating-field-out').oninput = function () { eatingFormatFieldLive(this); updateEatingDailyTotalPreview(); };
 
-  document.getElementById('mochi-back').onclick = function () {
-    mochiStopMusic();
-    cancelAnimationFrame(mochiRAF);
-    mochiState = 'idle';
-    goHome('games');
-  };
   document.querySelectorAll('.mochi-color-swatch').forEach(function (btn) {
     btn.onclick = function () {
       document.querySelectorAll('.mochi-color-swatch').forEach(function (b) { b.classList.remove('selected'); });
@@ -2026,4 +2431,22 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('home-reset-btn').onclick = function () { document.getElementById('home-reset-modal').classList.add('active'); };
   document.getElementById('home-reset-nope').onclick = function () { document.getElementById('home-reset-modal').classList.remove('active'); };
   document.getElementById('home-reset-yah').onclick = homeConfirmReset;
+
+  document.querySelectorAll('.ms-diff-btn').forEach(function (btn) {
+    btn.onclick = function () { msSelectDifficulty(btn.dataset.difficulty); };
+  });
+  document.getElementById('ms-start-btn').onclick = msStartGame;
+  document.getElementById('ms-newgame-btn').onclick = msStartGame;
+  document.getElementById('ms-mode-open').onclick = function () { msSetMode('open'); };
+  document.getElementById('ms-mode-flag').onclick = function () { msSetMode('flag'); };
+  document.getElementById('ms-save-score').onclick = msSaveScore;
+  document.getElementById('ms-win-newgame').onclick = msStartGame;
+  document.getElementById('ms-win-close').onclick = function () {
+    document.getElementById('ms-win-modal').classList.remove('active');
+    msShowStartScreen();
+  };
+  document.getElementById('ms-lose-tryagain').onclick = function () {
+    document.getElementById('ms-lose-modal').classList.remove('active');
+    msStartGame();
+  };
 });
