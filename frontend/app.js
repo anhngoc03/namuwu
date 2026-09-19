@@ -2087,10 +2087,8 @@ function msOpenCell(r, c) {
     return;
   }
 
-  msPlaySfx('dig');
+    msPlaySfx('dig');
   msFloodReveal(r, c);
-
-  if (msRevealedSafeCount >= msTotalSafeCells) msGameOver(true);
 }
 
 // Places mines anywhere except (optionally) a 3x3 zone centered on the first click,
@@ -2159,7 +2157,7 @@ function msFloodReveal(startR, startC) {
     }
   }
 
-  layers.forEach(function (layerCells, depth) {
+    layers.forEach(function (layerCells, depth) {
     setTimeout(function () {
       layerCells.forEach(function (pos) {
         var r = pos[0], c = pos[1];
@@ -2169,6 +2167,9 @@ function msFloodReveal(startR, startC) {
         msRevealedSafeCount++;
         msRenderCell(r, c);
       });
+      if (msState === 'playing' && msRevealedSafeCount >= msTotalSafeCells) {
+        msGameOver(true);
+      }
     }, depth * 35);
   });
 }
