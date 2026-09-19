@@ -2,44 +2,29 @@
  * gas-bridge.js
  * ------------------------------------------------------------------
  * Lớp "cầu nối" giả lập API `google.script.run` của Google Apps Script,
- * nhưng thực chất gọi tới Apps Script Web App bằng fetch() thông thường.
+ * nhưng thực chất gọi tới Cloudflare Pages Function (/api) bằng fetch().
  *
- * NHỜ FILE NÀY, app.js (chuyển nguyên vẹn từ JavaScript.html cũ) KHÔNG CẦN
- * SỬA BẤT KỲ DÒNG NÀO — mọi lời gọi kiểu:
+ * NHỜ FILE NÀY, app.js KHÔNG CẦN SỬA BẤT KỲ DÒNG N ÀO — mọi lời gọi kiểu:
  *
  *   google.script.run
  *     .withSuccessHandler(function (data) { ... })
  *     .withFailureHandler(function (err) { ... })
  *     .getAccountsData();
  *
- * vẫn hoạt động y hệt như cũ, chỉ khác là bên dưới nó dùng fetch() thay vì
- * cơ chế nội bộ của Apps Script HtmlService.
+ * vẫn hoạt động y hệt như cũ.
  *
- * CÁCH DÙNG:
- *   1. Deploy Code.gs thành Web App (Deploy > New deployment > Web app).
- *   2. Copy URL dạng: https://script.google.com/macros/s/XXXXXXXX/exec
- *   3. Dán vào API_BASE_URL bên dưới.
- *   4. Nhúng file này TRƯỚC app.js trong index.html:
- *        <script src="gas-bridge.js"></script>
- *        <script src="app.js"></script>
+ * Backend giờ là functions/api.js (Cloudflare Pages Function), đọc/ghi
+ * dữ liệu ở Supabase — cùng domain với frontend nên KHÔNG cần lo CORS.
  * ------------------------------------------------------------------
  */
 
 (function () {
   'use strict';
 
-  // ⚠️ BẮT BUỘC: thay bằng URL Web App Apps Script thực tế của bạn sau khi deploy.
-  var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbw344nesbbvd4PXn4i8wjysTJHFrY2WcOz6b-UOdFDW5sPQfzNhDU7j4zTyhqcBMnk2Ww/exec';
+  // Cùng domain (namuwu.pages.dev) nên chỉ cần đường dẫn tương đối — không
+  // cần sửa gì thêm dù bạn đổi custom domain sau này.
+  var API_BASE_URL = '/api';
 
-  /**
-   * Gọi 1 action lên Apps Script Web App.
-   * QUAN TRỌNG: KHÔNG set header 'Content-Type': 'application/json' thủ công,
-   * vì làm vậy trình duyệt sẽ gửi preflight OPTIONS — mà Apps Script Web App
-   * không xử lý OPTIONS, sẽ gây lỗi CORS. Để fetch() tự gán Content-Type mặc
-   * định là "text/plain;charset=UTF-8" (request được coi là "simple request",
-   * không cần preflight), Apps Script vẫn đọc được JSON trong e.postData.contents
-   * bình thường.
-   */
   function callApi(action, args) {
     return fetch(API_BASE_URL, {
       method: 'POST',
