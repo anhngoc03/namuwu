@@ -157,6 +157,30 @@ var NAV_SECTION_MAP_ = {
   'datediff-view': 'tools', 'icd-view': 'tools', 'eating-view': 'tools', 'qr-view': 'tools',
   'memory-view': 'games', 'mochi-view': 'games', 'minesweeper-view': 'games'
 };
+
+// Which function actually "opens" each view (loads its data, etc.) — used to restore
+// the right page after a reload. 'accounts-view' is deliberately excluded: it's
+// password-gated, so a reload should never silently bypass that gate.
+var VIEW_OPENERS_ = {
+  'symbols-view': loadSymbols,
+  'saving-view': openSaving,
+  'datediff-view': openDateDiff,
+  'icd-view': openIcd,
+  'eating-view': openEating,
+  'qr-view': openQrCollection,
+  'memory-view': openMemory,
+  'mochi-view': openMochi,
+  'minesweeper-view': openMinesweeper
+};
+
+// Remembers where the person currently is, so reloading the page lands back on the
+// same view instead of always resetting to Home.
+function saveNavState_(view, section) {
+  try {
+    localStorage.setItem('henlo_nav', JSON.stringify({ view: view, section: section }));
+  } catch (e) { /* localStorage unavailable — silently skip, not critical */ }
+}
+
 function setNavActive(section) {
   document.querySelectorAll('.navbar-link').forEach(function (el) {
     el.classList.toggle('active', el.dataset.navSection === section);
@@ -198,6 +222,7 @@ function showHomeSection(section) {
     if (games) games.style.display = '';
   }
   setNavActive(section);
+  saveNavState_('menu-view', section);
 }
 
 function showView(id) {
@@ -207,6 +232,7 @@ function showView(id) {
     showHomeSection(currentHomeSection_);
   } else {
     setNavActive(NAV_SECTION_MAP_[id] || 'home');
+    if (id !== 'accounts-view') saveNavState_(id);
   }
 
   syncFixedHeaderOffsets();
@@ -2525,7 +2551,18 @@ function confirmQrDelete() {
 document.addEventListener('DOMContentLoaded', function () {
   scatterFlowers();
   syncFixedHeaderOffsets();
-  showHomeSection('home');
+
+  // Restore whichever view the person was on before reloading (if any, and if it's
+  // safe to restore — Accounts is skipped since it's password-gated).
+  var savedNav = null;
+  try { savedNav = JSON.parse(localStorage.getItem('henlo_nav') || 'null'); } catch (e) { savedNav = null; }
+  if (savedNav && savedNav.view && savedNav.view !== 'menu-view' && typeof VIEW_OPENERS_[savedNav.view] === 'function') {
+    VIEW_OPENERS_[savedNav.view]();
+  } else {
+    showView('menu-view');
+    showHomeSection((savedNav && savedNav.section) || 'home');
+  }
+
   window.addEventListener('resize', syncFixedHeaderOffsets);
 
   document.getElementById('nav-home').onclick = function () { goHome('home'); };
