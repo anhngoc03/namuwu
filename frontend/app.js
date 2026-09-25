@@ -1,19 +1,4 @@
 /* ---------------------------------------------------------------- */
-/* LOGIN IMAGE FALLBACK CHAIN                                         */
-/* ---------------------------------------------------------------- */
-function imgFallback(img) {
-  if (img.dataset.fallback1) {
-    img.src = img.dataset.fallback1;
-    img.removeAttribute('data-fallback1');
-  } else if (img.dataset.fallback2) {
-    img.src = img.dataset.fallback2;
-    img.removeAttribute('data-fallback2');
-  } else {
-    img.style.display = 'none';
-  }
-}
-
-/* ---------------------------------------------------------------- */
 /* FLOWER BACKGROUND                                                  */
 /* ---------------------------------------------------------------- */
 function scatterFlowers() {
@@ -169,7 +154,7 @@ function showScreen(id) {
 var NAV_SECTION_MAP_ = {
   'menu-view': 'home',
   'accounts-view': 'tools', 'symbols-view': 'tools', 'saving-view': 'tools',
-  'datediff-view': 'tools', 'icd-view': 'tools', 'eating-view': 'tools',
+  'datediff-view': 'tools', 'icd-view': 'tools', 'eating-view': 'tools', 'qr-view': 'tools',
   'memory-view': 'games', 'mochi-view': 'games', 'minesweeper-view': 'games'
 };
 function setNavActive(section) {
@@ -2087,8 +2072,10 @@ function msOpenCell(r, c) {
     return;
   }
 
-    msPlaySfx('dig');
+  msPlaySfx('dig');
   msFloodReveal(r, c);
+
+  if (msRevealedSafeCount >= msTotalSafeCells) msGameOver(true);
 }
 
 // Places mines anywhere except (optionally) a 3x3 zone centered on the first click,
@@ -2157,7 +2144,7 @@ function msFloodReveal(startR, startC) {
     }
   }
 
-    layers.forEach(function (layerCells, depth) {
+  layers.forEach(function (layerCells, depth) {
     setTimeout(function () {
       layerCells.forEach(function (pos) {
         var r = pos[0], c = pos[1];
@@ -2167,9 +2154,6 @@ function msFloodReveal(startR, startC) {
         msRevealedSafeCount++;
         msRenderCell(r, c);
       });
-      if (msState === 'playing' && msRevealedSafeCount >= msTotalSafeCells) {
-        msGameOver(true);
-      }
     }, depth * 35);
   });
 }
@@ -2339,6 +2323,197 @@ function msPlaySfx(type) {
 }
 
 /* ---------------------------------------------------------------- */
+/* QR COLLECTION                                                       */
+/* ---------------------------------------------------------------- */
+var qrData = [];        // [{ row, name, link, note }]
+var qrEditingId = null; // null when Add modal is open, otherwise the row being edited
+var qrDeletingId = null;
+var topToastTimer = null;
+
+function openQrCollection() {
+  showView('qr-view');
+  loadQrData();
+}
+
+function loadQrData() {
+  showLoading();
+  google.script.run
+    .withSuccessHandler(function (list) {
+      hideLoading();
+      qrData = list;
+      renderQrList();
+    })
+    .withFailureHandler(function (err) { hideLoading(); toast('Error: ' + err.message); })
+    .getQrData();
+}
+
+function renderQrList() {
+  var container = document.getElementById('qr-list');
+  container.innerHTML = '';
+
+  if (qrData.length === 0) {
+    container.innerHTML = '<div class="empty-state"><span class="empty-icon">⌘</span>No QR codes yet</div>';
+    return;
+  }
+
+  // Always display sorted A→Z by name, numbered to match that order —
+  // independent of whatever order the server happened to return them in.
+  var sorted = qrData.slice().sort(function (a, b) {
+    return String(a.name).localeCompare(String(b.name), undefined, { sensitivity: 'base' });
+  });
+
+  sorted.forEach(function (item, idx) {
+    var card = document.createElement('div');
+    card.className = 'qr-card';
+    card.innerHTML =
+      '<div class="qr-canvas-wrap">' +
+        '<button class="qr-delete-btn" title="Delete">✕</button>' +
+        '<canvas width="240" height="240"></canvas>' +
+      '</div>' +
+      '<div class="qr-index">#' + (idx + 1) + '</div>' +
+      '<div class="qr-name">' + icdEscape(item.name) + '</div>' +
+      (item.note ? '<div class="qr-note">' + icdEscape(item.note) + '</div>' : '') +
+      '<div class="qr-actions">' +
+        '<button class="qr-download-btn" title="Download">⬇</button>' +
+        '<button class="qr-edit-btn acc-edit-icon-btn" title="Edit">✎</button>' +
+      '</div>';
+
+    var canvas = card.querySelector('canvas');
+    var canvasWrap = card.querySelector('.qr-canvas-wrap');
+    qrRenderCanvas(canvas, item.link);
+
+    canvasWrap.onclick = function () { window.open(item.link, '_blank'); };
+    card.querySelector('.qr-name').onclick = function () { window.open(item.link, '_blank'); };
+    card.querySelector('.qr-download-btn').onclick = function (e) {
+      e.stopPropagation();
+      qrDownload(canvas, item.name);
+    };
+    card.querySelector('.qr-edit-btn').onclick = function (e) {
+      e.stopPropagation();
+      openQrForm(item);
+    };
+    card.querySelector('.qr-delete-btn').onclick = function (e) {
+      e.stopPropagation();
+      qrDeletingId = item.row;
+      document.getElementById('qr-delete-modal').classList.add('active');
+    };
+
+    container.appendChild(card);
+  });
+}
+
+// Draws the QR code for `link` onto `canvas`, then stamps the tomato logo
+// (same image used as the site favicon) in the center on top of it — QR codes
+// have enough built-in redundancy (error correction) to survive a small
+// logo covering their middle and still scan correctly.
+function qrRenderCanvas(canvas, link) {
+  QRCode.toCanvas(canvas, link || '', {
+    width: 240,
+    margin: 1,
+    errorCorrectionLevel: 'H',
+    color: { dark: '#5a4a4a', light: '#fffaea' }
+  }, function (err) {
+    if (err) { console.error(err); return; }
+    var ctx = canvas.getContext('2d');
+    var logo = new Image();
+    logo.onload = function () {
+      var size = canvas.width * 0.22;
+      var x = (canvas.width - size) / 2;
+      var y = (canvas.height - size) / 2;
+      var pad = size * 0.16;
+      ctx.fillStyle = '#fffaea';
+      qrRoundRect(ctx, x - pad, y - pad, size + pad * 2, size + pad * 2, 8);
+      ctx.fill();
+      ctx.drawImage(logo, x, y, size, size);
+    };
+    logo.src = 'images/favicon.png';
+  });
+}
+
+function qrRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function qrDownload(canvas, name) {
+  try {
+    var safeName = String(name || 'qr').trim().replace(/[^a-z0-9\-_]+/gi, '_') || 'qr';
+    var a = document.createElement('a');
+    a.download = safeName + '.png';
+    a.href = canvas.toDataURL('image/png');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showTopToast('Saved to your downloads ✓');
+  } catch (e) {
+    toast("Couldn't download");
+  }
+}
+
+// A separate top-of-screen toast used only for this — the regular toast()
+// stays at the bottom for everything else in the app.
+function showTopToast(msg) {
+  var t = document.getElementById('top-toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(topToastTimer);
+  topToastTimer = setTimeout(function () { t.classList.remove('show'); }, 2000);
+}
+
+function openQrForm(item) {
+  qrEditingId = item ? item.row : null;
+  document.getElementById('qr-modal-title').textContent = item ? 'Edit QR' : 'Add QR';
+  document.getElementById('qr-field-name').value = item ? item.name : '';
+  document.getElementById('qr-field-link').value = item ? item.link : '';
+  document.getElementById('qr-field-note').value = item ? item.note : '';
+  document.getElementById('qr-modal').classList.add('active');
+}
+
+function saveQrEntry() {
+  var name = document.getElementById('qr-field-name').value.trim();
+  var link = document.getElementById('qr-field-link').value.trim();
+  var note = document.getElementById('qr-field-note').value.trim();
+  if (!name || !link) { toast('Enter both Name and Link'); return; }
+
+  showLoading();
+  var onDone = function (list) {
+    hideLoading();
+    qrData = list;
+    document.getElementById('qr-modal').classList.remove('active');
+    renderQrList();
+    toast('Saved!');
+  };
+  var onFail = function (err) { hideLoading(); toast('Error: ' + err.message); };
+
+  if (qrEditingId) {
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(onFail).updateQrRow(qrEditingId, name, link, note);
+  } else {
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(onFail).addQrRow(name, link, note);
+  }
+}
+
+function confirmQrDelete() {
+  document.getElementById('qr-delete-modal').classList.remove('active');
+  if (qrDeletingId == null) return;
+  var rowToDelete = qrDeletingId;
+  qrDeletingId = null;
+  showLoading();
+  google.script.run
+    .withSuccessHandler(function (list) {
+      hideLoading();
+      qrData = list;
+      renderQrList();
+    })
+    .withFailureHandler(function (err) { hideLoading(); toast('Error: ' + err.message); })
+    .deleteQrRow(rowToDelete);
+}
+
+/* ---------------------------------------------------------------- */
 /* INIT                                                               */
 /* ---------------------------------------------------------------- */
 document.addEventListener('DOMContentLoaded', function () {
@@ -2359,6 +2534,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('open-mochi').onclick = openMochi;
   document.getElementById('open-icd').onclick = openIcd;
   document.getElementById('open-minesweeper').onclick = openMinesweeper;
+  document.getElementById('open-qr').onclick = openQrCollection;
 
   document.getElementById('memory-newgame').onclick = memoryNewGame;
   document.getElementById('memory-start-btn').onclick = memoryNewGame;
@@ -2450,4 +2626,13 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('ms-lose-modal').classList.remove('active');
     msStartGame();
   };
+
+  document.getElementById('qr-add-btn').onclick = function () { openQrForm(null); };
+  document.getElementById('qr-modal-close').onclick = function () { document.getElementById('qr-modal').classList.remove('active'); };
+  document.getElementById('qr-save-btn').onclick = saveQrEntry;
+  document.getElementById('qr-delete-mistake').onclick = function () {
+    qrDeletingId = null;
+    document.getElementById('qr-delete-modal').classList.remove('active');
+  };
+  document.getElementById('qr-delete-yah').onclick = confirmQrDelete;
 });
