@@ -879,14 +879,15 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
   display:flex; align-items:center; justify-content:center;
 }
 .qr-delete-btn:hover{ background:rgba(90,74,74,0.8); }
-.qr-index{ font-size:11px; font-weight:800; color:var(--pink-deep); opacity:0.7; margin-bottom:2px; }
+.qr-meta-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
+.qr-index{ font-size:14px; font-weight:800; color:var(--pink-deep); opacity:0.7; }
+.qr-actions{ display:flex; align-items:center; justify-content:flex-end; gap:8px; }
 .qr-name{
   font-size:14px; font-weight:800; color:var(--ink); cursor:pointer;
   margin-bottom:2px; word-break:break-word;
 }
 .qr-name:hover{ color:var(--pink-deep); transform:none; }
 .qr-note{ font-size:12px; color:var(--ink); opacity:0.6; margin-bottom:8px; word-break:break-word; }
-.qr-actions{ display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-bottom:4px; }
 .qr-download-btn, .qr-edit-btn{
   background:none; border:none; box-shadow:none; padding:4px;
   color:var(--pink-deep); opacity:0.6; cursor:pointer; font-size:14px;
@@ -894,6 +895,11 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
 }
 .qr-download-btn:hover, .qr-edit-btn:hover{ opacity:1; transform:translateY(-2px); }
 .qr-download-btn:active, .qr-edit-btn:active{ transform:translateY(1px); }
+.qr-embed-logo-row{
+  display:flex; align-items:center; gap:8px;
+  font-size:13px; color:var(--ink); opacity:0.8; cursor:pointer; margin-bottom:14px;
+}
+.qr-embed-logo-row input[type="checkbox"]{ width:16px; height:16px; cursor:pointer; }
 
 /* ============================================================
    RESPONSIVE
