@@ -272,21 +272,34 @@ async function submitMinesweeperScore(env, [difficulty, name, time]) {
 }
 
 /* --------------------------- QR COLLECTION ------------------------------ */
-// Bảng qr_codes: id | name | link | note. Không cần cột ảnh — QR được tự
-// sinh từ "link" ngay trên trình duyệt (client-side), không cần Storage.
+// Bảng qr_codes: id | name | link | note | embed_logo. Không cần cột ảnh — QR
+// được tự sinh từ "link" ngay trên trình duyệt (client-side), không cần Storage.
+// embed_logo: có chèn logo favicon vào giữa mã QR hay không (tuỳ người dùng chọn).
 
 async function getQrData(env) {
-  const rows = await sb(env, 'qr_codes?select=id,name,link,note&order=name.asc');
-  return rows.map((r) => ({ row: r.id, name: r.name, link: r.link, note: r.note || '' }));
+  const rows = await sb(env, 'qr_codes?select=id,name,link,note,embed_logo&order=name.asc');
+  return rows.map((r) => ({
+    row: r.id,
+    name: r.name,
+    link: r.link,
+    note: r.note || '',
+    embedLogo: r.embed_logo !== false
+  }));
 }
 
-async function addQrRow(env, [name, link, note]) {
-  await sb(env, 'qr_codes', { method: 'POST', body: JSON.stringify([{ name, link, note }]) });
+async function addQrRow(env, [name, link, note, embedLogo]) {
+  await sb(env, 'qr_codes', {
+    method: 'POST',
+    body: JSON.stringify([{ name, link, note, embed_logo: embedLogo !== false }])
+  });
   return getQrData(env);
 }
 
-async function updateQrRow(env, [rowNumber, name, link, note]) {
-  await sb(env, `qr_codes?id=eq.${rowNumber}`, { method: 'PATCH', body: JSON.stringify({ name, link, note }) });
+async function updateQrRow(env, [rowNumber, name, link, note, embedLogo]) {
+  await sb(env, `qr_codes?id=eq.${rowNumber}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name, link, note, embed_logo: embedLogo !== false })
+  });
   return getQrData(env);
 }
 
