@@ -886,19 +886,20 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
 }
 .qr-name:hover{ color:var(--pink-deep); transform:none; }
 .qr-note{ font-size:12px; color:var(--ink); opacity:0.6; margin-bottom:8px; word-break:break-word; }
-.qr-actions{ display:flex; align-items:center; justify-content:center; gap:10px; }
-.qr-download-btn{
-  background:var(--blue); border:none; box-shadow:none; border-radius:50%;
-  width:30px; height:30px; font-size:14px; color:var(--white); cursor:pointer;
+.qr-actions{ display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-bottom:4px; }
+.qr-download-btn, .qr-edit-btn{
+  background:none; border:none; box-shadow:none; padding:4px;
+  color:var(--pink-deep); opacity:0.6; cursor:pointer; font-size:14px;
+  display:flex; align-items:center; justify-content:center;
 }
-.qr-edit-btn{ margin:0; }
+.qr-download-btn:hover, .qr-edit-btn:hover{ opacity:1; transform:translateY(-2px); }
+.qr-download-btn:active, .qr-edit-btn:active{ transform:translateY(1px); }
 
 /* ============================================================
    RESPONSIVE
    ============================================================ */
 @media (max-width: 960px){
   .nav-card-grid{ grid-template-columns:repeat(2, 1fr); }
-  .qr-list{ grid-template-columns:repeat(3, 1fr); }
 }
 
 @media (max-width: 760px){
