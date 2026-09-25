@@ -2396,13 +2396,18 @@ function renderQrList() {
         '<button class="qr-delete-btn" title="Delete">✕</button>' +
         '<div class="qr-canvas-holder"></div>' +
       '</div>' +
+      '<div class="qr-actions">' +
+        '<button class="qr-download-btn" title="Download">' +
+          '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+            '<path d="M12 3V15M12 15L7 10M12 15L17 10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+            '<path d="M4 17V18C4 19.6569 5.34315 21 7 21H17C18.6569 21 20 19.6569 20 18V17" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+          '</svg>' +
+        '</button>' +
+        '<button class="qr-edit-btn" title="Edit">✎</button>' +
+      '</div>' +
       '<div class="qr-index">#' + (idx + 1) + '</div>' +
       '<div class="qr-name">' + icdEscape(item.name) + '</div>' +
-      (item.note ? '<div class="qr-note">' + icdEscape(item.note) + '</div>' : '') +
-      '<div class="qr-actions">' +
-        '<button class="qr-download-btn" title="Download">⬇</button>' +
-        '<button class="qr-edit-btn acc-edit-icon-btn" title="Edit">✎</button>' +
-      '</div>';
+      (item.note ? '<div class="qr-note">' + icdEscape(item.note) + '</div>' : '');
 
     var holder = card.querySelector('.qr-canvas-holder');
     var canvasWrap = card.querySelector('.qr-canvas-wrap');
@@ -2458,6 +2463,14 @@ function qrRenderCanvas(container, link) {
     qrRoundRect(ctx, x - pad, y - pad, size + pad * 2, size + pad * 2, 8);
     ctx.fill();
     ctx.drawImage(logo, x, y, size, size);
+
+    // The qrcode.js library quietly swaps the canvas for a static snapshot <img>
+    // shortly after drawing (for old-Android compatibility) — that swap runs
+    // AFTER this callback fires, so it would otherwise hide our logo. Force the
+    // canvas to stay the visible element so the logo we just drew actually shows.
+    canvas.style.display = 'block';
+    var snapshotImg = container.querySelector('img');
+    if (snapshotImg) snapshotImg.style.display = 'none';
   };
   logo.src = 'images/favicon.png';
 }
