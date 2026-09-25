@@ -2475,10 +2475,13 @@ function qrRenderCanvas(container, link, embedLogo) {
       var size = canvas.width * 0.22;
       var x = (canvas.width - size) / 2;
       var y = (canvas.height - size) / 2;
-      var ring = size * 0.05; // thin white ring — a few px equivalent, not a big backing tile
+      // A hairline quiet zone (~3px at this resolution), sharp corners — just enough
+      // so the QR's dark modules don't touch the icon directly. Deliberately NOT a
+      // padded, rounded tile — that reads as a sticker slapped on top instead of an
+      // icon set into the code.
+      var ring = canvas.width * 0.006;
       ctx.fillStyle = '#fffaea';
-      qrRoundRect(ctx, x - ring, y - ring, size + ring * 2, size + ring * 2, ring * 1.5);
-      ctx.fill();
+      ctx.fillRect(x - ring, y - ring, size + ring * 2, size + ring * 2);
       ctx.drawImage(logo, x, y, size, size);
       fixVisibility();
     };
@@ -2487,16 +2490,6 @@ function qrRenderCanvas(container, link, embedLogo) {
   } else {
     setTimeout(fixVisibility, 0);
   }
-}
-
-function qrRoundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
 }
 
 function qrDownload(canvas, fileNumber) {
