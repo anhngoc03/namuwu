@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Henlo human</title>
+  <link rel="icon" type="image/png" href="images/favicon.png">
+  <link rel="apple-touch-icon" href="images/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Fredoka:wght@400;600;700&family=Baloo+2:wght@500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
@@ -12,6 +14,7 @@
 
   <div id="flower-field"></div>
   <div id="toast" class="toast"></div>
+  <div id="top-toast" class="top-toast"></div>
   <div id="footer-credit">created by namu •˖*</div>
 
   <!-- ================= LOADING OVERLAY ================= -->
@@ -43,12 +46,7 @@
       <div id="menu-view" class="app-view">
         <section class="home-section">
           <div class="home-intro">
-            <img id="home-login-img" class="home-intro-img"
-                 src="https://lh3.googleusercontent.com/d/1P3sWFps-Jrqwuj5WFaHfNiaIcu4E0thw=w1000"
-                 data-fallback1="https://drive.google.com/thumbnail?id=1P3sWFps-Jrqwuj5WFaHfNiaIcu4E0thw&sz=w1000"
-                 data-fallback2="https://drive.google.com/uc?export=view&id=1P3sWFps-Jrqwuj5WFaHfNiaIcu4E0thw"
-                 onerror="imgFallback(this)"
-                 alt="Henlo human">
+            <img id="home-login-img" class="home-intro-img" src="images/home-avatar.jpeg" alt="Henlo human">
             <p class="home-intro-tagline">My deadline isn't done, but I'm sure done ✿</p>
           </div>
 
@@ -115,6 +113,14 @@
               <div class="nav-card-body">
                 <div class="nav-card-title">Eating Tracker</div>
                 <div class="nav-card-desc">Track monthly spending on snacks</div>
+              </div>
+              <div class="nav-card-arrow">→</div>
+            </button>
+            <button id="open-qr" class="nav-card" data-accent="blue">
+              <span class="nav-card-emoji">⌘</span>
+              <div class="nav-card-body">
+                <div class="nav-card-title">QR Collection</div>
+                <div class="nav-card-desc">Save and scan your QR codes</div>
               </div>
               <div class="nav-card-arrow">→</div>
             </button>
@@ -276,7 +282,7 @@
       <!-- -------- MOCHI FLY VIEW -------- -->
       <div id="mochi-view" class="app-view" style="display:none;">
         <div id="mochi-start-screen" class="memory-start-screen">
-          <div class="memory-start-title"> Mochi Fly</div>
+          <div class="memory-start-title">🍡 Mochi Fly</div>
           <div class="memory-start-subtitle">Game</div>
 
           <div class="mochi-color-picker">
@@ -315,7 +321,7 @@
       <!-- -------- MINESWEEPER VIEW -------- -->
       <div id="minesweeper-view" class="app-view" style="display:none;">
         <div id="ms-start-screen" class="memory-start-screen">
-          <div class="memory-start-title">Minesweeper</div>
+          <div class="memory-start-title">🌷 Minesweeper</div>
           <div class="memory-start-subtitle">Game</div>
 
           <div class="ms-difficulty-buttons">
@@ -400,6 +406,20 @@
         </div>
 
         <div id="eating-calendar" class="eating-calendar"></div>
+      </div>
+
+      <!-- -------- QR COLLECTION VIEW -------- -->
+      <div id="qr-view" class="app-view" style="display:none;">
+        <div class="page-header">
+          <h2 class="page-title">QR Collection</h2>
+          <p class="page-subtitle">Tap a code to open its link, or grab a copy for later.</p>
+        </div>
+
+        <div class="qr-toolbar">
+          <button id="qr-add-btn" class="pill-btn">+ Add</button>
+        </div>
+
+        <div id="qr-list" class="qr-list"></div>
       </div>
 
     </main>
@@ -550,6 +570,35 @@
     </div>
   </div>
 
+  <!-- ================= MODAL: Add/Edit QR entry ================= -->
+  <div id="qr-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="qr-modal-title">Add QR</h3>
+        <button id="qr-modal-close" class="modal-close">✕</button>
+      </div>
+      <input type="text" id="qr-field-name" placeholder="Name" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:10px;">
+      <input type="text" id="qr-field-link" placeholder="Link" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:10px;">
+      <input type="text" id="qr-field-note" placeholder="Note" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:14px;">
+      <div class="modal-actions">
+        <button id="qr-save-btn" class="pill-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: QR delete confirmation ================= -->
+  <div id="qr-delete-modal" class="modal-overlay">
+    <div class="modal-box home-reset-box">
+      <div class="modal-header" style="padding-top:26px;">
+        <h3>You sure???</h3>
+      </div>
+      <div class="modal-actions">
+        <button id="qr-delete-mistake" class="pill-btn secondary">Mistake</button>
+        <button id="qr-delete-yah" class="pill-btn">Yah</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= MODAL: Memory Match result / leaderboard ================= -->
   <div id="memory-result-modal" class="modal-overlay">
     <div class="modal-box">
@@ -621,6 +670,7 @@
     1) gas-bridge.js  — định nghĩa window.google.script.run (shim gọi fetch())
     2) app.js         — code gốc, dùng google.script.run y hệt bản Apps Script cũ
   -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script src="gas-bridge.js"></script>
   <script src="app.js"></script>
 </body>
