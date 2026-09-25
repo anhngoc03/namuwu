@@ -2420,7 +2420,7 @@ function renderQrList() {
     card.querySelector('.qr-download-btn').onclick = function (e) {
       e.stopPropagation();
       var canvas = holder.querySelector('canvas');
-      qrDownload(canvas, item.name);
+      qrDownload(canvas, idx + 1);
     };
     card.querySelector('.qr-edit-btn').onclick = function (e) {
       e.stopPropagation();
@@ -2437,16 +2437,19 @@ function renderQrList() {
 }
 
 // Draws the QR code for `link` inside `container` (a plain <div>) — the library
-// creates its own <canvas> in there. If embedLogo is true, stamps the tomato logo
-// (same image used as the site favicon) directly in the center on top, no backing
-// shape behind it — QR codes have enough built-in redundancy (error correction
-// level H) to survive a small logo covering their middle and still scan correctly.
+// creates its own <canvas> in there. Rendered at 480×480 internally (well above
+// the ~110px it actually displays at) purely so the downloaded PNG stays crisp
+// when viewed full-size or printed — CSS still scales it to fit the card either way.
+// If embedLogo is true, stamps the tomato logo in the center with a thin white
+// ring around it (just enough so it doesn't sit flush against the QR's dark
+// modules) — QR codes have enough built-in redundancy (error correction level H)
+// to survive a small logo covering their middle and still scan correctly.
 function qrRenderCanvas(container, link, embedLogo) {
   container.innerHTML = '';
   new QRCode(container, {
     text: link || '',
-    width: 240,
-    height: 240,
+    width: 480,
+    height: 480,
     colorDark: '#5a4a4a',
     colorLight: '#fffaea',
     correctLevel: QRCode.CorrectLevel.H
@@ -2472,6 +2475,10 @@ function qrRenderCanvas(container, link, embedLogo) {
       var size = canvas.width * 0.22;
       var x = (canvas.width - size) / 2;
       var y = (canvas.height - size) / 2;
+      var ring = size * 0.05; // thin white ring — a few px equivalent, not a big backing tile
+      ctx.fillStyle = '#fffaea';
+      qrRoundRect(ctx, x - ring, y - ring, size + ring * 2, size + ring * 2, ring * 1.5);
+      ctx.fill();
       ctx.drawImage(logo, x, y, size, size);
       fixVisibility();
     };
@@ -2482,11 +2489,20 @@ function qrRenderCanvas(container, link, embedLogo) {
   }
 }
 
-function qrDownload(canvas, name) {
+function qrRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function qrDownload(canvas, fileNumber) {
   try {
-    var safeName = String(name || 'qr').trim().replace(/[^a-z0-9\-_]+/gi, '_') || 'qr';
     var a = document.createElement('a');
-    a.download = safeName + '.png';
+    a.download = String(fileNumber) + '.png';
     a.href = canvas.toDataURL('image/png');
     document.body.appendChild(a);
     a.click();
