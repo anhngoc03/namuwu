@@ -2368,7 +2368,7 @@ function renderQrList() {
     card.innerHTML =
       '<div class="qr-canvas-wrap">' +
         '<button class="qr-delete-btn" title="Delete">✕</button>' +
-        '<canvas width="240" height="240"></canvas>' +
+        '<div class="qr-canvas-holder"></div>' +
       '</div>' +
       '<div class="qr-index">#' + (idx + 1) + '</div>' +
       '<div class="qr-name">' + icdEscape(item.name) + '</div>' +
@@ -2378,14 +2378,15 @@ function renderQrList() {
         '<button class="qr-edit-btn acc-edit-icon-btn" title="Edit">✎</button>' +
       '</div>';
 
-    var canvas = card.querySelector('canvas');
+    var holder = card.querySelector('.qr-canvas-holder');
     var canvasWrap = card.querySelector('.qr-canvas-wrap');
-    qrRenderCanvas(canvas, item.link);
+    qrRenderCanvas(holder, item.link);
 
     canvasWrap.onclick = function () { window.open(item.link, '_blank'); };
     card.querySelector('.qr-name').onclick = function () { window.open(item.link, '_blank'); };
     card.querySelector('.qr-download-btn').onclick = function (e) {
       e.stopPropagation();
+      var canvas = holder.querySelector('canvas');
       qrDownload(canvas, item.name);
     };
     card.querySelector('.qr-edit-btn').onclick = function (e) {
@@ -2402,32 +2403,37 @@ function renderQrList() {
   });
 }
 
-// Draws the QR code for `link` onto `canvas`, then stamps the tomato logo
-// (same image used as the site favicon) in the center on top of it — QR codes
-// have enough built-in redundancy (error correction) to survive a small
-// logo covering their middle and still scan correctly.
-function qrRenderCanvas(canvas, link) {
-  QRCode.toCanvas(canvas, link || '', {
+// Draws the QR code for `link` inside `container` (a plain <div>) — the library
+// creates its own <canvas> in there — then stamps the tomato logo (same image
+// used as the site favicon) in the center on top of it. QR codes have enough
+// built-in redundancy (error correction level H) to survive a small logo
+// covering their middle and still scan correctly.
+function qrRenderCanvas(container, link) {
+  container.innerHTML = '';
+  new QRCode(container, {
+    text: link || '',
     width: 240,
-    margin: 1,
-    errorCorrectionLevel: 'H',
-    color: { dark: '#5a4a4a', light: '#fffaea' }
-  }, function (err) {
-    if (err) { console.error(err); return; }
-    var ctx = canvas.getContext('2d');
-    var logo = new Image();
-    logo.onload = function () {
-      var size = canvas.width * 0.22;
-      var x = (canvas.width - size) / 2;
-      var y = (canvas.height - size) / 2;
-      var pad = size * 0.16;
-      ctx.fillStyle = '#fffaea';
-      qrRoundRect(ctx, x - pad, y - pad, size + pad * 2, size + pad * 2, 8);
-      ctx.fill();
-      ctx.drawImage(logo, x, y, size, size);
-    };
-    logo.src = 'images/favicon.png';
+    height: 240,
+    colorDark: '#5a4a4a',
+    colorLight: '#fffaea',
+    correctLevel: QRCode.CorrectLevel.H
   });
+
+  var canvas = container.querySelector('canvas');
+  if (!canvas) return; // extremely old browser fallback (table-based) — no logo overlay possible
+  var ctx = canvas.getContext('2d');
+  var logo = new Image();
+  logo.onload = function () {
+    var size = canvas.width * 0.22;
+    var x = (canvas.width - size) / 2;
+    var y = (canvas.height - size) / 2;
+    var pad = size * 0.16;
+    ctx.fillStyle = '#fffaea';
+    qrRoundRect(ctx, x - pad, y - pad, size + pad * 2, size + pad * 2, 8);
+    ctx.fill();
+    ctx.drawImage(logo, x, y, size, size);
+  };
+  logo.src = 'images/favicon.png';
 }
 
 function qrRoundRect(ctx, x, y, w, h, r) {
