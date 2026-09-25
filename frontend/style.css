@@ -504,6 +504,7 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
   position:fixed; top:16px; left:50%;
   background:var(--ink); color:var(--white); padding:10px 20px; border-radius:var(--r-pill);
   font-size:14px; font-weight:600; z-index:210; opacity:0;
+  white-space:nowrap; max-width:calc(100vw - 32px); overflow:hidden; text-overflow:ellipsis;
   transform:translate(-50%, -10px);
   transition:opacity var(--dur-section) var(--ease-soft), transform var(--dur-section) var(--ease-soft);
 }
@@ -909,6 +910,11 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
 }
 
 @media (max-width: 760px){
+  /* iOS Safari/Chrome auto-zoom the whole page when a focused text input has
+     font-size under 16px — and doesn't always zoom back out afterward, leaving
+     the page stuck zoomed in. 16px keeps every input under that threshold. */
+  input[type=text], input[type=date]{ font-size:16px; }
+
   #login-screen.active{ flex-direction:column; }
   .login-left{ flex:0 0 auto; padding:16px; }
   .login-left img{ max-width:55%; max-height:26vh; }
