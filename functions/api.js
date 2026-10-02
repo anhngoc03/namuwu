@@ -310,7 +310,16 @@ async function deleteQrRow(env, [rowNumber]) {
 
 /* --------------------------- HOME TO DO LIST ------------------------------ */
 
+async function deleteStaleCompletedHomeItems(env) {
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  await sb(env, `home_todos?check=eq.true&completed_at=lt.${twoHoursAgo}`, {
+    method: 'DELETE',
+    prefer: 'return=minimal'
+  });
+}
+
 async function getHomeData(env) {
+  await deleteStaleCompletedHomeItems(env);
   const rows = await sb(env, 'home_todos?select=id,check,todolist,deadline&order=id.desc');
   return rows.map((r) => ({
     row: r.id,
@@ -339,7 +348,10 @@ async function updateHomeItem(env, [rowNumber, todolist, deadline]) {
 async function toggleHomeCheck(env, [rowNumber, checked]) {
   await sb(env, `home_todos?id=eq.${rowNumber}`, {
     method: 'PATCH',
-    body: JSON.stringify({ check: !!checked }),
+    body: JSON.stringify({
+      check: !!checked,
+      completed_at: checked ? new Date().toISOString() : null
+    }),
     prefer: 'return=minimal'
   });
   return getHomeData(env);
