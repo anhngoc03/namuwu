@@ -98,8 +98,16 @@
     return false;
   }
 
+  // Chặn trường hợp giữ phím Enter (key-repeat của hệ điều hành) bắn ra nhiều keydown
+  // liên tiếp trong tích tắc -> bấm Save nhiều lần. Chỉ cho phép 1 lần mỗi 500ms.
+  var lastTriggerAt_ = 0;
+
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter' || e.shiftKey) return; // Shift+Enter = xuống dòng bình thường (vd ô Note)
+    if (e.repeat) return; // bỏ qua các keydown lặp lại do giữ phím
+
+    var now = Date.now();
+    if (now - lastTriggerAt_ < 500) return;
 
     var target = e.target;
     if (!isEditableField(target)) return;
@@ -109,7 +117,10 @@
     if (modal) {
       var btn = pickConfirmButton(getButtons(modal));
       if (btn) {
+        lastTriggerAt_ = now;
         e.preventDefault();
+        e.stopPropagation(); // chặn không cho listener Enter gốc (nếu có) chạy thêm lần nữa -> tránh duplicate
+        e.stopImmediatePropagation();
         btn.click();
       }
       return;
@@ -118,7 +129,10 @@
     // 2) Không có popup -> đang gõ trong 1 form inline (vd sửa Home to-do) -> tìm nút Save gần nhất.
     var saveBtn = findInlineSaveButton(target);
     if (saveBtn) {
+      lastTriggerAt_ = now;
       e.preventDefault();
+      e.stopPropagation(); // quan trọng: 1 số ô (vd Home to-do) đã tự có sẵn listener Enter riêng trong app.js,
+      e.stopImmediatePropagation(); // không chặn thì nó chạy thêm 1 lần nữa -> bị thêm/sửa trùng lặp.
       saveBtn.click();
     }
   }, true);
