@@ -1859,20 +1859,30 @@ function homeToggleCheck(item) {
     .toggleHomeCheck(item.row, next);
 }
 
+var homeSaving_ = false;
+
 function homeSaveItem(item) {
+  if (homeSaving_) return; // đang có 1 lượt lưu chạy rồi -> bỏ qua lượt gọi thêm
   var editingEl = document.querySelector('.todo-item.editing');
   if (!editingEl) return;
   var content = editingEl.querySelector('.todo-content-input').value.trim();
   var deadline = editingEl.querySelector('.todo-deadline-input').value;
   if (!content) { toast('Nhập nội dung việc cần làm đã ✿'); return; }
 
+  homeSaving_ = true;
+
   var onDone = function (list) {
     hideLoading();
+    homeSaving_ = false;
     homeData = list;
     homeEditingRow = null;
     renderHomeList();
   };
-  var onFail = function (err) { hideLoading(); toast('Error: ' + err.message); };
+  var onFail = function (err) {
+    hideLoading();
+    homeSaving_ = false;
+    toast('Error: ' + err.message);
+  };
 
   showLoading();
   if (item.row === null) {
