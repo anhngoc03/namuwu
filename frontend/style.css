@@ -1367,17 +1367,31 @@ body.mobile-nav-open .mobile-nav-toggle{
 /* Calendar */
 .expense-cal-layout{ display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; }
 .expense-cal-card{ flex:1; min-width:280px; }
-.expense-cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+/* minmax(0,1fr), not plain 1fr: a grid track's default min-width is "auto",
+   i.e. it won't shrink below its content's natural size — so a cell whose
+   amount badge ("947K") is wider than a 1/7 share was pushing the whole
+   grid wider than its card and spilling the last (Sunday) column out past
+   the rounded corners on narrow phones. minmax(0,1fr) forces the 7 columns
+   to actually share the available width instead. */
+.expense-cal-grid{ display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); gap:6px; }
 .expense-cal-head{ text-align:center; font-size:11px; font-weight:700; color:var(--exp-muted); padding-bottom:6px; }
 .expense-cal-cell{
   aspect-ratio:1; border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center;
   font-size:13px; font-weight:700; cursor:pointer; gap:2px; background:#faf8f4;
+  overflow:hidden; min-width:0;
 }
 .expense-cal-cell.empty{ visibility:hidden; cursor:default; }
 .expense-cal-cell.has-spend{ background:#fdeaf0; color:var(--exp-pink-deep); }
 .expense-cal-cell.selected{ outline:2px solid var(--exp-pink-deep); }
 .expense-cal-cell.is-today .expense-cal-day{ text-decoration:underline; }
-.expense-cal-amt{ font-size:10px; font-weight:700; }
+.expense-cal-amt{ font-size:10px; font-weight:700; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+@media (max-width:760px){
+  .expense-cal-card{ min-width:0; padding:16px; } /* let it shrink to fit narrow phones instead of forcing overflow, and free up width for the grid */
+  .expense-cal-grid{ gap:4px; }
+  .expense-cal-cell{ font-size:12px; }
+  .expense-cal-amt{ font-size:9px; }
+}
 .expense-cal-footer{ display:flex; justify-content:space-between; font-size:12px; color:var(--exp-muted); margin-top:14px; padding-top:14px; border-top:1px dashed #eee0da; }
 
 .expense-day-detail{ flex:1; min-width:260px; }
@@ -1493,14 +1507,14 @@ body.mobile-nav-open .mobile-nav-toggle{
   .expense-mobile-tabbar.visible{
     display:flex; align-items:center; justify-content:space-around;
     position:fixed; left:0; right:0; bottom:0; background:#fff;
-    box-shadow:0 -6px 20px rgba(190,150,140,.14); padding:8px 6px calc(8px + env(safe-area-inset-bottom));
-    z-index:120;
+    box-shadow:0 -6px 20px rgba(190,150,140,.14); padding:12px 6px calc(12px + env(safe-area-inset-bottom));
+    min-height:64px; z-index:120;
   }
-  .expense-mobile-tab-btn{ background:none; border:none; display:flex; flex-direction:column; align-items:center; gap:2px; font-size:11px; font-weight:700; color:var(--exp-muted); padding:4px 6px; }
+  .expense-mobile-tab-btn{ background:none; border:none; display:flex; flex-direction:column; align-items:center; gap:3px; font-size:12px; font-weight:700; color:var(--exp-muted); padding:6px 8px; }
   .expense-mobile-tab-btn.active{ color:var(--exp-pink-deep); }
   .expense-mobile-tab-add{
-    width:52px; height:52px; border-radius:50%; background:var(--exp-pink); color:#fff; border:none;
-    font-size:22px; display:flex; align-items:center; justify-content:center; margin-top:-26px;
+    width:58px; height:58px; border-radius:50%; background:var(--exp-pink); color:#fff; border:none;
+    font-size:26px; display:flex; align-items:center; justify-content:center; margin-top:-30px;
     box-shadow:0 8px 18px rgba(232,137,159,.4);
   }
   .expense-cal-layout{ flex-direction:column; }
