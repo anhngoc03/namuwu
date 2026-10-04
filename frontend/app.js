@@ -154,7 +154,7 @@ function showScreen(id) {
 var NAV_SECTION_MAP_ = {
   'menu-view': 'home',
   'accounts-view': 'tools', 'symbols-view': 'tools', 'saving-view': 'tools',
-  'datediff-view': 'tools', 'icd-view': 'tools', 'eating-view': 'tools', 'qr-view': 'tools',
+  'datediff-view': 'tools', 'eating-view': 'tools', 'qr-view': 'tools',
   'expense-view': 'tools',
   'memory-view': 'games', 'mochi-view': 'games', 'minesweeper-view': 'games'
 };
@@ -166,7 +166,6 @@ var VIEW_OPENERS_ = {
   'symbols-view': loadSymbols,
   'saving-view': openSaving,
   'datediff-view': openDateDiff,
-  'icd-view': openIcd,
   'eating-view': openEating,
   'qr-view': openQrCollection,
   'expense-view': openExpense,
@@ -183,22 +182,26 @@ function saveNavState_(view, section) {
   } catch (e) { /* localStorage unavailable — silently skip, not critical */ }
 }
 
+// Keeps BOTH nav surfaces in sync — the mobile drawer's links and the desktop
+// dock's links share the ".app-nav-link" class, so one pass covers both.
 function setNavActive(section) {
-  document.querySelectorAll('.navbar-link').forEach(function (el) {
+  document.querySelectorAll('.app-nav-link').forEach(function (el) {
     el.classList.toggle('active', el.dataset.navSection === section);
   });
-  updateNavUnderline();
 }
 
-// Slides the shared underline bar to sit under whichever nav link is currently active.
-function updateNavUnderline() {
-  var activeLink = document.querySelector('.navbar-link.active');
-  var underline = document.getElementById('navbar-underline');
-  if (!activeLink || !underline) return;
-  var linkRect = activeLink.getBoundingClientRect();
-  var containerRect = activeLink.parentElement.getBoundingClientRect();
-  underline.style.width = linkRect.width + 'px';
-  underline.style.left = (linkRect.left - containerRect.left) + 'px';
+/* ---- Mobile nav drawer (tomato icon top-left → slide-in drawer + scrim) ---- */
+function openMobileNavDrawer() {
+  document.getElementById('mobile-nav-drawer').classList.add('open');
+  document.getElementById('mobile-nav-scrim').classList.add('active');
+}
+function closeMobileNavDrawer() {
+  document.getElementById('mobile-nav-drawer').classList.remove('open');
+  document.getElementById('mobile-nav-scrim').classList.remove('active');
+}
+function toggleMobileNavDrawer() {
+  var isOpen = document.getElementById('mobile-nav-drawer').classList.contains('open');
+  if (isOpen) closeMobileNavDrawer(); else openMobileNavDrawer();
 }
 
 // Controls which part of the Home tab is visible: 'home' = To Do List section only,
@@ -241,8 +244,10 @@ function showView(id) {
   syncFixedHeaderOffsets();
 }
 
-// Measures the ACTUAL rendered navbar height and sets it as a CSS var — no more
-// guessing pixel constants, so the fixed navbar can never overlap page content below it.
+// Legacy hook: there's no fixed top navbar anymore (mobile uses a small
+// overlay icon, desktop a floating bottom dock — neither pushes page content
+// down), so this now always resolves to 0px. Left in place since --navbar-h
+// may still be referenced in style.css; harmless either way.
 function syncFixedHeaderOffsets() {
   var navbar = document.querySelector('.navbar');
   var navH = navbar ? navbar.getBoundingClientRect().height : 0;
@@ -394,7 +399,7 @@ function renderAccountsList() {
   });
 }
 
-/* ---- Add/Edit a single account entry (row-level, like ICD) ---- */
+/* ---- Add/Edit a single account entry (row-level) ---- */
 var accountEditingRow = null;
 
 function openAccountEntryModal(entry) {
@@ -1532,127 +1537,10 @@ function mochiStopMusic() {
 }
 
 /* ---------------------------------------------------------------- */
-/* ICD LOOKUP                                                         */
+/* SHARED: HTML-escape helper (used by Expense, QR, Home to-do, etc.) */
 /* ---------------------------------------------------------------- */
-var icdData = [];
-var icdEditingRow = null; // null => adding a new entry; otherwise the sheet row being edited
-
 function icdEscape(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-// Wraps the first matching occurrence of `query` inside `text` in a <mark>, HTML-escaped safely.
-function icdHighlight(text, query) {
-  var raw = String(text == null ? '' : text);
-  if (!query) return icdEscape(raw);
-  var idx = raw.toLowerCase().indexOf(query.toLowerCase());
-  if (idx === -1) return icdEscape(raw);
-  var before = icdEscape(raw.slice(0, idx));
-  var match = icdEscape(raw.slice(idx, idx + query.length));
-  var after = icdEscape(raw.slice(idx + query.length));
-  return before + '<mark class="icd-highlight">' + match + '</mark>' + after;
-}
-
-function openIcd() {
-  showView('icd-view');
-  document.getElementById('icd-search').value = '';
-  renderIcdList(); // shows the "start typing" prompt immediately
-  loadIcdData();   // quietly loads data in the background so filtering is instant once they type
-}
-
-function loadIcdData() {
-  showLoading();
-  google.script.run
-    .withSuccessHandler(function (list) {
-      hideLoading();
-      icdData = list;
-      renderIcdList();
-    })
-    .withFailureHandler(function (err) { hideLoading(); toast('Error: ' + err.message); })
-    .getIcdData();
-}
-
-function renderIcdList() {
-  var query = document.getElementById('icd-search').value.trim().toLowerCase();
-  var countEl = document.getElementById('icd-result-count');
-  var list = document.getElementById('icd-list');
-
-  // Empty search box → show everything (sorted A→Z by ICD code) instead of asking to type first.
-  var filtered = query
-    ? icdData.filter(function (item) {
-        return String(item.icd).toLowerCase().indexOf(query) !== -1 ||
-               String(item.name).toLowerCase().indexOf(query) !== -1;
-      })
-    : icdData.slice();
-
-  filtered.sort(function (a, b) {
-    return String(a.icd).localeCompare(String(b.icd), undefined, { sensitivity: 'base' });
-  });
-
-  if (filtered.length === 0) {
-    countEl.textContent = '';
-    list.innerHTML =
-      '<div class="empty-state"><span class="empty-icon">✿</span>No matching diagnosis found' +
-      '<br><span style="font-size:13px;opacity:.8;">Try a different ICD code or name.</span></div>';
-    return;
-  }
-
-  countEl.textContent = filtered.length + (filtered.length === 1 ? ' result' : ' results');
-  list.innerHTML = '';
-  filtered.forEach(function (item) {
-    var card = document.createElement('div');
-    card.className = 'icd-card';
-    card.innerHTML =
-      '<div class="icd-card-top">' +
-        '<button class="icd-code-btn" title="Click to copy">' + icdHighlight(item.icd, query) + ' <span class="icd-copy-icon">⧉</span></button>' +
-        '<button class="icd-edit-icon-btn" title="Edit">✎</button>' +
-      '</div>' +
-      '<div class="icd-name">' + icdHighlight(item.name, query) + '</div>' +
-      (item.note ? '<div class="icd-note">' + icdEscape(item.note) + '</div>' : '');
-    card.querySelector('.icd-code-btn').onclick = function () { icdCopyCode(item.icd); };
-    card.querySelector('.icd-edit-icon-btn').onclick = function () { openIcdForm(item); };
-    list.appendChild(card);
-  });
-}
-
-function icdCopyCode(code) {
-  navigator.clipboard.writeText(String(code)).then(function () {
-    toast('Copied ' + code + ' ✓');
-  }).catch(function () {
-    toast("Couldn't copy");
-  });
-}
-
-function openIcdForm(item) {
-  icdEditingRow = item ? item.row : null;
-  document.getElementById('icd-modal-title').textContent = item ? 'Edit ICD Entry' : 'Add ICD Entry';
-  document.getElementById('icd-field-code').value = item ? item.icd : '';
-  document.getElementById('icd-field-name').value = item ? item.name : '';
-  document.getElementById('icd-field-note').value = item ? item.note : '';
-  document.getElementById('icd-modal').classList.add('active');
-}
-
-function saveIcdEntry() {
-  var code = document.getElementById('icd-field-code').value.trim();
-  var name = document.getElementById('icd-field-name').value.trim();
-  var note = document.getElementById('icd-field-note').value.trim();
-  if (!code || !name) { toast('Enter both ICD code and Name'); return; }
-
-  showLoading();
-  var onDone = function (list) {
-    hideLoading();
-    icdData = list;
-    document.getElementById('icd-modal').classList.remove('active');
-    renderIcdList();
-    toast('Saved!');
-  };
-  var onFail = function (err) { hideLoading(); toast('Error: ' + err.message); };
-
-  if (icdEditingRow) {
-    google.script.run.withSuccessHandler(onDone).withFailureHandler(onFail).updateIcdRow(icdEditingRow, code, name, note);
-  } else {
-    google.script.run.withSuccessHandler(onDone).withFailureHandler(onFail).addIcdRow(code, name, note);
-  }
 }
 
 /* ---------------------------------------------------------------- */
@@ -3358,9 +3246,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
   window.addEventListener('resize', syncFixedHeaderOffsets);
 
-  document.getElementById('nav-home').onclick = function () { goHome('home'); };
-  document.getElementById('nav-tools').onclick = function () { goHome('tools'); };
-  document.getElementById('nav-games').onclick = function () { goHome('games'); };
+  document.querySelectorAll('.app-nav-link').forEach(function (btn) {
+    btn.onclick = function () {
+      goHome(btn.dataset.navSection);
+      closeMobileNavDrawer();
+    };
+  });
+  document.getElementById('mobile-nav-toggle').onclick = toggleMobileNavDrawer;
+  document.getElementById('mobile-nav-scrim').onclick = closeMobileNavDrawer;
 
   document.getElementById('open-accounts').onclick = openAccountsGate;
   document.getElementById('open-symbols').onclick = loadSymbols;
@@ -3368,7 +3261,6 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('open-datediff').onclick = openDateDiff;
   document.getElementById('open-memory').onclick = openMemory;
   document.getElementById('open-mochi').onclick = openMochi;
-  document.getElementById('open-icd').onclick = openIcd;
   document.getElementById('open-minesweeper').onclick = openMinesweeper;
   document.getElementById('open-qr').onclick = openQrCollection;
 
@@ -3377,11 +3269,6 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('memory-result-newgame').onclick = memoryNewGame;
   document.getElementById('memory-save-score').onclick = memorySaveScore;
   document.getElementById('memory-result-close').onclick = function () { document.getElementById('memory-result-modal').classList.remove('active'); };
-
-  document.getElementById('icd-add-btn').onclick = function () { openIcdForm(null); };
-  document.getElementById('icd-search').oninput = renderIcdList;
-  document.getElementById('icd-save-btn').onclick = saveIcdEntry;
-  document.getElementById('icd-modal-close').onclick = function () { document.getElementById('icd-modal').classList.remove('active'); };
 
   document.getElementById('open-eating').onclick = openEating;
   document.getElementById('eating-reset-btn').onclick = openEatingReset;
