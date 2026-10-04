@@ -1193,3 +1193,83 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
   }
   .expense-cal-layout{ flex-direction:column; }
 }
+/* ============================================================
+   HENLO HUMAN — style.css — NAV REDESIGN
+   Dán nguyên khối này vào CUỐI style.css.
+
+   Thay thế hoàn toàn navbar ngang cũ:
+   - Mobile (<=760px): icon cà chua trần (favicon, không khung/nền) cố định
+     góc trên-trái → bấm vào mở drawer trượt từ trái, có lớp phủ mờ (scrim).
+   - Desktop (>760px): "dock" hình pill lơ lửng cố định giữa-dưới màn hình
+     (giống Dock macOS), chỉ chữ, không icon.
+
+   Nếu style.css cũ có rule nào đặt padding-top cho .page-container dựa vào
+   biến --navbar-h thì cứ để yên — biến đó giờ luôn là 0px (xem app.js), nên
+   tự nó không còn đẩy nội dung xuống nữa.
+   ============================================================ */
+
+/* ---------- shared nav link look (both mobile drawer + desktop dock) ---------- */
+.app-nav-link{
+  background:none; border:none; cursor:pointer; font-family:inherit;
+  font-weight:700; color:var(--exp-ink, #4a3f3f);
+}
+
+/* ---------- Mobile: bare tomato icon trigger, top-left ---------- */
+.mobile-nav-toggle{
+  display:none; /* shown only on mobile, see media query below */
+  position:fixed; top:14px; left:14px; z-index:410;
+  background:none; border:none; padding:0; margin:0; cursor:pointer;
+  width:40px; height:40px; align-items:center; justify-content:center;
+}
+.mobile-nav-toggle-icon{ width:34px; height:34px; object-fit:contain; display:block; }
+
+/* ---------- Mobile: dim scrim behind the open drawer ---------- */
+.mobile-nav-scrim{
+  display:none; position:fixed; inset:0; background:rgba(74,63,63,.38);
+  z-index:400; opacity:0; pointer-events:none; transition:opacity .22s ease;
+}
+.mobile-nav-scrim.active{ opacity:1; pointer-events:auto; }
+
+/* ---------- Mobile: slide-in drawer ---------- */
+.mobile-nav-drawer{
+  display:none; position:fixed; top:0; left:0; bottom:0; width:220px;
+  background:#fff; z-index:405; padding:70px 22px 24px;
+  box-shadow:8px 0 30px rgba(190,150,140,.22);
+  transform:translateX(-100%); transition:transform .25s ease;
+  flex-direction:column; gap:6px;
+}
+.mobile-nav-drawer.open{ transform:translateX(0); }
+.mobile-nav-drawer .app-nav-link{
+  text-align:left; padding:13px 14px; border-radius:14px; font-size:16px;
+}
+.mobile-nav-drawer .app-nav-link.active{ background:#fdeaf0; color:#e8899f; }
+
+/* ---------- Desktop: floating pill dock, bottom-center ---------- */
+.desktop-dock{
+  display:flex; position:fixed; left:50%; bottom:26px; transform:translateX(-50%);
+  z-index:200; background:#fff; border-radius:999px; padding:8px; gap:4px;
+  box-shadow:0 10px 30px rgba(190,150,140,.22);
+}
+.desktop-dock .app-nav-link{
+  padding:10px 22px; border-radius:999px; font-size:14px; color:var(--exp-muted, #9a8f8a);
+}
+.desktop-dock .app-nav-link.active{ background:#e8899f; color:#fff; }
+
+/* ---------- Responsive switch ---------- */
+@media (max-width:760px){
+  .mobile-nav-toggle{ display:flex; }
+  .mobile-nav-scrim{ display:block; }
+  .mobile-nav-drawer{ display:flex; }
+  .desktop-dock{ display:none; }
+
+  /* leave room at the bottom for the Expense tool's own mobile tab bar when
+     that view is open; everywhere else there's no fixed bottom bar on mobile
+     anymore, so nothing else needs bottom padding here. */
+}
+@media (min-width:761px){
+  .mobile-nav-toggle, .mobile-nav-scrim, .mobile-nav-drawer{ display:none; }
+  .desktop-dock{ display:flex; }
+
+  /* keep the floating dock from covering page content at the very bottom */
+  .page-container{ padding-bottom: 110px; }
+}
