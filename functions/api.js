@@ -362,6 +362,178 @@ async function resetHomeData(env) {
   return [];
 }
 
+/* --------------------------- EXPENSE TRACKER ------------------------------ */
+
+function expenseTodayStr_() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function expenseCurrentPeriod_() {
+  return expenseTodayStr_().slice(0, 7);
+}
+function expenseLastDayOfMonth_(period) {
+  var y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7));
+  return new Date(y, m, 0).getDate();
+}
+
+// Khoản chi đánh dấu "lặp lại hàng tháng": khi mở ĐÚNG tháng hiện tại (không
+// phải tháng quá khứ/tương lai xem lại), tự âm thầm tạo bản ghi cho tháng này
+// nếu chưa có, copy từ bản ghi mới nhất cùng recurring_key.
+async function expenseMaterializeRecurring_(env, period) {
+  if (period !== expenseCurrentPeriod_()) return; // chỉ tự tạo cho tháng hiện tại
+
+  var templates = await sb(env, 'expense_entries?repeat_monthly=eq.true&recurring_key=not.is.null&select=recurring_key,amount,category_id,note,entry_date&order=entry_date.desc');
+  var seen = {};
+  var uniq = [];
+  templates.forEach(function (t) {
+    if (!seen[t.recurring_key]) { seen[t.recurring_key] = true; uniq.push(t); }
+  });
+  if (!uniq.length) return;
+
+  var periodStart = period + '-01';
+  var nextPeriod = (function () {
+    var y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7));
+    m += 1; if (m > 12) { m = 1; y += 1; }
+    return y + '-' + String(m).padStart(2, '0') + '-01';
+  })();
+  var keysList = uniq.map(function (t) { return '"' + t.recurring_key + '"'; }).join(',');
+  var existing = await sb(env, 'expense_entries?entry_date=gte.' + periodStart + '&entry_date=lt.' + nextPeriod + '&recurring_key=in.(' + keysList + ')&select=recurring_key');
+  var existingKeys = {};
+  existing.forEach(function (e) { existingKeys[e.recurring_key] = true; });
+
+  var lastDay = expenseLastDayOfMonth_(period);
+  var toInsert = [];
+  uniq.forEach(function (t) {
+    if (existingKeys[t.recurring_key]) return;
+    var day = Number(String(t.entry_date).slice(8, 10));
+    var useDay = Math.min(day, lastDay);
+    toInsert.push({
+      amount: t.amount,
+      category_id: t.category_id,
+      note: t.note || '',
+      entry_date: period + '-' + String(useDay).padStart(2, '0'),
+      repeat_monthly: true,
+      recurring_key: t.recurring_key
+    });
+  });
+  if (toInsert.length) {
+    await sb(env, 'expense_entries', { method: 'POST', body: JSON.stringify(toInsert), prefer: 'return=minimal' });
+  }
+}
+
+// Gộp toàn bộ dữ liệu 1 tháng cần cho Overview/Calendar/Stats/Budget/History
+// vào 1 lần gọi — frontend tự lọc/tổng hợp từ đây, backend chỉ trả data thô.
+async function getExpenseData(env, [period]) {
+  period = period || expenseCurrentPeriod_();
+  await expenseMaterializeRecurring_(env, period);
+
+  var periodStart = period + '-01';
+  var nextPeriod = (function () {
+    var y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7));
+    m += 1; if (m > 12) { m = 1; y += 1; }
+    return y + '-' + String(m).padStart(2, '0') + '-01';
+  })();
+
+  var categories = await sb(env, 'expense_categories?select=id,name,color&order=name.asc');
+  var entries = await sb(env, 'expense_entries?entry_date=gte.' + periodStart + '&entry_date=lt.' + nextPeriod + '&select=id,amount,category_id,note,entry_date,repeat_monthly&order=entry_date.desc,id.desc');
+  var incomeRows = await sb(env, 'expense_income?period=eq.' + period + '&select=amount');
+  var budgetRows = await sb(env, 'expense_budget?period=eq.' + period + '&select=amount');
+  var catBudgetRows = await sb(env, 'expense_category_budget?period=eq.' + period + '&select=category_id,amount');
+
+  return {
+    period: period,
+    categories: categories.map(function (c) { return { id: c.id, name: c.name, color: c.color }; }),
+    entries: entries.map(function (e) {
+      return { id: e.id, amount: Number(e.amount), categoryId: e.category_id, note: e.note || '', date: e.entry_date, repeatMonthly: e.repeat_monthly === true };
+    }),
+    income: incomeRows.length ? Number(incomeRows[0].amount) : 0,
+    budgetOverall: budgetRows.length ? Number(budgetRows[0].amount) : 0,
+    categoryBudgets: catBudgetRows.map(function (r) { return { categoryId: r.category_id, amount: Number(r.amount) }; })
+  };
+}
+
+async function addExpenseEntry(env, [amount, categoryId, note, date, repeatMonthly]) {
+  var recurringKey = repeatMonthly ? (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()) : null;
+  await sb(env, 'expense_entries', {
+    method: 'POST',
+    body: JSON.stringify([{
+      amount: amount, category_id: categoryId, note: note || '', entry_date: date,
+      repeat_monthly: !!repeatMonthly, recurring_key: recurringKey
+    }])
+  });
+  return getExpenseData(env, [String(date).slice(0, 7)]);
+}
+
+async function updateExpenseEntry(env, [id, amount, categoryId, note, date, repeatMonthly, period]) {
+  await sb(env, 'expense_entries?id=eq.' + id, {
+    method: 'PATCH',
+    body: JSON.stringify({ amount: amount, category_id: categoryId, note: note || '', entry_date: date, repeat_monthly: !!repeatMonthly })
+  });
+  return getExpenseData(env, [period]);
+}
+
+async function deleteExpenseEntry(env, [id, period]) {
+  await sb(env, 'expense_entries?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
+  return getExpenseData(env, [period]);
+}
+
+async function setExpenseIncome(env, [period, amount]) {
+  await sb(env, 'expense_income', {
+    method: 'POST',
+    body: JSON.stringify([{ period: period, amount: amount }]),
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }
+  });
+  return getExpenseData(env, [period]);
+}
+
+async function setExpenseBudgetOverall(env, [period, amount]) {
+  await sb(env, 'expense_budget', {
+    method: 'POST',
+    body: JSON.stringify([{ period: period, amount: amount }]),
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }
+  });
+  return getExpenseData(env, [period]);
+}
+
+async function setExpenseCategoryBudget(env, [period, categoryId, amount]) {
+  await sb(env, 'expense_category_budget', {
+    method: 'POST',
+    body: JSON.stringify([{ period: period, category_id: categoryId, amount: amount }]),
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }
+  });
+  return getExpenseData(env, [period]);
+}
+
+async function deleteExpenseCategoryBudget(env, [period, categoryId]) {
+  await sb(env, 'expense_category_budget?period=eq.' + period + '&category_id=eq.' + categoryId, { method: 'DELETE', prefer: 'return=minimal' });
+  return getExpenseData(env, [period]);
+}
+
+async function addExpenseCategory(env, [name, color]) {
+  await sb(env, 'expense_categories', { method: 'POST', body: JSON.stringify([{ name: name, color: color }]) });
+  return sb(env, 'expense_categories?select=id,name,color&order=name.asc');
+}
+
+async function updateExpenseCategory(env, [id, name, color]) {
+  await sb(env, 'expense_categories?id=eq.' + id, { method: 'PATCH', body: JSON.stringify({ name: name, color: color }) });
+  return sb(env, 'expense_categories?select=id,name,color&order=name.asc');
+}
+
+// Nếu danh mục đang có khoản chi dùng tới, Postgres sẽ chặn (FK restrict) —
+// bắn lỗi lên để frontend hiện toast, không cho xoá ngầm.
+async function deleteExpenseCategory(env, [id]) {
+  await sb(env, 'expense_categories?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
+  return sb(env, 'expense_categories?select=id,name,color&order=name.asc');
+}
+
+// Dùng cho ô tóm tắt nhỏ ở Home — chỉ cần tổng đã chi HÔM NAY, khỏi tải cả tháng.
+async function getExpenseTodayTotal(env) {
+  var today = expenseTodayStr_();
+  var rows = await sb(env, 'expense_entries?entry_date=eq.' + today + '&select=amount');
+  var sum = rows.reduce(function (s, r) { return s + Number(r.amount); }, 0);
+  return { date: today, total: sum };
+}
+
 /* ============================================================
  *  API ROUTER
  * ============================================================ */
@@ -398,7 +570,19 @@ const ACTIONS = {
   addHomeItem,
   updateHomeItem,
   toggleHomeCheck,
-  resetHomeData
+  resetHomeData,
+  getExpenseData,
+  addExpenseEntry,
+  updateExpenseEntry,
+  deleteExpenseEntry,
+  setExpenseIncome,
+  setExpenseBudgetOverall,
+  setExpenseCategoryBudget,
+  deleteExpenseCategoryBudget,
+  addExpenseCategory,
+  updateExpenseCategory,
+  deleteExpenseCategory,
+  getExpenseTodayTotal
 };
 
 async function handle(env, action, args) {
