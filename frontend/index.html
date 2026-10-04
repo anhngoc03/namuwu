@@ -60,6 +60,12 @@
             </div>
             <div id="home-todo-list" class="home-todo-list"></div>
           </div>
+
+          <div class="home-expense-widget" id="home-expense-widget">
+            <div class="home-expense-widget-label">Today's spending</div>
+            <div class="home-expense-widget-value" id="home-expense-widget-value">—</div>
+            <div class="home-expense-widget-link">Open Expenses →</div>
+          </div>
         </section>
 
         <section class="content-section tools">
@@ -124,6 +130,14 @@
               </div>
               <div class="nav-card-arrow">→</div>
             </button>
+            <button id="open-expense" class="nav-card" data-accent="pink">
+              <span class="nav-card-emoji">˃ᴗ˂</span>
+              <div class="nav-card-body">
+                <div class="nav-card-title">Expenses</div>
+                <div class="nav-card-desc">Track spending, budgets and income</div>
+              </div>
+              <div class="nav-card-arrow">→</div>
+            </button>
           </div>
         </section>
 
@@ -160,6 +174,159 @@
           </div>
         </section>
       </div>
+
+      <!-- -------- EXPENSE TRACKER VIEW -------- -->
+      <div id="expense-view" class="app-view" style="display:none;">
+
+        <div class="expense-tabbar">
+          <button class="expense-tab-btn active" data-tab="overview">Overview</button>
+          <button class="expense-tab-btn" data-tab="calendar">Calendar</button>
+          <button class="expense-tab-btn" data-tab="stats">Statistics</button>
+          <button class="expense-tab-btn" data-tab="budget">Budget</button>
+          <button class="expense-tab-btn" data-tab="history">History</button>
+          <button class="expense-tab-btn" data-tab="categories">Categories</button>
+        </div>
+
+        <div class="expense-panel" data-panel="overview">
+          <div class="expense-month-row">
+            <button class="expense-month-nav expense-month-prev">‹</button>
+            <div class="expense-month-title">✿ <span id="expense-month-label"></span></div>
+            <button class="expense-month-nav expense-month-next">›</button>
+          </div>
+          <div class="expense-sub-line" id="expense-overview-subline"></div>
+
+          <div class="expense-card">
+            <div class="expense-remain-label">Remaining this month</div>
+            <div class="expense-remain-value" id="expense-remaining-value">0<small>đ</small></div>
+            <div class="expense-progress-track"><div class="expense-progress-fill" id="expense-progress-fill"></div></div>
+            <div class="expense-progress-meta"><span id="expense-progress-meta-left"></span><span id="expense-progress-meta-right"></span></div>
+
+            <div class="expense-chips-row">
+              <div class="expense-info-chip income">
+                <div class="expense-info-chip-top"><span>Income</span><span class="expense-edit-link" id="expense-income-edit-link">Edit</span></div>
+                <div class="expense-info-chip-val" id="expense-income-value">0đ</div>
+              </div>
+              <div class="expense-info-chip expense">
+                <div class="expense-info-chip-top"><span>Expenses</span><span id="expense-spent-count"></span></div>
+                <div class="expense-info-chip-val" id="expense-spent-value">0đ</div>
+              </div>
+            </div>
+          </div>
+
+          <button class="expense-add-btn" id="expense-overview-add-btn">＋ Add Expense</button>
+          <a class="expense-link-more" id="expense-view-stats-link">View detailed stats →</a>
+        </div>
+
+        <div class="expense-panel" data-panel="calendar" style="display:none;">
+          <div class="expense-month-row">
+            <button class="expense-month-nav expense-month-prev">‹</button>
+            <div class="expense-month-title" id="expense-cal-month-label"></div>
+            <button class="expense-month-nav expense-month-next">›</button>
+          </div>
+          <div class="expense-cal-layout">
+            <div class="expense-card expense-cal-card">
+              <div class="expense-cal-grid" id="expense-cal-grid"></div>
+              <div class="expense-cal-footer">
+                <span>Total this month: <b id="expense-cal-total"></b></span>
+                <span id="expense-cal-days-count"></span>
+              </div>
+            </div>
+            <div class="expense-card expense-day-detail" id="expense-day-detail" style="display:none;">
+              <div class="expense-day-detail-head">
+                <div><div class="expense-day-detail-label">Day details</div><div class="expense-day-title" id="expense-day-title"></div></div>
+                <button class="acc-edit-icon-btn" id="expense-day-close-btn">✕</button>
+              </div>
+              <div class="expense-day-total-row">Total spent <b id="expense-day-total"></b></div>
+              <div id="expense-day-list"></div>
+              <button class="expense-add-btn" id="expense-day-add-btn">＋ Add expense for this day</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="expense-panel" data-panel="stats" style="display:none;">
+          <div class="expense-section-title">Statistics — <span id="expense-stats-month-label"></span></div>
+
+          <div class="expense-card expense-stats-overview">
+            <div class="expense-stats-tile"><div class="label">Total spent</div><div class="val" id="expense-stats-total"></div></div>
+            <div class="expense-stats-tile"><div class="label">Income</div><div class="val" id="expense-stats-income"></div></div>
+            <div class="expense-stats-tile"><div class="label">Remaining</div><div class="val" id="expense-stats-remaining"></div></div>
+            <div class="expense-stats-tile"><div class="label">Transactions</div><div class="val" id="expense-stats-count"></div></div>
+            <div class="expense-stats-tile"><div class="label">Avg / day</div><div class="val" id="expense-stats-avg"></div></div>
+          </div>
+
+          <div class="expense-card">
+            <div class="expense-section-title">By category</div>
+            <div id="expense-stats-by-category"></div>
+          </div>
+
+          <div class="expense-card">
+            <div class="expense-trend-head">
+              <div class="expense-section-title">Spending trend</div>
+              <div class="expense-range-group">
+                <button class="expense-range-btn" data-range="7">7 days</button>
+                <button class="expense-range-btn" data-range="30">30 days</button>
+                <button class="expense-range-btn active" data-range="month">Month</button>
+              </div>
+            </div>
+            <canvas id="expense-trend-canvas" class="expense-trend-canvas"></canvas>
+          </div>
+        </div>
+
+        <div class="expense-panel" data-panel="budget" style="display:none;">
+          <div class="expense-month-row">
+            <div class="expense-month-title" id="expense-budget-month-label"></div>
+          </div>
+
+          <div class="expense-card">
+            <div class="expense-budget-head">
+              <div><div class="expense-sub-line" style="margin:0;">Monthly budget</div><div class="expense-remain-value" id="expense-budget-overall-value">0đ</div></div>
+              <button class="pill-btn" id="expense-budget-edit-btn">✎ Edit</button>
+            </div>
+            <div class="expense-progress-track"><div class="expense-progress-fill" id="expense-budget-progress-fill"></div></div>
+            <div class="expense-progress-meta"><span id="expense-budget-used-pct"></span><span>Remaining <b id="expense-budget-remaining"></b></span></div>
+            <div class="expense-hint" id="expense-budget-hint" style="display:none;"></div>
+          </div>
+
+          <div class="expense-section-title">By category</div>
+          <div id="expense-budget-by-category"></div>
+          <div id="expense-budget-add-row"></div>
+        </div>
+
+        <div class="expense-panel" data-panel="history" style="display:none;">
+          <div class="expense-section-title">Expense History — <span id="expense-history-month-label"></span></div>
+          <div class="expense-history-filters">
+            <input type="text" id="expense-history-search" placeholder="Search notes, e.g. coffee" autocomplete="off">
+            <select id="expense-history-category-filter"></select>
+            <select id="expense-history-amount-filter">
+              <option value="">All amounts</option>
+              <option value="lt100">Under 100k</option>
+              <option value="100to500">100k – 500k</option>
+              <option value="gt500">Above 500k</option>
+            </select>
+          </div>
+          <div class="expense-card" id="expense-history-list"></div>
+        </div>
+
+        <div class="expense-panel" data-panel="categories" style="display:none;">
+          <div class="expense-section-title">Categories</div>
+          <div class="expense-sub-line" style="margin:0 0 14px;">Keep it short for easy picking.</div>
+          <div class="expense-card" id="expense-category-list"></div>
+
+          <div class="expense-card expense-add-category-card">
+            <div class="expense-section-title">Add new category</div>
+            <button class="pill-btn" id="expense-new-category-btn">+ New category</button>
+          </div>
+        </div>
+
+        <div class="expense-mobile-tabbar">
+          <button class="expense-mobile-tab-btn active" data-tab="overview"><span>Overview</span></button>
+          <button class="expense-mobile-tab-btn" data-tab="calendar"><span>Calendar</span></button>
+          <button class="expense-mobile-tab-add" id="expense-mobile-add-btn">＋</button>
+          <button class="expense-mobile-tab-btn" data-tab="history"><span>History</span></button>
+          <button class="expense-mobile-tab-btn" data-tab="budget"><span>Budget</span></button>
+        </div>
+      </div>
+
 
       <!-- -------- ACCOUNTS VIEW -------- -->
       <div id="accounts-view" class="app-view" style="display:none;">
@@ -674,6 +841,128 @@
     1) gas-bridge.js  — định nghĩa window.google.script.run (shim gọi fetch())
     2) app.js         — code gốc, dùng google.script.run y hệt bản Apps Script cũ
   -->
+  <!-- ================= EXPENSE TRACKER MODALS ================= -->
+  <div id="expense-entry-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="expense-entry-modal-title">Add Expense</h3>
+        <button id="expense-entry-modal-close" class="modal-close">✕</button>
+      </div>
+
+      <div class="expense-field-caption">Amount</div>
+      <div class="expense-amount-row">
+        <input type="number" id="expense-amount-input" placeholder="0" inputmode="numeric">
+        <span>đ</span>
+      </div>
+      <div class="expense-quick-amounts">
+        <button type="button" class="expense-quick-amt-btn" data-amount="20000">20k</button>
+        <button type="button" class="expense-quick-amt-btn" data-amount="50000">50k</button>
+        <button type="button" class="expense-quick-amt-btn" data-amount="100000">100k</button>
+        <button type="button" class="expense-quick-amt-btn" data-amount="200000">200k</button>
+      </div>
+
+      <div class="expense-field-caption">Category</div>
+      <div class="expense-chip-grid" id="expense-entry-category-grid"></div>
+
+      <div class="expense-field-caption">Date</div>
+      <div class="expense-date-row">
+        <button type="button" class="pill-btn secondary" id="expense-date-today-btn">Today</button>
+        <button type="button" class="pill-btn secondary" id="expense-date-yesterday-btn">Yesterday</button>
+        <input type="date" id="expense-date-custom-input">
+      </div>
+      <div class="expense-sub-line" id="expense-date-display" style="margin:4px 0 0;"></div>
+
+      <div class="expense-field-caption">Note (optional)</div>
+      <input type="text" id="expense-note-input" placeholder="e.g. Lunch" autocomplete="off">
+
+      <label class="expense-checkbox-row">
+        <input type="checkbox" id="expense-repeat-checkbox"> Repeat monthly
+      </label>
+
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="expense-entry-cancel-btn">Cancel</button>
+        <button class="pill-btn" id="expense-entry-save-btn">Add Expense</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="expense-income-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Edit Income</h3>
+        <button id="expense-income-modal-close" class="modal-close">✕</button>
+      </div>
+      <div class="expense-field-caption">Monthly income</div>
+      <div class="expense-amount-row"><input type="number" id="expense-income-amount-input" placeholder="0"><span>đ</span></div>
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="expense-income-cancel-btn">Cancel</button>
+        <button class="pill-btn" id="expense-income-save-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="expense-budget-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Edit Monthly Budget</h3>
+        <button id="expense-budget-modal-close" class="modal-close">✕</button>
+      </div>
+      <div class="expense-amount-row"><input type="number" id="expense-budget-amount-input" placeholder="0"><span>đ</span></div>
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="expense-budget-cancel-btn">Cancel</button>
+        <button class="pill-btn" id="expense-budget-save-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="expense-category-budget-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Category Budget</h3>
+        <button id="expense-catbudget-modal-close" class="modal-close">✕</button>
+      </div>
+      <div id="expense-cat-budget-label" class="expense-sub-line" style="font-weight:700;"></div>
+      <select id="expense-cat-budget-select"></select>
+      <div class="expense-amount-row"><input type="number" id="expense-cat-budget-amount" placeholder="0"><span>đ</span></div>
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="expense-catbudget-cancel-btn">Cancel</button>
+        <button class="pill-btn" id="expense-catbudget-save-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="expense-category-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="expense-category-modal-title">Add Category</h3>
+        <button id="expense-category-modal-close" class="modal-close">✕</button>
+      </div>
+      <div class="expense-field-caption">Name</div>
+      <input type="text" id="expense-category-name-input" placeholder="e.g. Pets" autocomplete="off">
+      <div class="expense-field-caption">Color</div>
+      <div class="expense-swatches" id="expense-category-color-swatches"></div>
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="expense-category-cancel-btn">Cancel</button>
+        <button class="pill-btn" id="expense-category-save-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generic confirm (delete entry / delete category / remove budget limit) — matches
+       the no-close-icon, two-action convention used by home-reset-modal / qr-delete-modal -->
+  <div id="expense-confirm-modal" class="modal-overlay">
+    <div class="modal-box home-reset-box">
+      <div class="modal-header" style="padding-top:26px;">
+        <h3 id="expense-confirm-message"></h3>
+      </div>
+      <div class="modal-actions">
+        <button id="expense-confirm-cancel-btn" class="pill-btn secondary">Mistake</button>
+        <button id="expense-confirm-yes-btn" class="pill-btn">Yah</button>
+      </div>
+    </div>
+  </div>
+
+
   <script src="qrcode.min.js"></script>
   <script src="gas-bridge.js"></script>
   <script src="app.js"></script>
