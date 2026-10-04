@@ -190,19 +190,64 @@ function setNavActive(section) {
   });
 }
 
-/* ---- Mobile nav drawer (tomato icon top-left → slide-in drawer + scrim) ---- */
+/* ---- Mobile nav drawer (tomato icon top-left → slides along as the drawer
+   opens, parking itself top-right once fully open; tapping it there closes
+   the drawer again, tomato slides back to top-left) ---- */
 function openMobileNavDrawer() {
+  document.body.classList.add('mobile-nav-open');
   document.getElementById('mobile-nav-drawer').classList.add('open');
   document.getElementById('mobile-nav-scrim').classList.add('active');
 }
 function closeMobileNavDrawer() {
+  document.body.classList.remove('mobile-nav-open');
   document.getElementById('mobile-nav-drawer').classList.remove('open');
   document.getElementById('mobile-nav-scrim').classList.remove('active');
+  closeMobileNavSubmenus();
 }
 function toggleMobileNavDrawer() {
   var isOpen = document.getElementById('mobile-nav-drawer').classList.contains('open');
   if (isOpen) closeMobileNavDrawer(); else openMobileNavDrawer();
 }
+
+/* ---- Tools/Games accordion inside the drawer — tap the big item to reveal
+   its small items right there, tap a small item to jump straight into that
+   tool/game (no need to land on the Tools/Games grid page first). ---- */
+function closeMobileNavSubmenus() {
+  document.querySelectorAll('.app-nav-submenu').forEach(function (el) {
+    el.classList.remove('open');
+    el.style.maxHeight = '0px';
+  });
+  document.querySelectorAll('.app-nav-group-toggle').forEach(function (btn) {
+    btn.classList.remove('expanded');
+  });
+}
+function toggleMobileNavSubmenu(section) {
+  var submenu = document.querySelector('.app-nav-submenu[data-submenu="' + section + '"]');
+  var toggleBtn = document.querySelector('.app-nav-group-toggle[data-nav-section="' + section + '"]');
+  if (!submenu || !toggleBtn) return;
+  var wasOpen = submenu.classList.contains('open');
+  closeMobileNavSubmenus(); // accordion: only one group open at a time
+  if (!wasOpen) {
+    submenu.classList.add('open');
+    submenu.style.maxHeight = submenu.scrollHeight + 'px';
+    toggleBtn.classList.add('expanded');
+  }
+}
+
+// Which opener function each small drawer item ("data-open") jumps to —
+// same functions the old Tools/Games cards and desktop dock already use.
+var MOBILE_NAV_OPENERS_ = {
+  accounts: function () { openAccountsGate(); },
+  symbols: loadSymbols,
+  saving: openSaving,
+  datediff: openDateDiff,
+  eating: openEating,
+  qr: openQrCollection,
+  expense: openExpense,
+  memory: openMemory,
+  mochi: openMochi,
+  minesweeper: openMinesweeper
+};
 
 // Controls which part of the Home tab is visible: 'home' = To Do List section only,
 // 'tools' = only the Tools cards, 'games' = only the Games cards. Each is exclusive now.
@@ -244,13 +289,14 @@ function showView(id) {
   syncFixedHeaderOffsets();
 }
 
-// Legacy hook: there's no fixed top navbar anymore (mobile uses a small
-// overlay icon, desktop a floating bottom dock — neither pushes page content
-// down), so this now always resolves to 0px. Left in place since --navbar-h
-// may still be referenced in style.css; harmless either way.
+// There's no fixed top navbar anymore — mobile has a small fixed tomato icon
+// top-left instead, desktop has a floating bottom dock. Only the mobile icon
+// needs page content to leave it room (so it never sits on top of a section
+// title); --navbar-h keeps using whatever existing padding-top: var(--navbar-h)
+// rule style.css has for this, it just now means "icon height", not "navbar
+// height". Desktop needs no top offset (the dock is fixed at the bottom).
 function syncFixedHeaderOffsets() {
-  var navbar = document.querySelector('.navbar');
-  var navH = navbar ? navbar.getBoundingClientRect().height : 0;
+  var navH = window.innerWidth <= 760 ? 56 : 0;
   document.documentElement.style.setProperty('--navbar-h', navH + 'px');
 }
 
@@ -3246,12 +3292,28 @@ document.addEventListener('DOMContentLoaded', function () {
 
   window.addEventListener('resize', syncFixedHeaderOffsets);
 
-  document.querySelectorAll('.app-nav-link').forEach(function (btn) {
+  // Plain nav links (desktop dock's Home/Tools/Games, and the mobile
+  // drawer's Home) just navigate straight away. The mobile drawer's
+  // Tools/Games are ".app-nav-group-toggle" instead — handled separately
+  // below, since tapping them opens an in-drawer accordion rather than
+  // navigating immediately.
+  document.querySelectorAll('.app-nav-link:not(.app-nav-group-toggle)').forEach(function (btn) {
     btn.onclick = function () {
       goHome(btn.dataset.navSection);
       closeMobileNavDrawer();
     };
   });
+  document.querySelectorAll('.app-nav-group-toggle').forEach(function (btn) {
+    btn.onclick = function () { toggleMobileNavSubmenu(btn.dataset.navSection); };
+  });
+  document.querySelectorAll('.app-nav-sublink').forEach(function (btn) {
+    btn.onclick = function () {
+      var opener = MOBILE_NAV_OPENERS_[btn.dataset.open];
+      closeMobileNavDrawer();
+      if (opener) opener();
+    };
+  });
+
   document.getElementById('mobile-nav-toggle').onclick = toggleMobileNavDrawer;
   document.getElementById('mobile-nav-scrim').onclick = closeMobileNavDrawer;
 
