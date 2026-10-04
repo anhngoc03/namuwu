@@ -155,6 +155,7 @@ var NAV_SECTION_MAP_ = {
   'menu-view': 'home',
   'accounts-view': 'tools', 'symbols-view': 'tools', 'saving-view': 'tools',
   'datediff-view': 'tools', 'icd-view': 'tools', 'eating-view': 'tools', 'qr-view': 'tools',
+  'expense-view': 'tools',
   'memory-view': 'games', 'mochi-view': 'games', 'minesweeper-view': 'games'
 };
 
@@ -168,6 +169,7 @@ var VIEW_OPENERS_ = {
   'icd-view': openIcd,
   'eating-view': openEating,
   'qr-view': openQrCollection,
+  'expense-view': openExpense,
   'memory-view': openMemory,
   'mochi-view': openMochi,
   'minesweeper-view': openMinesweeper
@@ -212,6 +214,7 @@ function showHomeSection(section) {
     if (tools) tools.style.display = 'none';
     if (games) games.style.display = 'none';
     loadHomeData();
+    expenseLoadHomeWidget();
   } else if (section === 'tools') {
     if (home) home.style.display = 'none';
     if (tools) tools.style.display = '';
@@ -1797,6 +1800,765 @@ function confirmEatingReset() {
 }
 
 /* ---------------------------------------------------------------- */
+/* EXPENSE TRACKER                                                     */
+/* ---------------------------------------------------------------- */
+var EXPENSE_MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+var EXPENSE_COLORS = ['#f6b8c6','#bcdfd0','#f6e2a0','#c9c0ee','#f3c89a','#a9d3ee','#e3c6c6'];
+
+var expenseData = null;            // last payload from getExpenseData
+var expensePeriod = null;          // 'YYYY-MM' currently viewed
+var expenseActiveTab = 'overview'; // overview | calendar | stats | budget | history | categories
+var expenseEditingEntryId = null;  // null = adding new
+var expenseSelectedDay = null;     // 'YYYY-MM-DD' picked in Calendar tab
+var expensePendingDate = null;     // date the Add-Expense modal will save to
+var expenseEditingCategoryId = null;
+var expenseEditingCategoryBudgetId = null; // category id being budgeted (new or existing)
+var expenseConfirmAction = null;   // fn to run when the generic confirm modal says "Yah"
+var expenseStatsRange = 'month';   // '7' | '30' | 'month'
+var expenseHistoryFilters = { search: '', categoryId: '', amount: '' };
+
+function expenseTodayStr() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function expenseCurrentPeriod() { return expenseTodayStr().slice(0, 7); }
+function expensePeriodLabel(period) {
+  var y = period.slice(0, 4), m = Number(period.slice(5, 7));
+  return EXPENSE_MONTH_NAMES[m - 1] + ' ' + y;
+}
+function expenseLastDay(period) {
+  var y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7));
+  return new Date(y, m, 0).getDate();
+}
+function expenseFmt(n) { return formatThousands(Math.round(n)) + 'đ'; }
+function expenseShort(n) {
+  n = Math.round(n);
+  if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1000) return Math.round(n / 1000) + 'K';
+  return String(n);
+}
+function expenseColorFor(categoryId) {
+  var c = (expenseData && expenseData.categories || []).find(function (x) { return x.id === categoryId; });
+  return c ? c.color : '#ccc';
+}
+function expenseNameFor(categoryId) {
+  var c = (expenseData && expenseData.categories || []).find(function (x) { return x.id === categoryId; });
+  return c ? c.name : '(no category)';
+}
+function expenseEntriesTotal(entries) { return entries.reduce(function (s, e) { return s + e.amount; }, 0); }
+function expenseShiftPeriod(period, delta) {
+  var y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7));
+  m += delta;
+  while (m > 12) { m -= 12; y++; }
+  while (m < 1) { m += 12; y--; }
+  return y + '-' + String(m).padStart(2, '0');
+}
+
+/* ---- open / load ---- */
+function openExpense() {
+  showView('expense-view');
+  expenseActiveTab = 'overview';
+  loadExpenseData(expensePeriod || expenseCurrentPeriod());
+}
+
+function loadExpenseData(period) {
+  showLoading();
+  google.script.run
+    .withSuccessHandler(function (data) {
+      hideLoading();
+      expenseData = data;
+      expensePeriod = data.period;
+      expenseRenderShell();
+      expenseRenderActiveTab();
+    })
+    .withFailureHandler(function (err) { hideLoading(); toast('Error: ' + err.message); })
+    .getExpenseData(period);
+}
+
+function expenseReload() { loadExpenseData(expensePeriod); }
+
+/* ---- tabs / shell ---- */
+function expenseRenderShell() {
+  document.querySelectorAll('.expense-tab-btn').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.tab === expenseActiveTab);
+  });
+  document.querySelectorAll('.expense-mobile-tab-btn').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.tab === expenseActiveTab);
+  });
+  document.querySelectorAll('.expense-panel').forEach(function (p) {
+    p.style.display = (p.dataset.panel === expenseActiveTab) ? '' : 'none';
+  });
+}
+
+function expenseSwitchTab(tab) {
+  expenseActiveTab = tab;
+  expenseSelectedDay = null;
+  expenseRenderShell();
+  expenseRenderActiveTab();
+}
+
+function expenseRenderActiveTab() {
+  if (expenseActiveTab === 'overview') expenseRenderOverview();
+  else if (expenseActiveTab === 'calendar') expenseRenderCalendar();
+  else if (expenseActiveTab === 'stats') expenseRenderStats();
+  else if (expenseActiveTab === 'budget') expenseRenderBudget();
+  else if (expenseActiveTab === 'history') expenseRenderHistory();
+  else if (expenseActiveTab === 'categories') expenseRenderCategories();
+}
+
+function expensePrevMonth() { loadExpenseData(expenseShiftPeriod(expensePeriod, -1)); }
+function expenseNextMonth() { loadExpenseData(expenseShiftPeriod(expensePeriod, 1)); }
+
+/* ---- Overview tab ---- */
+function expenseRenderOverview() {
+  var totalSpent = expenseEntriesTotal(expenseData.entries);
+  var remaining = expenseData.income - totalSpent;
+  var pct = expenseData.income > 0 ? Math.min(100, (totalSpent / expenseData.income) * 100) : 0;
+  var isCurrentMonth = expensePeriod === expenseCurrentPeriod();
+  var daysLeft = isCurrentMonth ? (expenseLastDay(expensePeriod) - new Date().getDate()) : 0;
+  var todaySpent = isCurrentMonth ? expenseEntriesTotal(expenseData.entries.filter(function (e) { return e.date === expenseTodayStr(); })) : 0;
+
+  document.getElementById('expense-month-label').textContent = expensePeriodLabel(expensePeriod);
+  document.getElementById('expense-overview-subline').textContent =
+    isCurrentMonth ? ('Today · spent ' + expenseFmt(todaySpent) + ' so far') : (expenseData.entries.length + ' transactions this month');
+  document.getElementById('expense-remaining-value').innerHTML = formatThousands(Math.round(remaining)) + '<small>đ</small>';
+  document.getElementById('expense-progress-fill').style.width = pct + '%';
+  document.getElementById('expense-progress-meta-left').textContent = 'Spent ' + Math.round(pct) + '% of income';
+  document.getElementById('expense-progress-meta-right').textContent = isCurrentMonth ? (daysLeft + ' days left') : '';
+  document.getElementById('expense-income-value').textContent = expenseFmt(expenseData.income);
+  document.getElementById('expense-spent-value').textContent = expenseFmt(totalSpent);
+  document.getElementById('expense-spent-count').textContent = expenseData.entries.length + (expenseData.entries.length === 1 ? ' entry' : ' entries');
+}
+
+/* ---- Calendar tab ---- */
+function expenseRenderCalendar() {
+  document.getElementById('expense-cal-month-label').textContent = expensePeriodLabel(expensePeriod);
+  var grid = document.getElementById('expense-cal-grid');
+  grid.innerHTML = '';
+  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(function (d) {
+    var h = document.createElement('div');
+    h.className = 'expense-cal-head';
+    h.textContent = d;
+    grid.appendChild(h);
+  });
+
+  var y = Number(expensePeriod.slice(0, 4)), m = Number(expensePeriod.slice(5, 7));
+  var firstWeekday = (new Date(y, m - 1, 1).getDay() + 6) % 7; // 0=Mon
+  var daysInMonth = expenseLastDay(expensePeriod);
+  var totalsByDay = {};
+  expenseData.entries.forEach(function (e) {
+    totalsByDay[e.date] = (totalsByDay[e.date] || 0) + e.amount;
+  });
+
+  for (var i = 0; i < firstWeekday; i++) {
+    var blank = document.createElement('div');
+    blank.className = 'expense-cal-cell empty';
+    grid.appendChild(blank);
+  }
+  for (var day = 1; day <= daysInMonth; day++) {
+    var dateStr = expensePeriod + '-' + String(day).padStart(2, '0');
+    var cell = document.createElement('div');
+    cell.className = 'expense-cal-cell' + (totalsByDay[dateStr] ? ' has-spend' : '') + (dateStr === expenseSelectedDay ? ' selected' : '') + (dateStr === expenseTodayStr() ? ' is-today' : '');
+    cell.innerHTML = '<span class="expense-cal-day">' + day + '</span>' + (totalsByDay[dateStr] ? '<span class="expense-cal-amt">' + expenseShort(totalsByDay[dateStr]) + '</span>' : '');
+    cell.onclick = function (ds) { return function () { expenseOpenDay(ds); }; }(dateStr);
+    grid.appendChild(cell);
+  }
+
+  var monthTotal = expenseEntriesTotal(expenseData.entries);
+  var daysWithSpend = Object.keys(totalsByDay).length;
+  document.getElementById('expense-cal-total').textContent = expenseFmt(monthTotal);
+  document.getElementById('expense-cal-days-count').textContent = daysWithSpend + (daysWithSpend === 1 ? ' day' : ' days') + ' with spending';
+
+  expenseRenderDayDetail();
+}
+
+function expenseOpenDay(dateStr) {
+  expenseSelectedDay = (expenseSelectedDay === dateStr) ? null : dateStr;
+  expenseRenderCalendar();
+}
+
+function expenseRenderDayDetail() {
+  var panel = document.getElementById('expense-day-detail');
+  if (!expenseSelectedDay) { panel.style.display = 'none'; return; }
+  panel.style.display = '';
+  var dayEntries = expenseData.entries.filter(function (e) { return e.date === expenseSelectedDay; });
+  var d = new Date(expenseSelectedDay + 'T00:00:00');
+  var weekday = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
+  document.getElementById('expense-day-title').textContent = weekday + ', ' + expenseSelectedDay.slice(8,10) + '/' + expenseSelectedDay.slice(5,7) + '/' + expenseSelectedDay.slice(0,4);
+  document.getElementById('expense-day-total').textContent = expenseFmt(expenseEntriesTotal(dayEntries));
+  var list = document.getElementById('expense-day-list');
+  list.innerHTML = '';
+  dayEntries.forEach(function (e) {
+    var row = document.createElement('div');
+    row.className = 'expense-day-row';
+    row.innerHTML =
+      '<span class="expense-dot" style="background:' + expenseColorFor(e.categoryId) + '"></span>' +
+      '<div class="expense-day-row-main"><div class="expense-day-row-name">' + icdEscape(e.note || expenseNameFor(e.categoryId)) + '</div>' +
+      '<div class="expense-day-row-cat">' + icdEscape(expenseNameFor(e.categoryId)) + '</div></div>' +
+      '<div class="expense-day-row-amt">' + expenseFmt(e.amount) + '</div>';
+    row.onclick = function (entry) { return function () { expenseOpenEntryModal(entry); }; }(e);
+    list.appendChild(row);
+  });
+  document.getElementById('expense-day-add-btn').onclick = function () { expenseOpenEntryModal(null, expenseSelectedDay); };
+}
+
+/* ---- Stats tab ---- */
+function expenseSetStatsRange(range) {
+  expenseStatsRange = range;
+  expenseRenderStats();
+}
+
+function expenseRenderStats() {
+  document.getElementById('expense-stats-month-label').textContent = expensePeriodLabel(expensePeriod);
+  var totalSpent = expenseEntriesTotal(expenseData.entries);
+  var isCurrentMonth = expensePeriod === expenseCurrentPeriod();
+  var elapsedDays = isCurrentMonth ? new Date().getDate() : expenseLastDay(expensePeriod);
+
+  document.getElementById('expense-stats-total').textContent = expenseFmt(totalSpent);
+  document.getElementById('expense-stats-income').textContent = expenseFmt(expenseData.income);
+  document.getElementById('expense-stats-remaining').textContent = expenseFmt(expenseData.income - totalSpent);
+  document.getElementById('expense-stats-count').textContent = expenseData.entries.length;
+  document.getElementById('expense-stats-avg').textContent = expenseFmt(elapsedDays ? totalSpent / elapsedDays : 0);
+
+  var byCat = {};
+  expenseData.entries.forEach(function (e) { byCat[e.categoryId] = (byCat[e.categoryId] || 0) + e.amount; });
+  var rows = Object.keys(byCat).map(function (cid) { return { categoryId: Number(cid), amount: byCat[cid] }; });
+  rows.sort(function (a, b) { return b.amount - a.amount; });
+
+  var wrap = document.getElementById('expense-stats-by-category');
+  wrap.innerHTML = '';
+  if (!rows.length) {
+    wrap.innerHTML = '<div class="empty-state"><span class="empty-icon">✿</span>No expenses yet this month</div>';
+  }
+  rows.forEach(function (r) {
+    var pct = totalSpent ? Math.round((r.amount / totalSpent) * 100) : 0;
+    var row = document.createElement('div');
+    row.className = 'expense-stat-row';
+    row.innerHTML =
+      '<span class="expense-dot" style="background:' + expenseColorFor(r.categoryId) + '"></span>' +
+      '<span class="expense-stat-name">' + icdEscape(expenseNameFor(r.categoryId)) + '</span>' +
+      '<div class="expense-stat-bar"><div class="expense-stat-bar-fill" style="width:' + pct + '%;background:' + expenseColorFor(r.categoryId) + '"></div></div>' +
+      '<span class="expense-stat-pct">' + pct + '%</span>' +
+      '<span class="expense-stat-amt">' + expenseFmt(r.amount) + '</span>';
+    wrap.appendChild(row);
+  });
+
+  document.querySelectorAll('.expense-range-btn').forEach(function (b) { b.classList.toggle('active', b.dataset.range === expenseStatsRange); });
+  expenseDrawTrendChart();
+}
+
+function expenseDrawTrendChart() {
+  var canvas = document.getElementById('expense-trend-canvas');
+  if (!canvas) return;
+  var rect = canvas.getBoundingClientRect();
+  var dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  var ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  var w = rect.width, h = rect.height;
+  ctx.clearRect(0, 0, w, h);
+
+  var daysInMonth = expenseLastDay(expensePeriod);
+  var totalsByDay = {};
+  expenseData.entries.forEach(function (e) { totalsByDay[e.date] = (totalsByDay[e.date] || 0) + e.amount; });
+
+  var n = expenseStatsRange === '7' ? 7 : (expenseStatsRange === '30' ? 30 : daysInMonth);
+  n = Math.min(n, daysInMonth);
+  var points = [];
+  for (var day = daysInMonth - n + 1; day <= daysInMonth; day++) {
+    if (day < 1) continue;
+    var ds = expensePeriod + '-' + String(day).padStart(2, '0');
+    points.push({ day: day, value: totalsByDay[ds] || 0 });
+  }
+
+  var max = Math.max.apply(null, points.map(function (p) { return p.value; }).concat([1]));
+  max = Math.ceil(max / 100000) * 100000 || 100000;
+  var padL = 48, padB = 22, padT = 10, padR = 10;
+  var plotW = w - padL - padR, plotH = h - padT - padB;
+
+  ctx.strokeStyle = 'rgba(154,143,138,0.25)';
+  ctx.fillStyle = '#9a8f8a';
+  ctx.font = '11px Nunito, sans-serif';
+  [0, 0.5, 1].forEach(function (f) {
+    var y = padT + plotH * (1 - f);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+    ctx.fillText(expenseShort(max * f), 4, y + 4);
+  });
+
+  if (points.length > 1) {
+    var stepX = plotW / (points.length - 1);
+    ctx.beginPath();
+    points.forEach(function (p, i) {
+      var x = padL + i * stepX, y = padT + plotH * (1 - p.value / max);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.lineTo(padL + (points.length - 1) * stepX, padT + plotH);
+    ctx.lineTo(padL, padT + plotH);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(232,137,159,0.18)';
+    ctx.fill();
+
+    ctx.beginPath();
+    points.forEach(function (p, i) {
+      var x = padL + i * stepX, y = padT + plotH * (1 - p.value / max);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = '#e8899f';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+}
+
+/* ---- Budget tab ---- */
+function expenseRenderBudget() {
+  document.getElementById('expense-budget-month-label').textContent = expensePeriodLabel(expensePeriod);
+  var totalSpent = expenseEntriesTotal(expenseData.entries);
+  var pct = expenseData.budgetOverall > 0 ? Math.min(100, (totalSpent / expenseData.budgetOverall) * 100) : 0;
+  var remaining = expenseData.budgetOverall - totalSpent;
+
+  document.getElementById('expense-budget-overall-value').textContent = expenseFmt(expenseData.budgetOverall);
+  document.getElementById('expense-budget-progress-fill').style.width = pct + '%';
+  document.getElementById('expense-budget-used-pct').textContent = 'Used · ' + Math.round(pct) + '%';
+  document.getElementById('expense-budget-remaining').textContent = expenseFmt(Math.max(0, remaining));
+
+  var hintEl = document.getElementById('expense-budget-hint');
+  var isCurrentMonth = expensePeriod === expenseCurrentPeriod();
+  if (expenseData.budgetOverall > 0 && isCurrentMonth) {
+    var daysLeft = Math.max(1, expenseLastDay(expensePeriod) - new Date().getDate() + 1);
+    if (pct >= 100) { hintEl.textContent = "You've gone over budget this month."; hintEl.className = 'expense-hint over'; }
+    else if (pct >= 90) { hintEl.textContent = "Almost at your limit — maybe slow down a little."; hintEl.className = 'expense-hint warn'; }
+    else { hintEl.textContent = daysLeft + ' days left, about ' + expenseFmt(remaining / daysLeft) + '/day keeps you comfortable.'; hintEl.className = 'expense-hint'; }
+    hintEl.style.display = '';
+  } else { hintEl.style.display = 'none'; }
+
+  var byCat = {};
+  expenseData.entries.forEach(function (e) { byCat[e.categoryId] = (byCat[e.categoryId] || 0) + e.amount; });
+
+  var wrap = document.getElementById('expense-budget-by-category');
+  wrap.innerHTML = '';
+  expenseData.categoryBudgets.forEach(function (b) {
+    var spent = byCat[b.categoryId] || 0;
+    var p = b.amount > 0 ? Math.min(100, (spent / b.amount) * 100) : 0;
+    var row = document.createElement('div');
+    row.className = 'expense-budget-cat-card';
+    row.innerHTML =
+      '<div class="expense-budget-cat-top">' +
+        '<div class="expense-budget-cat-name"><span class="expense-dot" style="background:' + expenseColorFor(b.categoryId) + '"></span>' + icdEscape(expenseNameFor(b.categoryId)) + '</div>' +
+        '<div class="expense-budget-cat-nums">' + formatThousands(spent) + ' / ' + formatThousands(b.amount) + 'đ</div>' +
+        '<button class="acc-edit-icon-btn expense-edit-cat-budget" title="Edit">✎</button>' +
+        '<button class="acc-edit-icon-btn expense-del-cat-budget" title="Remove limit">🗑</button>' +
+      '</div>' +
+      '<div class="expense-progress-track"><div class="expense-progress-fill-sm" style="width:' + p + '%;background:' + (p >= 100 ? '#e8899f' : expenseColorFor(b.categoryId)) + '"></div></div>' +
+      '<div class="expense-budget-cat-remain">' + (p >= 100 ? 'Over budget' : expenseFmt(b.amount - spent) + ' left') + '</div>';
+    row.querySelector('.expense-edit-cat-budget').onclick = function () { expenseOpenCategoryBudgetModal(b.categoryId, b.amount); };
+    row.querySelector('.expense-del-cat-budget').onclick = function () { expenseConfirm('Remove the budget limit for "' + expenseNameFor(b.categoryId) + '"?', function () {
+      google.script.run.withSuccessHandler(expenseApplyData).withFailureHandler(expenseFail).deleteExpenseCategoryBudget(expensePeriod, b.categoryId);
+    }); };
+    wrap.appendChild(row);
+  });
+
+  var addWrap = document.getElementById('expense-budget-add-row');
+  var budgeted = expenseData.categoryBudgets.map(function (b) { return b.categoryId; });
+  var available = expenseData.categories.filter(function (c) { return budgeted.indexOf(c.id) === -1; });
+  addWrap.innerHTML = '';
+  if (available.length) {
+    var btn = document.createElement('button');
+    btn.className = 'pill-btn expense-add-cat-budget-btn';
+    btn.textContent = '+ Add category budget';
+    btn.onclick = function () { expenseOpenCategoryBudgetModal(null, 0); };
+    addWrap.appendChild(btn);
+  }
+}
+
+function expenseOpenCategoryBudgetModal(categoryId, amount) {
+  expenseEditingCategoryBudgetId = categoryId;
+  var sel = document.getElementById('expense-cat-budget-select');
+  var budgeted = expenseData.categoryBudgets.map(function (b) { return b.categoryId; });
+  if (categoryId === null) {
+    sel.style.display = '';
+    sel.innerHTML = '';
+    expenseData.categories.filter(function (c) { return budgeted.indexOf(c.id) === -1; }).forEach(function (c) {
+      var opt = document.createElement('option'); opt.value = c.id; opt.textContent = c.name; sel.appendChild(opt);
+    });
+  } else {
+    sel.style.display = 'none';
+  }
+  document.getElementById('expense-cat-budget-label').textContent = categoryId ? expenseNameFor(categoryId) : '';
+  document.getElementById('expense-cat-budget-label').style.display = categoryId ? '' : 'none';
+  document.getElementById('expense-cat-budget-amount').value = amount || '';
+  document.getElementById('expense-category-budget-modal').classList.add('active');
+}
+
+function expenseSaveCategoryBudget() {
+  var categoryId = expenseEditingCategoryBudgetId;
+  if (categoryId === null) {
+    var sel = document.getElementById('expense-cat-budget-select');
+    if (!sel.value) { toast('Pick a category'); return; }
+    categoryId = Number(sel.value);
+  }
+  var amount = Number(document.getElementById('expense-cat-budget-amount').value);
+  if (!amount || amount <= 0) { toast('Enter a budget amount'); return; }
+  showLoading();
+  google.script.run
+    .withSuccessHandler(function (data) { hideLoading(); document.getElementById('expense-category-budget-modal').classList.remove('active'); expenseApplyData(data); })
+    .withFailureHandler(expenseFail)
+    .setExpenseCategoryBudget(expensePeriod, categoryId, amount);
+}
+
+function expenseOpenOverallBudgetModal() {
+  document.getElementById('expense-budget-amount-input').value = expenseData.budgetOverall || '';
+  document.getElementById('expense-budget-modal').classList.add('active');
+}
+function expenseSaveOverallBudget() {
+  var amount = Number(document.getElementById('expense-budget-amount-input').value) || 0;
+  showLoading();
+  google.script.run
+    .withSuccessHandler(function (data) { hideLoading(); document.getElementById('expense-budget-modal').classList.remove('active'); expenseApplyData(data); })
+    .withFailureHandler(expenseFail)
+    .setExpenseBudgetOverall(expensePeriod, amount);
+}
+
+/* ---- Income ---- */
+function expenseOpenIncomeModal() {
+  document.getElementById('expense-income-amount-input').value = expenseData.income || '';
+  document.getElementById('expense-income-modal').classList.add('active');
+}
+function expenseSaveIncome() {
+  var amount = Number(document.getElementById('expense-income-amount-input').value) || 0;
+  showLoading();
+  google.script.run
+    .withSuccessHandler(function (data) { hideLoading(); document.getElementById('expense-income-modal').classList.remove('active'); expenseApplyData(data); })
+    .withFailureHandler(expenseFail)
+    .setExpenseIncome(expensePeriod, amount);
+}
+
+/* ---- History tab ---- */
+function expenseRenderHistory() {
+  document.getElementById('expense-history-month-label').textContent = expensePeriodLabel(expensePeriod);
+  var catSel = document.getElementById('expense-history-category-filter');
+  if (!catSel.dataset.built) {
+    catSel.innerHTML = '<option value="">All categories</option>';
+    expenseData.categories.forEach(function (c) {
+      var opt = document.createElement('option'); opt.value = c.id; opt.textContent = c.name; catSel.appendChild(opt);
+    });
+    catSel.dataset.built = '1';
+  }
+
+  var q = expenseHistoryFilters.search.toLowerCase();
+  var filtered = expenseData.entries.filter(function (e) {
+    if (q && icdEscape(e.note).toLowerCase().indexOf(q) === -1 && expenseNameFor(e.categoryId).toLowerCase().indexOf(q) === -1) return false;
+    if (expenseHistoryFilters.categoryId && String(e.categoryId) !== String(expenseHistoryFilters.categoryId)) return false;
+    if (expenseHistoryFilters.amount === 'lt100') return e.amount < 100000;
+    if (expenseHistoryFilters.amount === '100to500') return e.amount >= 100000 && e.amount <= 500000;
+    if (expenseHistoryFilters.amount === 'gt500') return e.amount > 500000;
+    return true;
+  });
+
+  var byDate = {};
+  var order = [];
+  filtered.forEach(function (e) {
+    if (!byDate[e.date]) { byDate[e.date] = []; order.push(e.date); }
+    byDate[e.date].push(e);
+  });
+
+  var list = document.getElementById('expense-history-list');
+  list.innerHTML = '';
+  if (!order.length) {
+    list.innerHTML = '<div class="empty-state"><span class="empty-icon">✿</span>No matching expenses</div>';
+    return;
+  }
+  order.forEach(function (date) {
+    var head = document.createElement('div');
+    head.className = 'expense-history-date-head';
+    var d = new Date(date + 'T00:00:00');
+    var weekday = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
+    head.innerHTML = '<span>' + weekday + ', ' + date.slice(8,10) + '/' + date.slice(5,7) + '</span><span>' + expenseFmt(expenseEntriesTotal(byDate[date])) + '</span>';
+    list.appendChild(head);
+
+    byDate[date].forEach(function (e) {
+      var row = document.createElement('div');
+      row.className = 'expense-history-row';
+      row.innerHTML =
+        '<div class="expense-history-row-main">' +
+          '<div class="expense-history-row-name">' + icdEscape(e.note || expenseNameFor(e.categoryId)) + '</div>' +
+          '<div class="expense-history-row-cat"><span class="expense-dot" style="background:' + expenseColorFor(e.categoryId) + '"></span>' + icdEscape(expenseNameFor(e.categoryId)) + '</div>' +
+        '</div>' +
+        '<div class="expense-history-row-amt">' + expenseFmt(e.amount) + '</div>' +
+        '<button class="acc-edit-icon-btn expense-hist-edit" title="Edit">✎</button>' +
+        '<button class="acc-edit-icon-btn expense-hist-del" title="Delete">🗑</button>';
+      row.querySelector('.expense-hist-edit').onclick = function () { expenseOpenEntryModal(e); };
+      row.querySelector('.expense-hist-del').onclick = function () {
+        expenseConfirm('Delete this expense?', function () {
+          google.script.run.withSuccessHandler(expenseApplyData).withFailureHandler(expenseFail).deleteExpenseEntry(e.id, expensePeriod);
+        });
+      };
+      list.appendChild(row);
+    });
+  });
+}
+
+/* ---- Categories tab ---- */
+function expenseRenderCategories() {
+  var usage = {};
+  expenseData.entries.forEach(function (e) { usage[e.categoryId] = (usage[e.categoryId] || 0) + 1; });
+
+  var list = document.getElementById('expense-category-list');
+  list.innerHTML = '';
+  if (!expenseData.categories.length) {
+    list.innerHTML = '<div class="empty-state"><span class="empty-icon">✿</span>No categories yet — add your first one below</div>';
+  }
+  expenseData.categories.forEach(function (c) {
+    var row = document.createElement('div');
+    row.className = 'expense-category-row';
+    row.innerHTML =
+      '<span class="expense-dot lg" style="background:' + c.color + '"></span>' +
+      '<span class="expense-category-row-name">' + icdEscape(c.name) + '</span>' +
+      '<span class="expense-category-row-usage">' + (usage[c.id] ? (usage[c.id] + (usage[c.id] === 1 ? ' entry' : ' entries') + ' this month') : 'Unused') + '</span>' +
+      '<button class="acc-edit-icon-btn expense-cat-edit" title="Edit">✎</button>' +
+      '<button class="acc-edit-icon-btn expense-cat-del" title="Delete">🗑</button>';
+    row.querySelector('.expense-cat-edit').onclick = function () { expenseOpenCategoryModal(c); };
+    row.querySelector('.expense-cat-del').onclick = function () {
+      expenseConfirm('Delete category "' + c.name + '"?', function () {
+        google.script.run
+          .withSuccessHandler(function (cats) { expenseData.categories = cats; expenseRenderCategories(); toast('Deleted'); })
+          .withFailureHandler(function () { toast("Can't delete — this category still has expenses"); })
+          .deleteExpenseCategory(c.id);
+      });
+    };
+    list.appendChild(row);
+  });
+}
+
+function expenseOpenCategoryModal(cat) {
+  expenseEditingCategoryId = cat ? cat.id : null;
+  document.getElementById('expense-category-modal-title').textContent = cat ? 'Edit Category' : 'Add Category';
+  document.getElementById('expense-category-name-input').value = cat ? cat.name : '';
+  var chosen = cat ? cat.color : EXPENSE_COLORS[0];
+  var sw = document.getElementById('expense-category-color-swatches');
+  sw.innerHTML = '';
+  EXPENSE_COLORS.forEach(function (color) {
+    var dot = document.createElement('div');
+    dot.className = 'expense-swatch' + (color === chosen ? ' selected' : '');
+    dot.style.background = color;
+    dot.onclick = function () {
+      sw.querySelectorAll('.expense-swatch').forEach(function (s) { s.classList.remove('selected'); });
+      dot.classList.add('selected');
+      sw.dataset.chosen = color;
+    };
+    sw.appendChild(dot);
+  });
+  sw.dataset.chosen = chosen;
+  document.getElementById('expense-category-modal').classList.add('active');
+}
+
+function expenseSaveCategory() {
+  var name = document.getElementById('expense-category-name-input').value.trim();
+  if (!name) { toast('Enter a category name'); return; }
+  var color = document.getElementById('expense-category-color-swatches').dataset.chosen || EXPENSE_COLORS[0];
+  showLoading();
+  var onDone = function (cats) {
+    hideLoading();
+    expenseData.categories = cats;
+    document.getElementById('expense-category-modal').classList.remove('active');
+    expenseRenderCategories();
+    toast('Saved!');
+  };
+  if (expenseEditingCategoryId) {
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).updateExpenseCategory(expenseEditingCategoryId, name, color);
+  } else {
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).addExpenseCategory(name, color);
+  }
+}
+
+/* ---- Add / Edit expense entry modal ---- */
+function expenseOpenEntryModal(entry, presetDate) {
+  expenseEditingEntryId = entry ? entry.id : null;
+  document.getElementById('expense-entry-modal-title').textContent = entry ? 'Edit Expense' : 'Add Expense';
+  document.getElementById('expense-amount-input').value = entry ? entry.amount : '';
+
+  var catGrid = document.getElementById('expense-entry-category-grid');
+  catGrid.innerHTML = '';
+  var selectedCat = entry ? entry.categoryId : (expenseData.categories[0] ? expenseData.categories[0].id : null);
+  expenseData.categories.forEach(function (c) {
+    var chip = document.createElement('div');
+    chip.className = 'expense-chip' + (c.id === selectedCat ? ' active' : '');
+    chip.style.setProperty('--chip-color', c.color);
+    chip.innerHTML = '<span class="expense-dot" style="background:' + c.color + '"></span>' + icdEscape(c.name);
+    chip.dataset.id = c.id;
+    chip.onclick = function () {
+      catGrid.querySelectorAll('.expense-chip').forEach(function (x) { x.classList.remove('active'); });
+      chip.classList.add('active');
+      catGrid.dataset.chosen = c.id;
+    };
+    catGrid.appendChild(chip);
+  });
+  catGrid.dataset.chosen = selectedCat || '';
+  if (!expenseData.categories.length) {
+    catGrid.innerHTML = '<div class="empty-state" style="padding:12px 0;">No categories yet — add one in the Categories tab first.</div>';
+  }
+
+  expensePendingDate = entry ? entry.date : (presetDate || expenseTodayStr());
+  expenseUpdateDateButtons();
+  document.getElementById('expense-note-input').value = entry ? entry.note : '';
+  document.getElementById('expense-repeat-checkbox').checked = entry ? entry.repeatMonthly : false;
+  document.getElementById('expense-entry-save-btn').textContent = entry ? 'Save Changes' : 'Add Expense';
+  document.getElementById('expense-entry-modal').classList.add('active');
+}
+
+function expenseSetQuickAmount(v) {
+  var input = document.getElementById('expense-amount-input');
+  input.value = (Number(input.value) || 0) + v;
+}
+
+function expensePickDate(which) {
+  var today = expenseTodayStr();
+  if (which === 'today') expensePendingDate = today;
+  else if (which === 'yesterday') {
+    var d = new Date(); d.setDate(d.getDate() - 1);
+    expensePendingDate = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  expenseUpdateDateButtons();
+}
+function expensePickCustomDate(value) {
+  if (!value) return;
+  expensePendingDate = value;
+  expenseUpdateDateButtons();
+}
+function expenseUpdateDateButtons() {
+  var today = expenseTodayStr();
+  var y = new Date(); y.setDate(y.getDate() - 1);
+  var yesterday = y.getFullYear() + '-' + String(y.getMonth()+1).padStart(2,'0') + '-' + String(y.getDate()).padStart(2,'0');
+  document.getElementById('expense-date-today-btn').classList.toggle('active', expensePendingDate === today);
+  document.getElementById('expense-date-yesterday-btn').classList.toggle('active', expensePendingDate === yesterday);
+  document.getElementById('expense-date-custom-input').value = expensePendingDate;
+  var d = new Date(expensePendingDate + 'T00:00:00');
+  var weekday = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
+  document.getElementById('expense-date-display').textContent = weekday + ', ' + expensePendingDate.slice(8,10) + '/' + expensePendingDate.slice(5,7) + '/' + expensePendingDate.slice(0,4);
+}
+
+function expenseSaveEntry() {
+  var amount = Number(document.getElementById('expense-amount-input').value);
+  if (!amount || amount <= 0) { toast('Enter an amount'); return; }
+  var catGrid = document.getElementById('expense-entry-category-grid');
+  var categoryId = Number(catGrid.dataset.chosen);
+  if (!categoryId) { toast('Pick a category'); return; }
+  var note = document.getElementById('expense-note-input').value.trim();
+  var repeatMonthly = document.getElementById('expense-repeat-checkbox').checked;
+  var date = expensePendingDate;
+
+  showLoading();
+  var onDone = function (data) {
+    hideLoading();
+    document.getElementById('expense-entry-modal').classList.remove('active');
+    expenseApplyData(data);
+    toast('Saved!');
+  };
+  if (expenseEditingEntryId) {
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).updateExpenseEntry(expenseEditingEntryId, amount, categoryId, note, date, repeatMonthly, expensePeriod);
+  } else {
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).addExpenseEntry(amount, categoryId, note, date, repeatMonthly);
+  }
+}
+
+/* ---- shared helpers ---- */
+function expenseApplyData(data) {
+  // addExpenseEntry may return data for a DIFFERENT period (if a custom date
+  // was picked outside the currently viewed month) — follow it either way.
+  expenseData = data;
+  expensePeriod = data.period;
+  expenseRenderShell();
+  expenseRenderActiveTab();
+}
+function expenseFail(err) { hideLoading(); toast('Error: ' + err.message); }
+
+function expenseConfirm(message, onYes) {
+  document.getElementById('expense-confirm-message').textContent = message;
+  expenseConfirmAction = onYes;
+  document.getElementById('expense-confirm-modal').classList.add('active');
+}
+
+/* ---- Home widget ---- */
+function expenseLoadHomeWidget() {
+  var el = document.getElementById('home-expense-widget-value');
+  if (!el) return;
+  google.script.run
+    .withSuccessHandler(function (r) { el.textContent = formatThousands(Math.round(r.total)) + 'đ'; })
+    .withFailureHandler(function () { el.textContent = '—'; })
+    .getExpenseTodayTotal();
+}
+function expenseOpenFromHomeWidget() { openExpense(); }
+
+/* ---- static event wiring (called once, from DOMContentLoaded) ---- */
+function expenseWireEvents() {
+  document.querySelectorAll('.expense-tab-btn, .expense-mobile-tab-btn').forEach(function (b) {
+    b.onclick = function () { expenseSwitchTab(b.dataset.tab); };
+  });
+  document.querySelectorAll('.expense-month-prev').forEach(function (b) { b.onclick = expensePrevMonth; });
+  document.querySelectorAll('.expense-month-next').forEach(function (b) { b.onclick = expenseNextMonth; });
+  document.querySelectorAll('.expense-range-btn').forEach(function (b) {
+    b.onclick = function () { expenseSetStatsRange(b.dataset.range); };
+  });
+  document.querySelectorAll('.expense-quick-amt-btn').forEach(function (b) {
+    b.onclick = function () { expenseSetQuickAmount(Number(b.dataset.amount)); };
+  });
+
+  document.getElementById('open-expense').onclick = openExpense;
+  document.getElementById('home-expense-widget').onclick = expenseOpenFromHomeWidget;
+
+  document.getElementById('expense-income-edit-link').onclick = expenseOpenIncomeModal;
+  document.getElementById('expense-overview-add-btn').onclick = function () { expenseOpenEntryModal(null); };
+  document.getElementById('expense-view-stats-link').onclick = function () { expenseSwitchTab('stats'); };
+  document.getElementById('expense-day-close-btn').onclick = function () { expenseOpenDay(expenseSelectedDay); };
+  document.getElementById('expense-budget-edit-btn').onclick = expenseOpenOverallBudgetModal;
+  document.getElementById('expense-new-category-btn').onclick = function () { expenseOpenCategoryModal(null); };
+  document.getElementById('expense-mobile-add-btn').onclick = function () { expenseOpenEntryModal(null); };
+
+  document.getElementById('expense-date-today-btn').onclick = function () { expensePickDate('today'); };
+  document.getElementById('expense-date-yesterday-btn').onclick = function () { expensePickDate('yesterday'); };
+  document.getElementById('expense-date-custom-input').onchange = function () { expensePickCustomDate(this.value); };
+
+  document.getElementById('expense-entry-modal-close').onclick = function () { document.getElementById('expense-entry-modal').classList.remove('active'); };
+  document.getElementById('expense-entry-cancel-btn').onclick = function () { document.getElementById('expense-entry-modal').classList.remove('active'); };
+  document.getElementById('expense-entry-save-btn').onclick = expenseSaveEntry;
+
+  document.getElementById('expense-income-modal-close').onclick = function () { document.getElementById('expense-income-modal').classList.remove('active'); };
+  document.getElementById('expense-income-cancel-btn').onclick = function () { document.getElementById('expense-income-modal').classList.remove('active'); };
+  document.getElementById('expense-income-save-btn').onclick = expenseSaveIncome;
+
+  document.getElementById('expense-budget-modal-close').onclick = function () { document.getElementById('expense-budget-modal').classList.remove('active'); };
+  document.getElementById('expense-budget-cancel-btn').onclick = function () { document.getElementById('expense-budget-modal').classList.remove('active'); };
+  document.getElementById('expense-budget-save-btn').onclick = expenseSaveOverallBudget;
+
+  document.getElementById('expense-catbudget-modal-close').onclick = function () { document.getElementById('expense-category-budget-modal').classList.remove('active'); };
+  document.getElementById('expense-catbudget-cancel-btn').onclick = function () { document.getElementById('expense-category-budget-modal').classList.remove('active'); };
+  document.getElementById('expense-catbudget-save-btn').onclick = expenseSaveCategoryBudget;
+
+  document.getElementById('expense-category-modal-close').onclick = function () { document.getElementById('expense-category-modal').classList.remove('active'); };
+  document.getElementById('expense-category-cancel-btn').onclick = function () { document.getElementById('expense-category-modal').classList.remove('active'); };
+  document.getElementById('expense-category-save-btn').onclick = expenseSaveCategory;
+
+  document.getElementById('expense-confirm-cancel-btn').onclick = function () { document.getElementById('expense-confirm-modal').classList.remove('active'); };
+  document.getElementById('expense-confirm-yes-btn').onclick = function () {
+    document.getElementById('expense-confirm-modal').classList.remove('active');
+    if (expenseConfirmAction) expenseConfirmAction();
+  };
+
+  document.getElementById('expense-history-search').oninput = function () {
+    expenseHistoryFilters.search = this.value;
+    expenseRenderHistory();
+  };
+  document.getElementById('expense-history-category-filter').onchange = function () {
+    expenseHistoryFilters.categoryId = this.value;
+    expenseRenderHistory();
+  };
+  document.getElementById('expense-history-amount-filter').onchange = function () {
+    expenseHistoryFilters.amount = this.value;
+    expenseRenderHistory();
+  };
+}
+
+/* ---------------------------------------------------------------- */
 /* HOME — TO DO LIST                                                   */
 /* ---------------------------------------------------------------- */
 var homeData = [];          // [{ row, checked, todolist, deadline }]
@@ -2709,4 +3471,6 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('qr-delete-modal').classList.remove('active');
   };
   document.getElementById('qr-delete-yah').onclick = confirmQrDelete;
+
+  expenseWireEvents();
 });
