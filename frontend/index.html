@@ -29,17 +29,23 @@
   <!-- ================= APP SCREEN ================= -->
   <div id="app-screen" class="screen active">
 
-    <header class="navbar">
-      <div class="navbar-inner">
-        <div class="navbar-brand">Henlo human</div>
-        <nav class="navbar-links">
-          <button id="nav-home" class="navbar-link active" data-nav-section="home">Home</button>
-          <button id="nav-tools" class="navbar-link" data-nav-section="tools">Tools</button>
-          <button id="nav-games" class="navbar-link" data-nav-section="games">Games</button>
-          <span id="navbar-underline" class="navbar-underline"></span>
-        </nav>
-      </div>
-    </header>
+    <!-- ===== Mobile: bare tomato icon (top-left) that opens a drawer ===== -->
+    <button id="mobile-nav-toggle" class="mobile-nav-toggle" aria-label="Open menu">
+      <img src="images/favicon.png" alt="" class="mobile-nav-toggle-icon">
+    </button>
+    <div id="mobile-nav-scrim" class="mobile-nav-scrim"></div>
+    <nav id="mobile-nav-drawer" class="mobile-nav-drawer">
+      <button class="app-nav-link active" data-nav-section="home">Home</button>
+      <button class="app-nav-link" data-nav-section="tools">Tools</button>
+      <button class="app-nav-link" data-nav-section="games">Games</button>
+    </nav>
+
+    <!-- ===== Desktop: floating pill dock (bottom-center), text-only ===== -->
+    <nav id="desktop-dock" class="desktop-dock">
+      <button class="app-nav-link active" data-nav-section="home">Home</button>
+      <button class="app-nav-link" data-nav-section="tools">Tools</button>
+      <button class="app-nav-link" data-nav-section="games">Games</button>
+    </nav>
 
     <main class="page-container">
 
@@ -103,14 +109,6 @@
               <div class="nav-card-body">
                 <div class="nav-card-title">Day Counter</div>
                 <div class="nav-card-desc">Count the days between two dates</div>
-              </div>
-              <div class="nav-card-arrow">→</div>
-            </button>
-            <button id="open-icd" class="nav-card" data-accent="lavender">
-              <span class="nav-card-emoji">⚕</span>
-              <div class="nav-card-body">
-                <div class="nav-card-title">ICD Lookup</div>
-                <div class="nav-card-desc">Quickly search ICD codes</div>
               </div>
               <div class="nav-card-arrow">→</div>
             </button>
@@ -518,25 +516,6 @@
         </div>
       </div>
 
-      <!-- -------- ICD LOOKUP VIEW -------- -->
-      <div id="icd-view" class="app-view" style="display:none;">
-        <div class="page-header">
-          <h2 class="page-title">ICD Lookup</h2>
-          <p class="page-subtitle">Quickly search by ICD code or diagnosis name</p>
-        </div>
-
-        <div class="icd-search-wrap">
-          <input type="text" id="icd-search" class="icd-search-input" placeholder="Search ICD code or diagnosis..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-        </div>
-
-        <div class="icd-toolbar">
-          <span id="icd-result-count" class="icd-result-count"></span>
-          <button id="icd-add-btn" class="icd-add-link">+ Add new</button>
-        </div>
-
-        <div id="icd-list"></div>
-      </div>
-
 
       <!-- -------- EATING TRACKER VIEW -------- -->
       <div id="eating-view" class="app-view" style="display:none;">
@@ -717,22 +696,6 @@
       <div class="modal-actions">
         <button id="symbol-add-more" class="pill-btn secondary">Add</button>
         <button id="symbol-add-save" class="pill-btn">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= MODAL: Add/Edit ICD entry ================= -->
-  <div id="icd-modal" class="modal-overlay">
-    <div class="modal-box">
-      <div class="modal-header">
-        <h3 id="icd-modal-title">Add ICD Entry</h3>
-        <button id="icd-modal-close" class="modal-close">✕</button>
-      </div>
-      <input type="text" id="icd-field-code" placeholder="ICD code" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:10px;">
-      <input type="text" id="icd-field-name" placeholder="Name" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:10px;">
-      <input type="text" id="icd-field-note" placeholder="Note" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="margin-bottom:14px;">
-      <div class="modal-actions">
-        <button id="icd-save-btn" class="pill-btn">Save</button>
       </div>
     </div>
   </div>
