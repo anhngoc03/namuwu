@@ -56,6 +56,19 @@
     <button class="app-nav-link" data-nav-section="games">Games</button>
   </nav>
 
+  <!-- ===== Expense tool's own mobile tab bar — ALSO a direct child of <body>
+       for the same reason as the nav elements above (fixed-position only
+       truly sticks to the real viewport bottom when it isn't nested inside
+       the transformed #app-screen). app.js shows/hides it (class "visible")
+       whenever expense-view becomes the active/inactive view. ===== -->
+  <div id="expense-mobile-tabbar" class="expense-mobile-tabbar">
+    <button class="expense-mobile-tab-btn active" data-tab="overview"><span>Overview</span></button>
+    <button class="expense-mobile-tab-btn" data-tab="calendar"><span>Calendar</span></button>
+    <button class="expense-mobile-tab-add" id="expense-mobile-add-btn">＋</button>
+    <button class="expense-mobile-tab-btn" data-tab="history"><span>History</span></button>
+    <button class="expense-mobile-tab-btn" data-tab="budget"><span>Budget</span></button>
+  </div>
+
   <div id="flower-field"></div>
   <div id="toast" class="toast"></div>
   <div id="top-toast" class="top-toast"></div>
@@ -342,13 +355,6 @@
           </div>
         </div>
 
-        <div class="expense-mobile-tabbar">
-          <button class="expense-mobile-tab-btn active" data-tab="overview"><span>Overview</span></button>
-          <button class="expense-mobile-tab-btn" data-tab="calendar"><span>Calendar</span></button>
-          <button class="expense-mobile-tab-add" id="expense-mobile-add-btn">＋</button>
-          <button class="expense-mobile-tab-btn" data-tab="history"><span>History</span></button>
-          <button class="expense-mobile-tab-btn" data-tab="budget"><span>Budget</span></button>
-        </div>
       </div>
 
 
@@ -840,7 +846,7 @@
 
       <div class="expense-field-caption">Amount</div>
       <div class="expense-amount-row">
-        <input type="number" id="expense-amount-input" placeholder="0" inputmode="numeric">
+        <input type="text" id="expense-amount-input" class="expense-amount-field" placeholder="0" inputmode="numeric">
         <span>đ</span>
       </div>
       <div class="expense-quick-amounts">
@@ -882,7 +888,7 @@
         <button id="expense-income-modal-close" class="modal-close">✕</button>
       </div>
       <div class="expense-field-caption">Monthly income</div>
-      <div class="expense-amount-row"><input type="number" id="expense-income-amount-input" placeholder="0"><span>đ</span></div>
+      <div class="expense-amount-row"><input type="text" id="expense-income-amount-input" class="expense-amount-field" placeholder="0" inputmode="numeric"><span>đ</span></div>
       <div class="modal-actions">
         <button class="pill-btn secondary" id="expense-income-cancel-btn">Cancel</button>
         <button class="pill-btn" id="expense-income-save-btn">Save</button>
@@ -896,7 +902,7 @@
         <h3>Edit Monthly Budget</h3>
         <button id="expense-budget-modal-close" class="modal-close">✕</button>
       </div>
-      <div class="expense-amount-row"><input type="number" id="expense-budget-amount-input" placeholder="0"><span>đ</span></div>
+      <div class="expense-amount-row"><input type="text" id="expense-budget-amount-input" class="expense-amount-field" placeholder="0" inputmode="numeric"><span>đ</span></div>
       <div class="modal-actions">
         <button class="pill-btn secondary" id="expense-budget-cancel-btn">Cancel</button>
         <button class="pill-btn" id="expense-budget-save-btn">Save</button>
@@ -912,7 +918,7 @@
       </div>
       <div id="expense-cat-budget-label" class="expense-sub-line" style="font-weight:700;"></div>
       <select id="expense-cat-budget-select"></select>
-      <div class="expense-amount-row"><input type="number" id="expense-cat-budget-amount" placeholder="0"><span>đ</span></div>
+      <div class="expense-amount-row"><input type="text" id="expense-cat-budget-amount" class="expense-amount-field" placeholder="0" inputmode="numeric"><span>đ</span></div>
       <div class="modal-actions">
         <button class="pill-btn secondary" id="expense-catbudget-cancel-btn">Cancel</button>
         <button class="pill-btn" id="expense-catbudget-save-btn">Save</button>
