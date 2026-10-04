@@ -12,6 +12,50 @@
 </head>
 <body>
 
+  <!-- ===== Mobile: bare tomato icon (top-left, slides to top-right as the
+       drawer opens) + scrim + drawer. Placed as DIRECT children of <body> —
+       NOT inside #app-screen — because #app-screen is a ".screen" that gets
+       transitioned with a transform, and a transform on an ancestor turns
+       "position: fixed" descendants into something scoped to that ancestor's
+       box instead of the real viewport. Keeping these at the body level is
+       what makes them actually cover the whole screen edge-to-edge. ===== -->
+  <button id="mobile-nav-toggle" class="mobile-nav-toggle" aria-label="Open menu">
+    <img src="images/favicon.png" alt="" class="mobile-nav-toggle-icon">
+  </button>
+  <div id="mobile-nav-scrim" class="mobile-nav-scrim"></div>
+  <nav id="mobile-nav-drawer" class="mobile-nav-drawer">
+    <button class="app-nav-link active" data-nav-section="home">Home</button>
+
+    <button class="app-nav-link app-nav-group-toggle" data-nav-section="tools">
+      <span>Tools</span><span class="nav-chevron">⌄</span>
+    </button>
+    <div class="app-nav-submenu" data-submenu="tools">
+      <button class="app-nav-sublink" data-open="accounts">Accounts</button>
+      <button class="app-nav-sublink" data-open="symbols">Symbols</button>
+      <button class="app-nav-sublink" data-open="saving">Saving</button>
+      <button class="app-nav-sublink" data-open="datediff">Day Counter</button>
+      <button class="app-nav-sublink" data-open="eating">Eating Tracker</button>
+      <button class="app-nav-sublink" data-open="qr">QR Collection</button>
+      <button class="app-nav-sublink" data-open="expense">Expenses</button>
+    </div>
+
+    <button class="app-nav-link app-nav-group-toggle" data-nav-section="games">
+      <span>Games</span><span class="nav-chevron">⌄</span>
+    </button>
+    <div class="app-nav-submenu" data-submenu="games">
+      <button class="app-nav-sublink" data-open="memory">Memory Match</button>
+      <button class="app-nav-sublink" data-open="mochi">Mochi Fly</button>
+      <button class="app-nav-sublink" data-open="minesweeper">Minesweeper</button>
+    </div>
+  </nav>
+
+  <!-- ===== Desktop: floating pill dock (bottom-center), text-only — unchanged ===== -->
+  <nav id="desktop-dock" class="desktop-dock">
+    <button class="app-nav-link active" data-nav-section="home">Home</button>
+    <button class="app-nav-link" data-nav-section="tools">Tools</button>
+    <button class="app-nav-link" data-nav-section="games">Games</button>
+  </nav>
+
   <div id="flower-field"></div>
   <div id="toast" class="toast"></div>
   <div id="top-toast" class="top-toast"></div>
@@ -28,24 +72,6 @@
 
   <!-- ================= APP SCREEN ================= -->
   <div id="app-screen" class="screen active">
-
-    <!-- ===== Mobile: bare tomato icon (top-left) that opens a drawer ===== -->
-    <button id="mobile-nav-toggle" class="mobile-nav-toggle" aria-label="Open menu">
-      <img src="images/favicon.png" alt="" class="mobile-nav-toggle-icon">
-    </button>
-    <div id="mobile-nav-scrim" class="mobile-nav-scrim"></div>
-    <nav id="mobile-nav-drawer" class="mobile-nav-drawer">
-      <button class="app-nav-link active" data-nav-section="home">Home</button>
-      <button class="app-nav-link" data-nav-section="tools">Tools</button>
-      <button class="app-nav-link" data-nav-section="games">Games</button>
-    </nav>
-
-    <!-- ===== Desktop: floating pill dock (bottom-center), text-only ===== -->
-    <nav id="desktop-dock" class="desktop-dock">
-      <button class="app-nav-link active" data-nav-section="home">Home</button>
-      <button class="app-nav-link" data-nav-section="tools">Tools</button>
-      <button class="app-nav-link" data-nav-section="games">Games</button>
-    </nav>
 
     <main class="page-container">
 
