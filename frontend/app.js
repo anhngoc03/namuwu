@@ -286,6 +286,12 @@ function showView(id) {
     if (id !== 'accounts-view') saveNavState_(id);
   }
 
+  // The Expense tool's own mobile tab bar lives at the body level now (see
+  // index.html comment) so it can actually sit flush with the real screen
+  // bottom — show it only while expense-view is the active view.
+  var expenseTabbar = document.getElementById('expense-mobile-tabbar');
+  if (expenseTabbar) expenseTabbar.classList.toggle('visible', id === 'expense-view');
+
   syncFixedHeaderOffsets();
 }
 
@@ -1751,6 +1757,24 @@ var expenseConfirmAction = null;   // fn to run when the generic confirm modal s
 var expenseStatsRange = 'month';   // '7' | '30' | 'month'
 var expenseHistoryFilters = { search: '', categoryId: '', amount: '' };
 
+/* ---- amount inputs: live "." thousands-separator formatting ----
+   These fields are type="text" + inputmode="numeric" (not type="number",
+   which can't display formatted text like "20.000"). expenseWireEvents()
+   wires expenseFormatAmountInputLive to their oninput; everywhere else that
+   reads or sets one of these fields goes through the two helpers below so
+   the dots never leak into a parsed amount or get lost when pre-filling. */
+function expenseFormatAmountInputLive(el) {
+  var digits = el.value.replace(/\D/g, '');
+  el.value = digits ? formatThousands(Number(digits)) : '';
+}
+function expenseAmountInputValue(el) {
+  var digits = String(el.value || '').replace(/\D/g, '');
+  return digits ? Number(digits) : 0;
+}
+function expenseSetAmountInputValue(el, amount) {
+  el.value = amount ? formatThousands(Math.round(amount)) : '';
+}
+
 function expenseTodayStr() {
   var d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -2120,7 +2144,7 @@ function expenseOpenCategoryBudgetModal(categoryId, amount) {
   }
   document.getElementById('expense-cat-budget-label').textContent = categoryId ? expenseNameFor(categoryId) : '';
   document.getElementById('expense-cat-budget-label').style.display = categoryId ? '' : 'none';
-  document.getElementById('expense-cat-budget-amount').value = amount || '';
+  expenseSetAmountInputValue(document.getElementById('expense-cat-budget-amount'), amount);
   document.getElementById('expense-category-budget-modal').classList.add('active');
 }
 
@@ -2131,7 +2155,7 @@ function expenseSaveCategoryBudget() {
     if (!sel.value) { toast('Pick a category'); return; }
     categoryId = Number(sel.value);
   }
-  var amount = Number(document.getElementById('expense-cat-budget-amount').value);
+  var amount = expenseAmountInputValue(document.getElementById('expense-cat-budget-amount'));
   if (!amount || amount <= 0) { toast('Enter a budget amount'); return; }
   showLoading();
   google.script.run
@@ -2141,11 +2165,11 @@ function expenseSaveCategoryBudget() {
 }
 
 function expenseOpenOverallBudgetModal() {
-  document.getElementById('expense-budget-amount-input').value = expenseData.budgetOverall || '';
+  expenseSetAmountInputValue(document.getElementById('expense-budget-amount-input'), expenseData.budgetOverall);
   document.getElementById('expense-budget-modal').classList.add('active');
 }
 function expenseSaveOverallBudget() {
-  var amount = Number(document.getElementById('expense-budget-amount-input').value) || 0;
+  var amount = expenseAmountInputValue(document.getElementById('expense-budget-amount-input'));
   showLoading();
   google.script.run
     .withSuccessHandler(function (data) { hideLoading(); document.getElementById('expense-budget-modal').classList.remove('active'); expenseApplyData(data); })
@@ -2155,11 +2179,11 @@ function expenseSaveOverallBudget() {
 
 /* ---- Income ---- */
 function expenseOpenIncomeModal() {
-  document.getElementById('expense-income-amount-input').value = expenseData.income || '';
+  expenseSetAmountInputValue(document.getElementById('expense-income-amount-input'), expenseData.income);
   document.getElementById('expense-income-modal').classList.add('active');
 }
 function expenseSaveIncome() {
-  var amount = Number(document.getElementById('expense-income-amount-input').value) || 0;
+  var amount = expenseAmountInputValue(document.getElementById('expense-income-amount-input'));
   showLoading();
   google.script.run
     .withSuccessHandler(function (data) { hideLoading(); document.getElementById('expense-income-modal').classList.remove('active'); expenseApplyData(data); })
@@ -2309,7 +2333,7 @@ function expenseSaveCategory() {
 function expenseOpenEntryModal(entry, presetDate) {
   expenseEditingEntryId = entry ? entry.id : null;
   document.getElementById('expense-entry-modal-title').textContent = entry ? 'Edit Expense' : 'Add Expense';
-  document.getElementById('expense-amount-input').value = entry ? entry.amount : '';
+  expenseSetAmountInputValue(document.getElementById('expense-amount-input'), entry ? entry.amount : 0);
 
   var catGrid = document.getElementById('expense-entry-category-grid');
   catGrid.innerHTML = '';
@@ -2342,7 +2366,7 @@ function expenseOpenEntryModal(entry, presetDate) {
 
 function expenseSetQuickAmount(v) {
   var input = document.getElementById('expense-amount-input');
-  input.value = (Number(input.value) || 0) + v;
+  expenseSetAmountInputValue(input, expenseAmountInputValue(input) + v);
 }
 
 function expensePickDate(which) {
@@ -2372,7 +2396,7 @@ function expenseUpdateDateButtons() {
 }
 
 function expenseSaveEntry() {
-  var amount = Number(document.getElementById('expense-amount-input').value);
+  var amount = expenseAmountInputValue(document.getElementById('expense-amount-input'));
   if (!amount || amount <= 0) { toast('Enter an amount'); return; }
   var catGrid = document.getElementById('expense-entry-category-grid');
   var categoryId = Number(catGrid.dataset.chosen);
@@ -2425,6 +2449,9 @@ function expenseOpenFromHomeWidget() { openExpense(); }
 
 /* ---- static event wiring (called once, from DOMContentLoaded) ---- */
 function expenseWireEvents() {
+  document.querySelectorAll('.expense-amount-field').forEach(function (el) {
+    el.oninput = function () { expenseFormatAmountInputLive(el); };
+  });
   document.querySelectorAll('.expense-tab-btn, .expense-mobile-tab-btn').forEach(function (b) {
     b.onclick = function () { expenseSwitchTab(b.dataset.tab); };
   });
