@@ -191,23 +191,6 @@ async function submitMochiScore(env, [name, score]) {
   return top5.map(({ name, score }) => ({ name, score }));
 }
 
-/* ------------------------------ ICD LOOKUP -------------------------------- */
-
-async function getIcdData(env) {
-  const rows = await sb(env, 'icd?select=id,icd,name,note&order=id.asc');
-  return rows.map((r) => ({ row: r.id, icd: r.icd, name: r.name, note: r.note }));
-}
-
-async function addIcdRow(env, [icd, name, note]) {
-  await sb(env, 'icd', { method: 'POST', body: JSON.stringify([{ icd, name, note }]) });
-  return getIcdData(env);
-}
-
-async function updateIcdRow(env, [rowNumber, icd, name, note]) {
-  await sb(env, `icd?id=eq.${rowNumber}`, { method: 'PATCH', body: JSON.stringify({ icd, name, note }) });
-  return getIcdData(env);
-}
-
 /* --------------------------- EATING TRACKER ------------------------------ */
 
 async function getEatingData(env) {
@@ -560,9 +543,6 @@ const ACTIONS = {
   addQrRow,
   updateQrRow,
   deleteQrRow,
-  getIcdData,
-  addIcdRow,
-  updateIcdRow,
   getEatingData,
   saveEatingDay,
   resetEatingData,
