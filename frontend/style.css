@@ -1194,57 +1194,81 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
   .expense-cal-layout{ flex-direction:column; }
 }
 /* ============================================================
-   HENLO HUMAN — style.css — NAV REDESIGN
-   Dán nguyên khối này vào CUỐI style.css.
+   HENLO HUMAN — style.css — NAV REDESIGN (v2)
+   Đây là bản THAY THẾ cho khối "NAV REDESIGN" mình gửi lần trước — xoá
+   nguyên khối CSS cũ đó đi (từ dòng comment "NAV REDESIGN" cũ đến hết khối
+   @media của nó) rồi dán khối này vào đúng chỗ đó.
 
-   Thay thế hoàn toàn navbar ngang cũ:
-   - Mobile (<=760px): icon cà chua trần (favicon, không khung/nền) cố định
-     góc trên-trái → bấm vào mở drawer trượt từ trái, có lớp phủ mờ (scrim).
-   - Desktop (>760px): "dock" hình pill lơ lửng cố định giữa-dưới màn hình
-     (giống Dock macOS), chỉ chữ, không icon.
-
-   Nếu style.css cũ có rule nào đặt padding-top cho .page-container dựa vào
-   biến --navbar-h thì cứ để yên — biến đó giờ luôn là 0px (xem app.js), nên
-   tự nó không còn đẩy nội dung xuống nữa.
+   - Mobile (<=760px): icon cà chua trần, cố định góc trên-trái. Bấm vào →
+     nó trượt ngang sang góc trên-phải (animation mượt, cùng lúc với drawer
+     mở ra); bấm lại (giờ đang ở phải) → đóng, trượt về trái. Drawer trượt từ
+     trái, có scrim mờ phía sau. Tools/Games trong drawer là accordion — bấm
+     vào xổ ra danh sách mục nhỏ ngay bên dưới, bấm mục nhỏ → mở thẳng tool đó.
+   - Desktop (>760px): dock pill lơ lửng giữa-dưới — giữ nguyên như bản trước.
    ============================================================ */
 
-/* ---------- shared nav link look (both mobile drawer + desktop dock) ---------- */
+/* ---------- shared nav link look (mobile drawer + desktop dock) ---------- */
 .app-nav-link{
   background:none; border:none; cursor:pointer; font-family:inherit;
   font-weight:700; color:var(--exp-ink, #4a3f3f);
 }
 
-/* ---------- Mobile: bare tomato icon trigger, top-left ---------- */
+/* ---------- Mobile: bare tomato icon trigger — slides left → right ---------- */
 .mobile-nav-toggle{
   display:none; /* shown only on mobile, see media query below */
   position:fixed; top:14px; left:14px; z-index:410;
   background:none; border:none; padding:0; margin:0; cursor:pointer;
   width:40px; height:40px; align-items:center; justify-content:center;
+  transition:transform .28s cubic-bezier(.4,0,.2,1);
 }
 .mobile-nav-toggle-icon{ width:34px; height:34px; object-fit:contain; display:block; }
+
+/* While the drawer is open, slide the icon all the way to the top-right
+   corner — it now doubles as the Close button there. */
+body.mobile-nav-open .mobile-nav-toggle{
+  transform: translateX(calc(100vw - 68px));
+}
 
 /* ---------- Mobile: dim scrim behind the open drawer ---------- */
 .mobile-nav-scrim{
   display:none; position:fixed; inset:0; background:rgba(74,63,63,.38);
-  z-index:400; opacity:0; pointer-events:none; transition:opacity .22s ease;
+  z-index:400; opacity:0; pointer-events:none; transition:opacity .25s ease;
 }
 .mobile-nav-scrim.active{ opacity:1; pointer-events:auto; }
 
 /* ---------- Mobile: slide-in drawer ---------- */
 .mobile-nav-drawer{
-  display:none; position:fixed; top:0; left:0; bottom:0; width:220px;
-  background:#fff; z-index:405; padding:70px 22px 24px;
+  display:none; position:fixed; top:0; left:0; bottom:0; width:240px;
+  background:#fff; z-index:405; padding:70px 18px 24px;
   box-shadow:8px 0 30px rgba(190,150,140,.22);
-  transform:translateX(-100%); transition:transform .25s ease;
-  flex-direction:column; gap:6px;
+  transform:translateX(-100%); transition:transform .28s cubic-bezier(.4,0,.2,1);
+  flex-direction:column; gap:4px; overflow-y:auto;
 }
 .mobile-nav-drawer.open{ transform:translateX(0); }
+
 .mobile-nav-drawer .app-nav-link{
-  text-align:left; padding:13px 14px; border-radius:14px; font-size:16px;
+  display:flex; align-items:center; justify-content:space-between;
+  text-align:left; width:100%; padding:13px 14px; border-radius:14px; font-size:16px;
 }
 .mobile-nav-drawer .app-nav-link.active{ background:#fdeaf0; color:#e8899f; }
 
-/* ---------- Desktop: floating pill dock, bottom-center ---------- */
+/* chevron on the Tools/Games disclosure rows, flips when expanded */
+.nav-chevron{ font-size:13px; opacity:.55; transition:transform .2s ease; }
+.app-nav-group-toggle.expanded .nav-chevron{ transform:rotate(180deg); }
+
+/* ---------- Mobile: accordion sub-list under Tools/Games ---------- */
+.app-nav-submenu{
+  max-height:0; overflow:hidden; transition:max-height .25s ease;
+  display:flex; flex-direction:column; padding-left:8px;
+}
+.app-nav-sublink{
+  background:none; border:none; cursor:pointer; font-family:inherit;
+  text-align:left; padding:10px 14px; margin:1px 0; border-radius:12px;
+  font-size:14px; font-weight:600; color:var(--exp-muted, #9a8f8a);
+}
+.app-nav-sublink:active{ background:#faf6ee; color:var(--exp-ink, #4a3f3f); }
+
+/* ---------- Desktop: floating pill dock, bottom-center (unchanged) ---------- */
 .desktop-dock{
   display:flex; position:fixed; left:50%; bottom:26px; transform:translateX(-50%);
   z-index:200; background:#fff; border-radius:999px; padding:8px; gap:4px;
@@ -1262,9 +1286,12 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
   .mobile-nav-drawer{ display:flex; }
   .desktop-dock{ display:none; }
 
-  /* leave room at the bottom for the Expense tool's own mobile tab bar when
-     that view is open; everywhere else there's no fixed bottom bar on mobile
-     anymore, so nothing else needs bottom padding here. */
+  /* Leaves room so the fixed tomato icon (top-left) never sits on top of a
+     section title (Home/Tools/Games) or a page-header. app.js keeps
+     --navbar-h in sync with the icon's real footprint via
+     syncFixedHeaderOffsets(), so this works automatically — no per-view
+     class names needed. */
+  .page-container{ padding-top: var(--navbar-h, 56px); }
 }
 @media (min-width:761px){
   .mobile-nav-toggle, .mobile-nav-scrim, .mobile-nav-drawer{ display:none; }
