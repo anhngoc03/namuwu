@@ -996,208 +996,7 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
 }
 
 /* ============================================================
-   HENLO HUMAN — style.css — EXPENSE TRACKER
-   Dán nguyên khối này vào cuối style.css.
-   ============================================================ */
-
-:root{
-  --exp-cream:#faf6ee;
-  --exp-pink:#f6b8c6;
-  --exp-pink-deep:#e8899f;
-  --exp-mint:#cdeadb;
-  --exp-mint-deep:#4fae86;
-  --exp-ink:#4a3f3f;
-  --exp-muted:#9a8f8a;
-  --exp-shadow:0 10px 30px rgba(190,150,140,0.14);
-}
-
-#expense-view{ padding-bottom: 90px; } /* chừa chỗ cho mobile tab bar */
-
-.expense-tabbar{
-  display:flex; justify-content:center; gap:4px; flex-wrap:wrap;
-  background:#fff; border-radius:999px; padding:6px;
-  box-shadow:var(--exp-shadow); width:fit-content; margin:0 auto 24px;
-}
-.expense-tab-btn{
-  padding:9px 18px; border-radius:999px; font-weight:700; font-size:14px;
-  color:var(--exp-muted); cursor:pointer; white-space:nowrap; background:none; border:none;
-}
-.expense-tab-btn.active{ background:var(--exp-pink); color:#fff; }
-
-.expense-month-row{ display:flex; align-items:center; justify-content:center; gap:18px; margin-bottom:4px; }
-.expense-month-nav{
-  width:34px; height:34px; border-radius:50%; background:#fff; box-shadow:var(--exp-shadow);
-  display:flex; align-items:center; justify-content:center; color:var(--exp-pink-deep);
-  font-weight:700; cursor:pointer; border:none;
-}
-.expense-month-title{ font-weight:700; font-size:20px; display:flex; align-items:center; gap:8px; }
-.expense-sub-line{ text-align:center; color:var(--exp-muted); font-size:13px; margin:6px 0 20px; }
-.expense-section-title{ font-weight:700; font-size:16px; margin:0 0 10px; }
-
-.expense-card{ background:#fff; border-radius:24px; box-shadow:var(--exp-shadow); padding:26px; margin-bottom:18px; }
-
-.expense-remain-label{ text-align:center; color:var(--exp-muted); font-size:13px; font-weight:700; }
-.expense-remain-value{ text-align:center; font-weight:700; font-size:38px; margin:4px 0 16px; }
-.expense-remain-value small{ font-size:18px; color:var(--exp-muted); font-weight:600; }
-
-.expense-progress-track{ height:10px; border-radius:999px; background:var(--exp-mint); overflow:hidden; margin-bottom:8px; }
-.expense-progress-fill{ height:100%; width:0%; background:linear-gradient(90deg,var(--exp-pink-deep),var(--exp-pink)); border-radius:999px; transition:width .25s ease; }
-.expense-progress-meta{ display:flex; justify-content:space-between; color:var(--exp-muted); font-size:12px; margin-bottom:18px; }
-
-.expense-chips-row{ display:flex; gap:12px; }
-.expense-info-chip{ flex:1; border-radius:16px; padding:14px 16px; }
-.expense-info-chip.income{ background:#e4f6ec; }
-.expense-info-chip.expense{ background:#fdeaf0; }
-.expense-info-chip-top{ display:flex; justify-content:space-between; align-items:center; font-size:12px; font-weight:700; margin-bottom:6px; color:var(--exp-muted); }
-.expense-info-chip-val{ font-weight:700; font-size:19px; }
-.expense-edit-link{ text-decoration:underline; cursor:pointer; font-weight:700; color:var(--exp-pink-deep); }
-
-.expense-add-btn{
-  display:flex; align-items:center; justify-content:center; gap:8px; width:100%; max-width:480px;
-  margin:20px auto 10px; background:var(--exp-pink); color:#fff; border:none; border-radius:999px;
-  padding:15px; font-weight:700; font-size:15px; box-shadow:0 8px 18px rgba(232,137,159,.3); cursor:pointer;
-}
-.expense-link-more{ display:block; text-align:center; color:var(--exp-pink-deep); font-weight:700; font-size:13px; cursor:pointer; }
-
-/* Calendar */
-.expense-cal-layout{ display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; }
-.expense-cal-card{ flex:1; min-width:280px; }
-.expense-cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
-.expense-cal-head{ text-align:center; font-size:11px; font-weight:700; color:var(--exp-muted); padding-bottom:6px; }
-.expense-cal-cell{
-  aspect-ratio:1; border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center;
-  font-size:13px; font-weight:700; cursor:pointer; gap:2px; background:#faf8f4;
-}
-.expense-cal-cell.empty{ visibility:hidden; cursor:default; }
-.expense-cal-cell.has-spend{ background:#fdeaf0; color:var(--exp-pink-deep); }
-.expense-cal-cell.selected{ outline:2px solid var(--exp-pink-deep); }
-.expense-cal-cell.is-today .expense-cal-day{ text-decoration:underline; }
-.expense-cal-amt{ font-size:10px; font-weight:700; }
-.expense-cal-footer{ display:flex; justify-content:space-between; font-size:12px; color:var(--exp-muted); margin-top:14px; padding-top:14px; border-top:1px dashed #eee0da; }
-
-.expense-day-detail{ flex:1; min-width:260px; }
-.expense-day-detail-head{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
-.expense-day-detail-label{ font-size:11px; color:var(--exp-muted); font-weight:700; }
-.expense-day-title{ font-weight:700; font-size:16px; }
-.expense-day-total-row{ background:#fdeaf0; color:var(--exp-pink-deep); border-radius:14px; padding:10px 14px; font-weight:700; font-size:14px; margin-bottom:12px; }
-.expense-day-row{ display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid #f3ece6; cursor:pointer; }
-.expense-day-row-main{ flex:1; }
-.expense-day-row-name{ font-weight:700; font-size:14px; }
-.expense-day-row-cat{ font-size:12px; color:var(--exp-muted); }
-.expense-day-row-amt{ font-weight:700; font-size:14px; }
-
-.expense-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:2px; }
-.expense-dot.lg{ width:14px; height:14px; margin-right:8px; }
-
-/* Statistics */
-.expense-stats-overview{ display:flex; flex-wrap:wrap; gap:16px; }
-.expense-stats-tile{ flex:1; min-width:110px; }
-.expense-stats-tile .label{ font-size:11px; color:var(--exp-muted); font-weight:700; margin-bottom:4px; }
-.expense-stats-tile .val{ font-weight:700; font-size:17px; }
-.expense-stat-row{ display:flex; align-items:center; gap:10px; padding:8px 0; }
-.expense-stat-name{ width:90px; font-weight:700; font-size:13px; flex-shrink:0; }
-.expense-stat-bar{ flex:1; height:8px; border-radius:999px; background:#f3ece6; overflow:hidden; }
-.expense-stat-bar-fill{ height:100%; border-radius:999px; }
-.expense-stat-pct{ width:36px; text-align:right; font-size:12px; color:var(--exp-muted); }
-.expense-stat-amt{ width:90px; text-align:right; font-weight:700; font-size:13px; }
-
-.expense-trend-head{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px; }
-.expense-range-group{ display:flex; gap:4px; background:#faf6ee; border-radius:999px; padding:4px; }
-.expense-range-btn{ border:none; background:none; padding:6px 14px; border-radius:999px; font-size:12px; font-weight:700; color:var(--exp-muted); cursor:pointer; }
-.expense-range-btn.active{ background:#fff; color:var(--exp-pink-deep); box-shadow:var(--exp-shadow); }
-.expense-trend-canvas{ width:100%; height:200px; display:block; }
-
-/* Budget */
-.expense-budget-head{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
-.expense-hint{ background:#e4f6ec; color:var(--exp-mint-deep); border-radius:12px; padding:10px 14px; font-size:13px; margin-top:4px; }
-.expense-hint.warn{ background:#fdf3d8; color:#a3791f; }
-.expense-hint.over{ background:#fdeaf0; color:var(--exp-pink-deep); }
-
-.expense-budget-cat-card{ background:#fff; border-radius:20px; box-shadow:var(--exp-shadow); padding:18px 20px; margin-bottom:12px; }
-.expense-budget-cat-top{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
-.expense-budget-cat-name{ flex:1; font-weight:700; font-size:14px; display:flex; align-items:center; }
-.expense-budget-cat-nums{ font-weight:700; font-size:13px; color:var(--exp-muted); }
-.expense-progress-fill-sm{ height:100%; border-radius:999px; }
-.expense-budget-cat-remain{ font-size:12px; color:var(--exp-muted); margin-top:6px; }
-.expense-add-cat-budget-btn{ width:100%; }
-
-/* History */
-.expense-history-filters{ display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px; }
-.expense-history-filters input, .expense-history-filters select{
-  flex:1; min-width:140px; padding:10px 14px; border-radius:999px; border:1px solid #eee0da; font-size:13px; background:#fff;
-}
-.expense-history-date-head{ display:flex; justify-content:space-between; font-size:12px; font-weight:700; color:var(--exp-muted); padding:12px 0 6px; }
-.expense-history-row{ display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid #f3ece6; }
-.expense-history-row-main{ flex:1; }
-.expense-history-row-name{ font-weight:700; font-size:14px; }
-.expense-history-row-cat{ font-size:12px; color:var(--exp-muted); display:flex; align-items:center; }
-.expense-history-row-amt{ font-weight:700; font-size:14px; }
-
-/* Categories */
-.expense-category-row{ display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid #f3ece6; }
-.expense-category-row-name{ flex:1; font-weight:700; font-size:14px; }
-.expense-category-row-usage{ font-size:12px; color:var(--exp-muted); }
-.expense-add-category-card{ text-align:center; }
-
-/* Chips / swatches (shared by Add-entry modal + Categories) */
-.expense-chip-grid{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
-.expense-chip{
-  display:flex; align-items:center; gap:6px; padding:8px 14px; border-radius:999px; font-size:13px; font-weight:700;
-  background:#faf6ee; color:var(--exp-ink); cursor:pointer; border:2px solid transparent;
-}
-.expense-chip.active{ border-color: var(--chip-color, var(--exp-pink-deep)); background:#fff; }
-.expense-swatches{ display:flex; gap:10px; margin-bottom:6px; }
-.expense-swatch{ width:28px; height:28px; border-radius:50%; cursor:pointer; border:2px solid transparent; }
-.expense-swatch.selected{ border-color:var(--exp-ink); }
-
-/* Add / edit expense modal specifics */
-.expense-amount-row{ display:flex; align-items:center; gap:6px; border-bottom:2px solid var(--exp-pink); padding:6px 2px 10px; margin-bottom:10px; }
-.expense-amount-row input{ flex:1; border:none; outline:none; font-size:28px; font-weight:700; background:none; }
-.expense-amount-row span{ font-size:16px; color:var(--exp-muted); }
-.expense-quick-amounts{ display:flex; gap:8px; margin-bottom:16px; }
-.expense-quick-amounts button{ flex:1; padding:8px 0; border-radius:999px; border:1px solid #eee0da; background:#fff; font-weight:700; font-size:12px; cursor:pointer; }
-.expense-date-row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:4px; }
-.expense-date-row .pill-btn.active{ background:var(--exp-mint); color:var(--exp-mint-deep); }
-.expense-checkbox-row{ display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; margin:14px 0 6px; cursor:pointer; }
-
-/* Small bold caption above a field inside the (real) .modal-box — the expense
-   entry/category modals have more fields than the app's other modals, so a
-   short caption keeps them legible. Not tied to any modal wrapper class. */
-.expense-field-caption{ font-size:12px; font-weight:700; color:var(--exp-muted); margin:14px 0 6px; }
-.expense-field-caption:first-of-type{ margin-top:4px; }
-
-/* Home widget */
-.home-expense-widget{
-  background:#fff; border-radius:22px; box-shadow:var(--exp-shadow); padding:18px 20px; margin-top:14px; cursor:pointer;
-}
-.home-expense-widget-label{ font-size:12px; font-weight:700; color:var(--exp-muted); }
-.home-expense-widget-value{ font-size:24px; font-weight:700; margin:4px 0; }
-.home-expense-widget-link{ font-size:12px; font-weight:700; color:var(--exp-pink-deep); }
-
-/* Mobile bottom tab bar for the Expense tool only */
-.expense-mobile-tabbar{ display:none; }
-@media (max-width:760px){
-  .expense-tabbar{ display:none; }
-  .expense-mobile-tabbar{
-    display:flex; align-items:center; justify-content:space-around;
-    position:fixed; left:0; right:0; bottom:0; background:#fff;
-    box-shadow:0 -6px 20px rgba(190,150,140,.14); padding:8px 6px calc(8px + env(safe-area-inset-bottom));
-    z-index:120;
-  }
-  .expense-mobile-tab-btn{ background:none; border:none; display:flex; flex-direction:column; align-items:center; gap:2px; font-size:11px; font-weight:700; color:var(--exp-muted); padding:4px 6px; }
-  .expense-mobile-tab-btn.active{ color:var(--exp-pink-deep); }
-  .expense-mobile-tab-add{
-    width:52px; height:52px; border-radius:50%; background:var(--exp-pink); color:#fff; border:none;
-    font-size:22px; display:flex; align-items:center; justify-content:center; margin-top:-26px;
-    box-shadow:0 8px 18px rgba(232,137,159,.4);
-  }
-  .expense-cal-layout{ flex-direction:column; }
-}
-/* ============================================================
    HENLO HUMAN — style.css — NAV REDESIGN (v2)
-   Đây là bản THAY THẾ cho khối "NAV REDESIGN" mình gửi lần trước — xoá
-   nguyên khối CSS cũ đó đi (từ dòng comment "NAV REDESIGN" cũ đến hết khối
-   @media của nó) rồi dán khối này vào đúng chỗ đó.
 
    - Mobile (<=760px): icon cà chua trần, cố định góc trên-trái. Bấm vào →
      nó trượt ngang sang góc trên-phải (animation mượt, cùng lúc với drawer
@@ -1223,10 +1022,11 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
 }
 .mobile-nav-toggle-icon{ width:34px; height:34px; object-fit:contain; display:block; }
 
-/* While the drawer is open, slide the icon all the way to the top-right
-   corner — it now doubles as the Close button there. */
+/* While the drawer is open, slide the icon to the drawer's own top-right
+   corner (drawer width 240px; 68px = 14px left offset + 40px icon box + 14px
+   gap to the drawer edge) — it doubles as the Close button there. */
 body.mobile-nav-open .mobile-nav-toggle{
-  transform: translateX(calc(100vw - 68px));
+  transform: translateX(calc(min(240px, 100vw) - 68px));
 }
 
 /* ---------- Mobile: dim scrim behind the open drawer ---------- */
@@ -1302,8 +1102,10 @@ body.mobile-nav-open .mobile-nav-toggle{
 }
 
 /* ============================================================
-   HENLO HUMAN — style.css — EXPENSE TRACKER
-   Dán nguyên khối này vào cuối style.css.
+   HENLO HUMAN — style.css — EXPENSE TRACKER  (START MARKER: EXPENSE-CSS-START)
+   Dán nguyên khối này vào cuối style.css. Nếu trước đó đã dán bản cũ: xoá
+   TỪ dòng comment đầu của khối cũ ĐẾN HẾT file rồi dán bản này (bản này đã
+   gồm sẵn mọi thứ: calendar, tab bar, savings, income, budget repeat...).
    ============================================================ */
 
 :root{
@@ -1556,3 +1358,71 @@ body.mobile-nav-open .mobile-nav-toggle{
   border-radius:16px; border:2px solid #eee0da; background:#fff; font-size:15px; font-weight:700; font-family:inherit;
 }
 .modal-box input[type="date"]{ width:100%; box-sizing:border-box; }
+
+/* Income card: the Add button is small, centred, with even spacing, and the
+   last row drops its divider so the button never sits on a line. */
+.expense-income-add-wrap{ display:flex; justify-content:center; margin-top:16px; }
+.expense-income-add-btn{ padding:9px 22px; font-size:13px; width:auto; margin:0; }
+#expense-income-list .expense-history-row:last-child{ border-bottom:none; }
+#expense-savings-log .expense-history-row:last-child{ border-bottom:none; }
+
+/* ------------------------------------------------------------
+   One look for every field inside the Expense popups: same width (exactly the
+   popup's content width), same height, left-aligned text. iOS renders
+   <input type="date"> with its own intrinsic width and centred text, which is
+   what pushed it past the popup's right edge — appearance:none + min-width:0
+   + the ::-webkit-date-and-time-value rule below fix that.
+   ------------------------------------------------------------ */
+#expense-entry-modal .modal-box input[type="text"]:not(.expense-amount-field),
+#expense-income-modal .modal-box input[type="text"]:not(.expense-amount-field),
+#expense-budget-modal .modal-box input[type="text"]:not(.expense-amount-field),
+#expense-category-budget-modal .modal-box input[type="text"]:not(.expense-amount-field),
+#expense-category-modal .modal-box input[type="text"]:not(.expense-amount-field),
+#expense-savings-goal-modal .modal-box input[type="text"]:not(.expense-amount-field),
+#expense-savings-tx-modal .modal-box input[type="text"]:not(.expense-amount-field),
+#expense-entry-modal .modal-box input[type="date"],
+#expense-income-modal .modal-box input[type="date"],
+#expense-budget-modal .modal-box input[type="date"],
+#expense-category-budget-modal .modal-box input[type="date"],
+#expense-category-modal .modal-box input[type="date"],
+#expense-savings-goal-modal .modal-box input[type="date"],
+#expense-savings-tx-modal .modal-box input[type="date"],
+#expense-entry-modal .modal-box select,
+#expense-income-modal .modal-box select,
+#expense-budget-modal .modal-box select,
+#expense-category-budget-modal .modal-box select,
+#expense-category-modal .modal-box select,
+#expense-savings-goal-modal .modal-box select,
+#expense-savings-tx-modal .modal-box select{
+  display:block; width:100%; max-width:100%; min-width:0; box-sizing:border-box;
+  height:46px; padding:0 14px; margin:0 0 10px;
+  font-family:inherit; font-size:16px; font-weight:600; text-align:left; color:var(--ink);
+  background:var(--white); border:2px solid var(--pink); border-radius:var(--r-sm);
+  -webkit-appearance:none; appearance:none;
+}
+#expense-entry-modal .modal-box input[type="date"]::-webkit-date-and-time-value,
+#expense-income-modal .modal-box input[type="date"]::-webkit-date-and-time-value,
+#expense-budget-modal .modal-box input[type="date"]::-webkit-date-and-time-value,
+#expense-category-budget-modal .modal-box input[type="date"]::-webkit-date-and-time-value,
+#expense-category-modal .modal-box input[type="date"]::-webkit-date-and-time-value,
+#expense-savings-goal-modal .modal-box input[type="date"]::-webkit-date-and-time-value,
+#expense-savings-tx-modal .modal-box input[type="date"]::-webkit-date-and-time-value{
+  -webkit-appearance:none; appearance:none; min-height:0; text-align:left;
+  margin:0; padding:0; display:flex; align-items:center;
+}
+#expense-entry-modal .modal-box select,
+#expense-income-modal .modal-box select,
+#expense-budget-modal .modal-box select,
+#expense-category-budget-modal .modal-box select,
+#expense-category-modal .modal-box select,
+#expense-savings-goal-modal .modal-box select,
+#expense-savings-tx-modal .modal-box select{
+  background-image:linear-gradient(45deg,transparent 50%,#b9a9a9 50%),linear-gradient(135deg,#b9a9a9 50%,transparent 50%);
+  background-position:calc(100% - 20px) 50%,calc(100% - 14px) 50%;
+  background-size:6px 6px,6px 6px; background-repeat:no-repeat; padding-right:36px; cursor:pointer;
+}
+/* Add Expense: the date input sits on the same row as Today / Yesterday */
+#expense-entry-modal .expense-date-row input[type="date"]{ flex:1 1 150px; width:auto; margin:0; }
+#expense-entry-modal .expense-date-row .pill-btn{ flex:0 0 auto; }
+
+/* EXPENSE-CSS-END */
