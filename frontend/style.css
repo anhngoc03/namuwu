@@ -1300,6 +1300,7 @@ body.mobile-nav-open .mobile-nav-toggle{
   /* keep the floating dock from covering page content at the very bottom */
   .page-container{ padding-bottom: 110px; }
 }
+
 /* ============================================================
    HENLO HUMAN — style.css — EXPENSE TRACKER
    Dán nguyên khối này vào cuối style.css.
@@ -1517,5 +1518,41 @@ body.mobile-nav-open .mobile-nav-toggle{
     font-size:26px; display:flex; align-items:center; justify-content:center; margin-top:-30px;
     box-shadow:0 8px 18px rgba(232,137,159,.4);
   }
-  .expense-cal-layout{ flex-direction:column; }
+  /* Calendar: the layout is a column here, and the base rule's
+     align-items:flex-start made each card shrink-wrap its content, so the
+     calendar was a small box stuck to the left. stretch + width:100% makes
+     the cards fill the whole row (any phone width) and sit centred. */
+  .expense-cal-layout{ flex-direction:column; flex-wrap:nowrap; align-items:stretch; gap:14px; width:100%; margin:0 auto; }
+  .expense-cal-card, .expense-day-detail{ width:100%; max-width:none; min-width:0; flex:none; margin-left:0; margin-right:0; box-sizing:border-box; }
+  .expense-cal-grid{ width:100%; }
 }
+
+/* ============================================================
+   v2 — income list, savings goal, budget repeat, new-category chip
+   ============================================================ */
+.expense-chips-row{ flex-wrap:wrap; }
+.expense-info-chip{ min-width:120px; }
+.expense-info-chip.saved{ background:#f1ecfb; }
+.expense-income-amt{ color:var(--exp-mint-deep); }
+
+/* Savings card */
+.expense-savings-card{ background:linear-gradient(180deg,#fff,#fffaf2); }
+.expense-savings-head{ display:flex; justify-content:space-between; align-items:flex-start; }
+.expense-savings-name{ font-weight:700; font-size:18px; }
+.expense-savings-balance{ font-weight:700; font-size:30px; margin:8px 0 12px; }
+.expense-savings-fill{ background:linear-gradient(90deg,#f3c89a,#e8899f); }
+.expense-savings-actions{ display:flex; gap:10px; margin:16px 0 4px; }
+.expense-savings-actions .pill-btn{ flex:1; }
+
+/* Budget "repeat every month" */
+.expense-repeat-badge{ font-size:11px; font-weight:700; color:var(--exp-pink-deep); margin-top:4px; display:inline-block; }
+
+/* "+ New category" chip inside the Add Expense popup */
+.expense-chip-add{ background:#fff; border:2px dashed var(--exp-pink); color:var(--exp-pink-deep); }
+
+/* Select inside a modal: same full width as the amount row under it */
+.expense-modal-select{
+  display:block; width:100%; box-sizing:border-box; padding:12px 14px; margin:0 0 12px;
+  border-radius:16px; border:2px solid #eee0da; background:#fff; font-size:15px; font-weight:700; font-family:inherit;
+}
+.modal-box input[type="date"]{ width:100%; box-sizing:border-box; }
