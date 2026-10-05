@@ -35,7 +35,6 @@
       <button class="app-nav-sublink" data-open="eating">Eating Tracker</button>
       <button class="app-nav-sublink" data-open="expense">Expenses</button>
       <button class="app-nav-sublink" data-open="qr">QR Collection</button>
-      <button class="app-nav-sublink" data-open="saving">Saving</button>
       <button class="app-nav-sublink" data-open="symbols">Symbols</button>
     </div>
 
@@ -132,14 +131,6 @@
               <div class="nav-card-body">
                 <div class="nav-card-title">Symbols</div>
                 <div class="nav-card-desc">Copy useful symbols and kaomoji</div>
-              </div>
-              <div class="nav-card-arrow">→</div>
-            </button>
-            <button id="open-saving" class="nav-card" data-accent="green">
-              <span class="nav-card-emoji">⪩. .⪨</span>
-              <div class="nav-card-body">
-                <div class="nav-card-title">Saving</div>
-                <div class="nav-card-desc">A little day-by-day saving log</div>
               </div>
               <div class="nav-card-arrow">→</div>
             </button>
@@ -412,42 +403,6 @@
         <div id="symbols-small-grid" class="symbols-small-grid"></div>
         <div id="symbols-animal-grid" class="symbols-animal-grid"></div>
         <div id="symbols-medium-grid" class="symbols-medium-grid"></div>
-      </div>
-
-      <!-- -------- SAVING VIEW -------- -->
-      <div id="saving-view" class="app-view" style="display:none;">
-        <div class="page-header">
-          <h2 class="page-title">Saving</h2>
-          <p class="page-subtitle">Little by little, day by day.</p>
-        </div>
-
-        <div class="saving-top-row">
-          <div class="saving-picks-panel">
-            <div class="saving-picks-grid">
-              <div class="saving-pick-cell" id="saving-pick-0"></div>
-              <div class="saving-pick-cell" id="saving-pick-1"></div>
-              <div class="saving-pick-cell" id="saving-pick-2"></div>
-              <div class="saving-pick-cell" id="saving-pick-3"></div>
-              <div class="saving-pick-cell" id="saving-pick-4"></div>
-              <div class="saving-pick-cell saving-pick-sum" id="saving-pick-sum">0</div>
-            </div>
-            <button id="saving-clear" class="pill-btn secondary">Clear</button>
-          </div>
-
-          <div class="saving-random-box">
-            <div class="saving-random-label">Random Day</div>
-            <div id="saving-random-number" class="saving-random-number">--</div>
-            <button id="saving-random-btn" class="pill-btn">Random</button>
-          </div>
-        </div>
-
-        <div id="saving-days-grid" class="saving-days-grid"></div>
-
-        <div class="saving-bottom-row">
-          <div id="saving-total-box" class="saving-total-box" title="Total of all saved days">0</div>
-          <button id="saving-save" class="pill-btn">Save</button>
-          <button id="saving-reset" class="pill-btn secondary">Reset</button>
-        </div>
       </div>
 
       <!-- -------- DAY COUNT VIEW -------- -->
