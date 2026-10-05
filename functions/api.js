@@ -402,24 +402,46 @@ async function expenseMaterializeBudgets_(env, period) {
   }
 }
 
+// Tổng cột `amount` của các dòng THEO NGÀY < start (phân trang 1000 dòng/lần để không bị cắt).
+async function expenseSumBefore_(env, table, dateCol, start, extra) {
+  var total = 0, offset = 0, page = 1000;
+  for (;;) {
+    var rows = await sb(env, table + '?' + dateCol + '=lt.' + start + (extra || '') + '&select=amount&order=id.asc&limit=' + page + '&offset=' + offset);
+    rows.forEach(function (r) { total += Number(r.amount); });
+    if (rows.length < page) break;
+    offset += page;
+  }
+  return total;
+}
+
+// Tiền thừa mang sang: thu − chi − tiền nạp tiết kiệm (có trừ) của TẤT CẢ các tháng trước tháng đang xem.
+// Tính động → sửa/xoá khoản ở tháng cũ thì các tháng sau tự cập nhật. Âm thì mang số âm sang.
+async function expenseCarryIn_(env, period) {
+  var start = period + '-01';
+  var inc = await expenseSumBefore_(env, 'expense_income_entries', 'entry_date', start, '');
+  var exp = await expenseSumBefore_(env, 'expense_entries', 'entry_date', start, '');
+  var dep = await expenseSumBefore_(env, 'expense_savings_log', 'entry_date', start, '&kind=eq.deposit&deduct=eq.true');
+  return inc - exp - dep;
+}
+
 async function expenseGetSavings_(env, period) {
   var goalRows = await sb(env, 'expense_savings?id=eq.1&select=name,target');
   var goal = goalRows.length ? goalRows[0] : { name: 'Billionaire ✮⋆˙', target: 0 };
-  var logs = await sb(env, 'expense_savings_log?select=id,kind,amount,note,entry_date&order=entry_date.desc,id.desc');
+  var logs = await sb(env, 'expense_savings_log?select=id,kind,amount,note,entry_date,deduct&order=entry_date.desc,id.desc');
   var balance = 0, monthDeposits = 0;
   var periodStart = period + '-01', nextStart = expenseNextPeriodStart_(period);
   logs.forEach(function (l) {
     var a = Number(l.amount);
     balance += l.kind === 'deposit' ? a : -a;
-    if (l.kind === 'deposit' && l.entry_date >= periodStart && l.entry_date < nextStart) monthDeposits += a;
+    if (l.kind === 'deposit' && l.deduct !== false && l.entry_date >= periodStart && l.entry_date < nextStart) monthDeposits += a;
   });
   return {
     name: goal.name,
     target: Number(goal.target) || 0,
     balance: balance,                 // tiết kiệm KHÔNG reset theo tháng
-    monthDeposits: monthDeposits,     // phần nạp trong tháng đang xem → trừ vào Remaining
+    monthDeposits: monthDeposits,     // phần nạp CÓ TRỪ trong tháng đang xem → trừ vào Remaining
     log: logs.slice(0, 100).map(function (l) {
-      return { id: l.id, kind: l.kind, amount: Number(l.amount), note: l.note || '', date: l.entry_date };
+      return { id: l.id, kind: l.kind, amount: Number(l.amount), note: l.note || '', date: l.entry_date, deduct: l.deduct !== false };
     })
   };
 }
@@ -439,6 +461,7 @@ async function getExpenseData(env, [period]) {
   var budgetRows = await sb(env, 'expense_budget?period=eq.' + period + '&select=amount,repeat_monthly');
   var catBudgetRows = await sb(env, 'expense_category_budget?period=eq.' + period + '&select=category_id,amount,repeat_monthly');
   var savings = await expenseGetSavings_(env, period);
+  var carryIn = await expenseCarryIn_(env, period);
 
   var incomeEntries = incomeRows.map(function (r) {
     return { id: r.id, amount: Number(r.amount), source: r.source || '', date: r.entry_date };
@@ -452,6 +475,7 @@ async function getExpenseData(env, [period]) {
     }),
     incomeEntries: incomeEntries,
     income: incomeEntries.reduce(function (s, r) { return s + r.amount; }, 0),
+    carryIn: carryIn,
     budgetOverall: budgetRows.length ? Number(budgetRows[0].amount) : 0,
     budgetOverallRepeat: budgetRows.length ? budgetRows[0].repeat_monthly === true : false,
     categoryBudgets: catBudgetRows.map(function (r) { return { categoryId: r.category_id, amount: Number(r.amount), repeat: r.repeat_monthly === true }; }),
@@ -547,8 +571,9 @@ async function saveExpenseSavingsGoal(env, [name, target, period]) {
   return getExpenseData(env, [period]);
 }
 
-// kind: 'deposit' (nạp — trừ vào Remaining của tháng) | 'spend' (tiêu từ tiết kiệm — không tính vào chi tiêu tháng)
-async function addExpenseSavingsLog(env, [kind, amount, note, date, period]) {
+// kind: 'deposit' (nạp) | 'spend' (tiêu từ tiết kiệm — không tính vào chi tiêu tháng)
+// deduct (chỉ cho deposit): true = lấy từ tiền tháng này → trừ vào Remaining; false = tiền có sẵn, không trừ.
+async function addExpenseSavingsLog(env, [kind, amount, note, date, period, deduct]) {
   if (kind !== 'deposit' && kind !== 'spend') throw new Error('Loại giao dịch không hợp lệ');
   if (kind === 'spend') {
     var s = await expenseGetSavings_(env, String(date).slice(0, 7));
@@ -556,7 +581,18 @@ async function addExpenseSavingsLog(env, [kind, amount, note, date, period]) {
   }
   await sb(env, 'expense_savings_log', {
     method: 'POST',
-    body: JSON.stringify([{ kind: kind, amount: amount, note: note || '', entry_date: date }]),
+    body: JSON.stringify([{ kind: kind, amount: amount, note: note || '', entry_date: date, deduct: kind === 'deposit' ? deduct !== false : false }]),
+    prefer: 'return=minimal'
+  });
+  return getExpenseData(env, [period]);
+}
+
+async function updateExpenseSavingsLog(env, [id, amount, note, date, deduct, period]) {
+  var rows = await sb(env, 'expense_savings_log?id=eq.' + id + '&select=kind');
+  if (!rows.length) throw new Error('Entry not found');
+  await sb(env, 'expense_savings_log?id=eq.' + id, {
+    method: 'PATCH',
+    body: JSON.stringify({ amount: amount, note: note || '', entry_date: date, deduct: rows[0].kind === 'deposit' ? deduct !== false : false }),
     prefer: 'return=minimal'
   });
   return getExpenseData(env, [period]);
@@ -637,6 +673,7 @@ const ACTIONS = {
   deleteExpenseIncomeEntry,
   saveExpenseSavingsGoal,
   addExpenseSavingsLog,
+  updateExpenseSavingsLog,
   deleteExpenseSavingsLog,
   setExpenseBudgetOverall,
   setExpenseCategoryBudget,
