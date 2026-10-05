@@ -240,14 +240,42 @@
 
             <div class="expense-chips-row">
               <div class="expense-info-chip income">
-                <div class="expense-info-chip-top"><span>Income</span><span class="expense-edit-link" id="expense-income-edit-link">Edit</span></div>
+                <div class="expense-info-chip-top"><span>Income</span><span class="expense-edit-link" id="expense-income-add-link">+ Add</span></div>
                 <div class="expense-info-chip-val" id="expense-income-value">0đ</div>
               </div>
               <div class="expense-info-chip expense">
                 <div class="expense-info-chip-top"><span>Expenses</span><span id="expense-spent-count"></span></div>
                 <div class="expense-info-chip-val" id="expense-spent-value">0đ</div>
               </div>
+              <div class="expense-info-chip saved">
+                <div class="expense-info-chip-top"><span>Saved</span><span>this month</span></div>
+                <div class="expense-info-chip-val" id="expense-saved-value">0đ</div>
+              </div>
             </div>
+          </div>
+
+          <div class="expense-card expense-savings-card">
+            <div class="expense-savings-head">
+              <div>
+                <div class="expense-sub-line" style="margin:0;">Savings goal</div>
+                <div class="expense-savings-name" id="expense-savings-name"></div>
+              </div>
+              <span class="expense-edit-link" id="expense-savings-edit-link">Edit</span>
+            </div>
+            <div class="expense-savings-balance" id="expense-savings-balance">0đ</div>
+            <div class="expense-progress-track"><div class="expense-progress-fill expense-savings-fill" id="expense-savings-fill"></div></div>
+            <div class="expense-progress-meta"><span id="expense-savings-meta-left"></span><span id="expense-savings-meta-right"></span></div>
+            <div class="expense-savings-actions">
+              <button class="pill-btn" id="expense-savings-deposit-btn">+ Deposit</button>
+              <button class="pill-btn secondary" id="expense-savings-spend-btn">− Spend</button>
+            </div>
+            <div id="expense-savings-log"></div>
+          </div>
+
+          <div class="expense-card">
+            <div class="expense-section-title">Income this month</div>
+            <div id="expense-income-list"></div>
+            <button class="pill-btn" id="expense-income-add-btn">+ Add income</button>
           </div>
 
           <button class="expense-add-btn" id="expense-overview-add-btn">＋ Add Expense</button>
@@ -316,7 +344,7 @@
 
           <div class="expense-card">
             <div class="expense-budget-head">
-              <div><div class="expense-sub-line" style="margin:0;">Monthly budget</div><div class="expense-remain-value" id="expense-budget-overall-value">0đ</div></div>
+              <div><div class="expense-sub-line" style="margin:0;">Monthly budget</div><div class="expense-remain-value" id="expense-budget-overall-value">0đ</div><div class="expense-repeat-badge" id="expense-budget-repeat-badge" style="display:none;">↻ Repeats every month</div></div>
               <button class="pill-btn" id="expense-budget-edit-btn">✎ Edit</button>
             </div>
             <div class="expense-progress-track"><div class="expense-progress-fill" id="expense-budget-progress-fill"></div></div>
@@ -870,10 +898,6 @@
       <div class="expense-field-caption">Note (optional)</div>
       <input type="text" id="expense-note-input" placeholder="e.g. Lunch" autocomplete="off">
 
-      <label class="expense-checkbox-row">
-        <input type="checkbox" id="expense-repeat-checkbox"> Repeat monthly
-      </label>
-
       <div class="modal-actions">
         <button class="pill-btn secondary" id="expense-entry-cancel-btn">Cancel</button>
         <button class="pill-btn" id="expense-entry-save-btn">Add Expense</button>
@@ -884,11 +908,15 @@
   <div id="expense-income-modal" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
-        <h3>Edit Income</h3>
+        <h3 id="expense-income-modal-title">Add Income</h3>
         <button id="expense-income-modal-close" class="modal-close">✕</button>
       </div>
-      <div class="expense-field-caption">Monthly income</div>
+      <div class="expense-field-caption">Amount</div>
       <div class="expense-amount-row"><input type="text" id="expense-income-amount-input" class="expense-amount-field" placeholder="0" inputmode="numeric"><span>đ</span></div>
+      <div class="expense-field-caption">Source</div>
+      <input type="text" id="expense-income-source-input" placeholder="e.g. Salary, Freelance" autocomplete="off">
+      <div class="expense-field-caption">Date received</div>
+      <input type="date" id="expense-income-date-input">
       <div class="modal-actions">
         <button class="pill-btn secondary" id="expense-income-cancel-btn">Cancel</button>
         <button class="pill-btn" id="expense-income-save-btn">Save</button>
@@ -903,6 +931,9 @@
         <button id="expense-budget-modal-close" class="modal-close">✕</button>
       </div>
       <div class="expense-amount-row"><input type="text" id="expense-budget-amount-input" class="expense-amount-field" placeholder="0" inputmode="numeric"><span>đ</span></div>
+      <label class="expense-checkbox-row">
+        <input type="checkbox" id="expense-budget-repeat-checkbox"> Repeat every month
+      </label>
       <div class="modal-actions">
         <button class="pill-btn secondary" id="expense-budget-cancel-btn">Cancel</button>
         <button class="pill-btn" id="expense-budget-save-btn">Save</button>
@@ -917,11 +948,50 @@
         <button id="expense-catbudget-modal-close" class="modal-close">✕</button>
       </div>
       <div id="expense-cat-budget-label" class="expense-sub-line" style="font-weight:700;"></div>
-      <select id="expense-cat-budget-select"></select>
+      <select id="expense-cat-budget-select" class="expense-modal-select"></select>
       <div class="expense-amount-row"><input type="text" id="expense-cat-budget-amount" class="expense-amount-field" placeholder="0" inputmode="numeric"><span>đ</span></div>
+      <label class="expense-checkbox-row">
+        <input type="checkbox" id="expense-cat-budget-repeat-checkbox"> Repeat every month
+      </label>
       <div class="modal-actions">
         <button class="pill-btn secondary" id="expense-catbudget-cancel-btn">Cancel</button>
         <button class="pill-btn" id="expense-catbudget-save-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="expense-savings-goal-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Edit Savings Goal</h3>
+        <button id="expense-savings-goal-close" class="modal-close">✕</button>
+      </div>
+      <div class="expense-field-caption">Name</div>
+      <input type="text" id="expense-savings-name-input" placeholder="e.g. Billionaire" autocomplete="off">
+      <div class="expense-field-caption">Target</div>
+      <div class="expense-amount-row"><input type="text" id="expense-savings-target-input" class="expense-amount-field" placeholder="0" inputmode="numeric"><span>đ</span></div>
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="expense-savings-goal-cancel">Cancel</button>
+        <button class="pill-btn" id="expense-savings-goal-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="expense-savings-tx-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="expense-savings-tx-title">Deposit</h3>
+        <button id="expense-savings-tx-close" class="modal-close">✕</button>
+      </div>
+      <div class="expense-field-caption">Amount</div>
+      <div class="expense-amount-row"><input type="text" id="expense-savings-tx-amount" class="expense-amount-field" placeholder="0" inputmode="numeric"><span>đ</span></div>
+      <div class="expense-field-caption">Note (optional)</div>
+      <input type="text" id="expense-savings-tx-note" placeholder="e.g. Bonus" autocomplete="off">
+      <div class="expense-field-caption">Date</div>
+      <input type="date" id="expense-savings-tx-date">
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="expense-savings-tx-cancel">Cancel</button>
+        <button class="pill-btn" id="expense-savings-tx-save">Save</button>
       </div>
     </div>
   </div>
