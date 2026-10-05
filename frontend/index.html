@@ -262,7 +262,6 @@
               </div>
               <span class="expense-edit-link" id="expense-savings-edit-link">Edit</span>
             </div>
-            <div class="expense-savings-balance" id="expense-savings-balance">0đ</div>
             <div class="expense-progress-track"><div class="expense-progress-fill expense-savings-fill" id="expense-savings-fill"></div></div>
             <div class="expense-progress-meta"><span id="expense-savings-meta-left"></span><span id="expense-savings-meta-right"></span></div>
             <div class="expense-savings-actions">
@@ -275,7 +274,7 @@
           <div class="expense-card">
             <div class="expense-section-title">Income this month</div>
             <div id="expense-income-list"></div>
-            <button class="pill-btn" id="expense-income-add-btn">+ Add income</button>
+            <div class="expense-income-add-wrap"><button class="pill-btn expense-income-add-btn" id="expense-income-add-btn">+ Add income</button></div>
           </div>
 
           <button class="expense-add-btn" id="expense-overview-add-btn">＋ Add Expense</button>
@@ -989,6 +988,9 @@
       <input type="text" id="expense-savings-tx-note" placeholder="e.g. Bonus" autocomplete="off">
       <div class="expense-field-caption">Date</div>
       <input type="date" id="expense-savings-tx-date">
+      <label class="expense-checkbox-row" id="expense-savings-tx-deduct-row">
+        <input type="checkbox" id="expense-savings-tx-deduct" checked> Deduct from this month's balance
+      </label>
       <div class="modal-actions">
         <button class="pill-btn secondary" id="expense-savings-tx-cancel">Cancel</button>
         <button class="pill-btn" id="expense-savings-tx-save">Save</button>
