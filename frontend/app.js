@@ -1759,6 +1759,7 @@ var expenseStatsRange = 'month';   // '7' | '30' | 'month'
 var expenseHistoryFilters = { search: '', categoryId: '', amount: '' };
 var expenseEditingIncomeId = null;     // null = adding new income
 var expenseSavingsTxKind = 'deposit';  // 'deposit' | 'spend'
+var expenseEditingSavingsId = null;    // null = adding a new savings entry
 var expenseCategoryReturnToEntry = false; // true when "+ New category" was pressed inside the Add Expense popup
 
 // Dropdowns / chips: categories always alphabetical (Vietnamese-aware).
@@ -1776,8 +1777,11 @@ function expenseMonthDefaultDate() {
   // Default date for new income/savings entries: today if viewing the current month, otherwise the 1st of the viewed month.
   return expensePeriod === expenseCurrentPeriod() ? expenseTodayStr() : expensePeriod + '-01';
 }
+// Remaining = money carried over from earlier months + this month's income
+//             − this month's expenses − savings deposits that were deducted.
+function expenseAvailable() { return (expenseData.carryIn || 0) + expenseData.income; }
 function expenseRemaining() {
-  return expenseData.income - expenseEntriesTotal(expenseData.entries) - (expenseData.savings ? expenseData.savings.monthDeposits : 0);
+  return expenseAvailable() - expenseEntriesTotal(expenseData.entries) - (expenseData.savings ? expenseData.savings.monthDeposits : 0);
 }
 
 /* ---- amount inputs: live "." thousands-separator formatting ----
@@ -1899,7 +1903,8 @@ function expenseRenderOverview() {
   var sv = expenseData.savings || { name: '', target: 0, balance: 0, monthDeposits: 0, log: [] };
   var remaining = expenseRemaining();
   var used = totalSpent + sv.monthDeposits;
-  var pct = expenseData.income > 0 ? Math.min(100, (used / expenseData.income) * 100) : 0;
+  var available = expenseAvailable();
+  var pct = available > 0 ? Math.min(100, (used / available) * 100) : 0;
   var isCurrentMonth = expensePeriod === expenseCurrentPeriod();
   var daysLeft = isCurrentMonth ? (expenseLastDay(expensePeriod) - new Date().getDate()) : 0;
   var todaySpent = isCurrentMonth ? expenseEntriesTotal(expenseData.entries.filter(function (e) { return e.date === expenseTodayStr(); })) : 0;
@@ -1909,7 +1914,7 @@ function expenseRenderOverview() {
     isCurrentMonth ? ('Today · spent ' + expenseFmt(todaySpent) + ' so far') : (expenseData.entries.length + ' transactions this month');
   document.getElementById('expense-remaining-value').innerHTML = formatThousands(Math.round(remaining)) + '<small>đ</small>';
   document.getElementById('expense-progress-fill').style.width = pct + '%';
-  document.getElementById('expense-progress-meta-left').textContent = 'Spent + saved ' + Math.round(pct) + '% of income';
+  document.getElementById('expense-progress-meta-left').textContent = 'Spent + saved ' + Math.round(pct) + '% of what you have';
   document.getElementById('expense-progress-meta-right').textContent = isCurrentMonth ? (daysLeft + ' days left') : '';
   document.getElementById('expense-income-value').textContent = expenseFmt(expenseData.income);
   document.getElementById('expense-spent-value').textContent = expenseFmt(totalSpent);
@@ -1955,7 +1960,6 @@ function expenseRenderSavings() {
   var sv = expenseData.savings;
   if (!sv) return;
   document.getElementById('expense-savings-name').textContent = sv.name;
-  document.getElementById('expense-savings-balance').textContent = expenseFmt(sv.balance);
   var pct = sv.target > 0 ? Math.max(0, Math.min(100, (sv.balance / sv.target) * 100)) : 0;
   document.getElementById('expense-savings-fill').style.width = pct + '%';
   document.getElementById('expense-savings-meta-left').textContent = sv.target > 0 ? (Math.round(pct) + '% of ' + expenseFmt(sv.target)) : 'Set a target with Edit';
@@ -1971,10 +1975,12 @@ function expenseRenderSavings() {
     row.innerHTML =
       '<div class="expense-history-row-main">' +
         '<div class="expense-history-row-name">' + (isDep ? 'Deposit' : 'Spent from savings') + (l.note ? ' · ' + icdEscape(l.note) : '') + '</div>' +
-        '<div class="expense-history-row-cat">' + expenseVNDate(l.date) + '</div>' +
+        '<div class="expense-history-row-cat">' + expenseVNDate(l.date) + (isDep && !l.deduct ? ' · not deducted' : '') + '</div>' +
       '</div>' +
       '<div class="expense-history-row-amt ' + (isDep ? 'expense-income-amt' : '') + '">' + (isDep ? '+' : '−') + expenseFmt(l.amount) + '</div>' +
+      '<button class="acc-edit-icon-btn expense-sv-edit" title="Edit">✎</button>' +
       '<button class="acc-edit-icon-btn expense-sv-del" title="Delete">🗑</button>';
+    row.querySelector('.expense-sv-edit').onclick = function () { expenseOpenSavingsTxModal(l.kind, l); };
     row.querySelector('.expense-sv-del').onclick = function () {
       expenseConfirm('Delete this savings entry?', function () {
         google.script.run.withSuccessHandler(expenseApplyData).withFailureHandler(expenseFail).deleteExpenseSavingsLog(l.id, expensePeriod);
@@ -2001,25 +2007,31 @@ function expenseSaveSavingsGoal() {
     .saveExpenseSavingsGoal(name, target, expensePeriod);
 }
 
-function expenseOpenSavingsTxModal(kind) {
+function expenseOpenSavingsTxModal(kind, item) {
   expenseSavingsTxKind = kind;
-  document.getElementById('expense-savings-tx-title').textContent = kind === 'deposit' ? 'Deposit to savings' : 'Spend from savings';
-  expenseSetAmountInputValue(document.getElementById('expense-savings-tx-amount'), 0);
-  document.getElementById('expense-savings-tx-note').value = '';
-  document.getElementById('expense-savings-tx-date').value = expenseMonthDefaultDate();
+  expenseEditingSavingsId = item ? item.id : null;
+  document.getElementById('expense-savings-tx-title').textContent =
+    (item ? 'Edit ' : '') + (kind === 'deposit' ? (item ? 'deposit' : 'Deposit to savings') : (item ? 'spend' : 'Spend from savings'));
+  expenseSetAmountInputValue(document.getElementById('expense-savings-tx-amount'), item ? item.amount : 0);
+  document.getElementById('expense-savings-tx-note').value = item ? item.note : '';
+  document.getElementById('expense-savings-tx-date').value = item ? item.date : expenseMonthDefaultDate();
+  // "Deduct from this month's balance" only makes sense for deposits; default ON for new ones.
+  document.getElementById('expense-savings-tx-deduct-row').style.display = kind === 'deposit' ? '' : 'none';
+  document.getElementById('expense-savings-tx-deduct').checked = item ? item.deduct !== false : true;
   document.getElementById('expense-savings-tx-modal').classList.add('active');
 }
 function expenseSaveSavingsTx() {
   var amount = expenseAmountInputValue(document.getElementById('expense-savings-tx-amount'));
   if (!amount || amount <= 0) { toast('Enter an amount'); return; }
-  if (expenseSavingsTxKind === 'spend' && expenseData.savings && amount > expenseData.savings.balance) { toast('Not enough savings'); return; }
+  if (!expenseEditingSavingsId && expenseSavingsTxKind === 'spend' && expenseData.savings && amount > expenseData.savings.balance) { toast('Not enough savings'); return; }
   var date = document.getElementById('expense-savings-tx-date').value || expenseMonthDefaultDate();
   var note = document.getElementById('expense-savings-tx-note').value.trim();
+  var deduct = document.getElementById('expense-savings-tx-deduct').checked;
   showLoading();
-  google.script.run
-    .withSuccessHandler(function (data) { hideLoading(); document.getElementById('expense-savings-tx-modal').classList.remove('active'); expenseApplyData(data); toast('Saved!'); })
-    .withFailureHandler(expenseFail)
-    .addExpenseSavingsLog(expenseSavingsTxKind, amount, note, date, expensePeriod);
+  var onDone = function (data) { hideLoading(); document.getElementById('expense-savings-tx-modal').classList.remove('active'); expenseApplyData(data); toast('Saved!'); };
+  var run = google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail);
+  if (expenseEditingSavingsId) run.updateExpenseSavingsLog(expenseEditingSavingsId, amount, note, date, deduct, expensePeriod);
+  else run.addExpenseSavingsLog(expenseSavingsTxKind, amount, note, date, expensePeriod, deduct);
 }
 
 /* ---- Calendar tab ---- */
