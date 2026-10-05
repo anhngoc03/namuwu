@@ -120,34 +120,6 @@ async function addSymbolsBatch(env, [items]) {
   return getSymbolsData(env);
 }
 
-/* --------------------------- SAVING ------------------------------ */
-
-async function getSavingData(env) {
-  const rows = await sb(env, 'saving?select=day&saved=eq.true&order=day.asc');
-  return rows.map((r) => r.day);
-}
-
-async function saveSavingDays(env, [days]) {
-  if (days && days.length) {
-    const list = days.join(',');
-    await sb(env, `saving?day=in.(${list})`, {
-      method: 'PATCH',
-      body: JSON.stringify({ saved: true }),
-      prefer: 'return=minimal'
-    });
-  }
-  return getSavingData(env);
-}
-
-async function resetSaving(env) {
-  await sb(env, 'saving?day=gt.0', {
-    method: 'PATCH',
-    body: JSON.stringify({ saved: false }),
-    prefer: 'return=minimal'
-  });
-  return getSavingData(env);
-}
-
 /* ------------------------ MEMORY MATCH LEADERBOARD ---------------------- */
 
 async function getLeaderboard(env) {
@@ -643,9 +615,6 @@ const ACTIONS = {
   getSymbolsData,
   addSymbol,
   addSymbolsBatch,
-  getSavingData,
-  saveSavingDays,
-  resetSaving,
   getLeaderboard,
   submitScore,
   getMochiLeaderboard,
