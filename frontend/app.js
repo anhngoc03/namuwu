@@ -376,6 +376,7 @@ function loadAccounts() {
 function renderTypeSelect(types) {
   var sel = document.getElementById('type-select');
   sel.innerHTML = '';
+  types = types.slice().sort(function (a, b) { return String(a).localeCompare(String(b), 'vi', { sensitivity: 'base' }); });
   types.forEach(function (t) {
     var opt = document.createElement('option');
     opt.value = t; opt.textContent = t;
@@ -562,9 +563,9 @@ function addSymbolRow() {
   row.className = 'symbol-add-row';
   row.innerHTML =
     '<select class="s-type">' +
-      '<option value="small">small</option>' +
       '<option value="animal">animal</option>' +
       '<option value="medium">medium</option>' +
+      '<option value="small">small</option>' +
     '</select>' +
     '<input type="text" class="s-value" name="' + uid + '-value" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Detail">';
   wrap.appendChild(row);
@@ -1756,6 +1757,28 @@ var expenseEditingCategoryBudgetId = null; // category id being budgeted (new or
 var expenseConfirmAction = null;   // fn to run when the generic confirm modal says "Yah"
 var expenseStatsRange = 'month';   // '7' | '30' | 'month'
 var expenseHistoryFilters = { search: '', categoryId: '', amount: '' };
+var expenseEditingIncomeId = null;     // null = adding new income
+var expenseSavingsTxKind = 'deposit';  // 'deposit' | 'spend'
+var expenseCategoryReturnToEntry = false; // true when "+ New category" was pressed inside the Add Expense popup
+
+// Dropdowns / chips: categories always alphabetical (Vietnamese-aware).
+function expenseSortCategories(cats) {
+  return (cats || []).slice().sort(function (a, b) {
+    return String(a.name).localeCompare(String(b.name), 'vi', { sensitivity: 'base' });
+  });
+}
+function expenseNormalize(data) {
+  data.categories = expenseSortCategories(data.categories);
+  return data;
+}
+function expenseVNDate(dateStr) { return dateStr.slice(8, 10) + '/' + dateStr.slice(5, 7); }
+function expenseMonthDefaultDate() {
+  // Default date for new income/savings entries: today if viewing the current month, otherwise the 1st of the viewed month.
+  return expensePeriod === expenseCurrentPeriod() ? expenseTodayStr() : expensePeriod + '-01';
+}
+function expenseRemaining() {
+  return expenseData.income - expenseEntriesTotal(expenseData.entries) - (expenseData.savings ? expenseData.savings.monthDeposits : 0);
+}
 
 /* ---- amount inputs: live "." thousands-separator formatting ----
    These fields are type="text" + inputmode="numeric" (not type="number",
@@ -1816,7 +1839,10 @@ function expenseShiftPeriod(period, delta) {
 function openExpense() {
   showView('expense-view');
   expenseActiveTab = 'overview';
-  loadExpenseData(expensePeriod || expenseCurrentPeriod());
+  // Always open on the real current month: a new month = fresh numbers
+  // (income/expenses at 0), while savings carry over. Past months stay
+  // reachable with the ‹ › arrows.
+  loadExpenseData(expenseCurrentPeriod());
 }
 
 function loadExpenseData(period) {
@@ -1824,7 +1850,7 @@ function loadExpenseData(period) {
   google.script.run
     .withSuccessHandler(function (data) {
       hideLoading();
-      expenseData = data;
+      expenseData = expenseNormalize(data);
       expensePeriod = data.period;
       expenseRenderShell();
       expenseRenderActiveTab();
@@ -1870,8 +1896,10 @@ function expenseNextMonth() { loadExpenseData(expenseShiftPeriod(expensePeriod, 
 /* ---- Overview tab ---- */
 function expenseRenderOverview() {
   var totalSpent = expenseEntriesTotal(expenseData.entries);
-  var remaining = expenseData.income - totalSpent;
-  var pct = expenseData.income > 0 ? Math.min(100, (totalSpent / expenseData.income) * 100) : 0;
+  var sv = expenseData.savings || { name: '', target: 0, balance: 0, monthDeposits: 0, log: [] };
+  var remaining = expenseRemaining();
+  var used = totalSpent + sv.monthDeposits;
+  var pct = expenseData.income > 0 ? Math.min(100, (used / expenseData.income) * 100) : 0;
   var isCurrentMonth = expensePeriod === expenseCurrentPeriod();
   var daysLeft = isCurrentMonth ? (expenseLastDay(expensePeriod) - new Date().getDate()) : 0;
   var todaySpent = isCurrentMonth ? expenseEntriesTotal(expenseData.entries.filter(function (e) { return e.date === expenseTodayStr(); })) : 0;
@@ -1881,11 +1909,117 @@ function expenseRenderOverview() {
     isCurrentMonth ? ('Today · spent ' + expenseFmt(todaySpent) + ' so far') : (expenseData.entries.length + ' transactions this month');
   document.getElementById('expense-remaining-value').innerHTML = formatThousands(Math.round(remaining)) + '<small>đ</small>';
   document.getElementById('expense-progress-fill').style.width = pct + '%';
-  document.getElementById('expense-progress-meta-left').textContent = 'Spent ' + Math.round(pct) + '% of income';
+  document.getElementById('expense-progress-meta-left').textContent = 'Spent + saved ' + Math.round(pct) + '% of income';
   document.getElementById('expense-progress-meta-right').textContent = isCurrentMonth ? (daysLeft + ' days left') : '';
   document.getElementById('expense-income-value').textContent = expenseFmt(expenseData.income);
   document.getElementById('expense-spent-value').textContent = expenseFmt(totalSpent);
   document.getElementById('expense-spent-count').textContent = expenseData.entries.length + (expenseData.entries.length === 1 ? ' entry' : ' entries');
+  document.getElementById('expense-saved-value').textContent = expenseFmt(sv.monthDeposits);
+
+  expenseRenderSavings();
+  expenseRenderIncomeList();
+}
+
+/* ---- Income list (irregular income: one row per payment) ---- */
+function expenseRenderIncomeList() {
+  var list = document.getElementById('expense-income-list');
+  list.innerHTML = '';
+  var items = expenseData.incomeEntries || [];
+  if (!items.length) {
+    list.innerHTML = '<div class="empty-state" style="padding:10px 0;">No income recorded this month</div>';
+    return;
+  }
+  items.forEach(function (it) {
+    var row = document.createElement('div');
+    row.className = 'expense-history-row';
+    row.innerHTML =
+      '<div class="expense-history-row-main">' +
+        '<div class="expense-history-row-name">' + icdEscape(it.source || 'Income') + '</div>' +
+        '<div class="expense-history-row-cat">' + expenseVNDate(it.date) + '</div>' +
+      '</div>' +
+      '<div class="expense-history-row-amt expense-income-amt">+' + expenseFmt(it.amount) + '</div>' +
+      '<button class="acc-edit-icon-btn expense-inc-edit" title="Edit">✎</button>' +
+      '<button class="acc-edit-icon-btn expense-inc-del" title="Delete">🗑</button>';
+    row.querySelector('.expense-inc-edit').onclick = function () { expenseOpenIncomeModal(it); };
+    row.querySelector('.expense-inc-del').onclick = function () {
+      expenseConfirm('Delete this income?', function () {
+        google.script.run.withSuccessHandler(expenseApplyData).withFailureHandler(expenseFail).deleteExpenseIncomeEntry(it.id, expensePeriod);
+      });
+    };
+    list.appendChild(row);
+  });
+}
+
+/* ---- Savings card ---- */
+function expenseRenderSavings() {
+  var sv = expenseData.savings;
+  if (!sv) return;
+  document.getElementById('expense-savings-name').textContent = sv.name;
+  document.getElementById('expense-savings-balance').textContent = expenseFmt(sv.balance);
+  var pct = sv.target > 0 ? Math.max(0, Math.min(100, (sv.balance / sv.target) * 100)) : 0;
+  document.getElementById('expense-savings-fill').style.width = pct + '%';
+  document.getElementById('expense-savings-meta-left').textContent = sv.target > 0 ? (Math.round(pct) + '% of ' + expenseFmt(sv.target)) : 'Set a target with Edit';
+  document.getElementById('expense-savings-meta-right').textContent = sv.target > 0
+    ? (sv.balance >= sv.target ? 'Goal reached ✿' : expenseFmt(sv.target - sv.balance) + ' to go') : '';
+
+  var list = document.getElementById('expense-savings-log');
+  list.innerHTML = '';
+  (sv.log || []).slice(0, 5).forEach(function (l) {
+    var row = document.createElement('div');
+    row.className = 'expense-history-row';
+    var isDep = l.kind === 'deposit';
+    row.innerHTML =
+      '<div class="expense-history-row-main">' +
+        '<div class="expense-history-row-name">' + (isDep ? 'Deposit' : 'Spent from savings') + (l.note ? ' · ' + icdEscape(l.note) : '') + '</div>' +
+        '<div class="expense-history-row-cat">' + expenseVNDate(l.date) + '</div>' +
+      '</div>' +
+      '<div class="expense-history-row-amt ' + (isDep ? 'expense-income-amt' : '') + '">' + (isDep ? '+' : '−') + expenseFmt(l.amount) + '</div>' +
+      '<button class="acc-edit-icon-btn expense-sv-del" title="Delete">🗑</button>';
+    row.querySelector('.expense-sv-del').onclick = function () {
+      expenseConfirm('Delete this savings entry?', function () {
+        google.script.run.withSuccessHandler(expenseApplyData).withFailureHandler(expenseFail).deleteExpenseSavingsLog(l.id, expensePeriod);
+      });
+    };
+    list.appendChild(row);
+  });
+}
+
+function expenseOpenSavingsGoalModal() {
+  var sv = expenseData.savings;
+  document.getElementById('expense-savings-name-input').value = sv ? sv.name : '';
+  expenseSetAmountInputValue(document.getElementById('expense-savings-target-input'), sv ? sv.target : 0);
+  document.getElementById('expense-savings-goal-modal').classList.add('active');
+}
+function expenseSaveSavingsGoal() {
+  var name = document.getElementById('expense-savings-name-input').value.trim();
+  if (!name) { toast('Enter a name'); return; }
+  var target = expenseAmountInputValue(document.getElementById('expense-savings-target-input'));
+  showLoading();
+  google.script.run
+    .withSuccessHandler(function (data) { hideLoading(); document.getElementById('expense-savings-goal-modal').classList.remove('active'); expenseApplyData(data); })
+    .withFailureHandler(expenseFail)
+    .saveExpenseSavingsGoal(name, target, expensePeriod);
+}
+
+function expenseOpenSavingsTxModal(kind) {
+  expenseSavingsTxKind = kind;
+  document.getElementById('expense-savings-tx-title').textContent = kind === 'deposit' ? 'Deposit to savings' : 'Spend from savings';
+  expenseSetAmountInputValue(document.getElementById('expense-savings-tx-amount'), 0);
+  document.getElementById('expense-savings-tx-note').value = '';
+  document.getElementById('expense-savings-tx-date').value = expenseMonthDefaultDate();
+  document.getElementById('expense-savings-tx-modal').classList.add('active');
+}
+function expenseSaveSavingsTx() {
+  var amount = expenseAmountInputValue(document.getElementById('expense-savings-tx-amount'));
+  if (!amount || amount <= 0) { toast('Enter an amount'); return; }
+  if (expenseSavingsTxKind === 'spend' && expenseData.savings && amount > expenseData.savings.balance) { toast('Not enough savings'); return; }
+  var date = document.getElementById('expense-savings-tx-date').value || expenseMonthDefaultDate();
+  var note = document.getElementById('expense-savings-tx-note').value.trim();
+  showLoading();
+  google.script.run
+    .withSuccessHandler(function (data) { hideLoading(); document.getElementById('expense-savings-tx-modal').classList.remove('active'); expenseApplyData(data); toast('Saved!'); })
+    .withFailureHandler(expenseFail)
+    .addExpenseSavingsLog(expenseSavingsTxKind, amount, note, date, expensePeriod);
 }
 
 /* ---- Calendar tab ---- */
@@ -1974,7 +2108,7 @@ function expenseRenderStats() {
 
   document.getElementById('expense-stats-total').textContent = expenseFmt(totalSpent);
   document.getElementById('expense-stats-income').textContent = expenseFmt(expenseData.income);
-  document.getElementById('expense-stats-remaining').textContent = expenseFmt(expenseData.income - totalSpent);
+  document.getElementById('expense-stats-remaining').textContent = expenseFmt(expenseRemaining());
   document.getElementById('expense-stats-count').textContent = expenseData.entries.length;
   document.getElementById('expense-stats-avg').textContent = expenseFmt(elapsedDays ? totalSpent / elapsedDays : 0);
 
@@ -2076,6 +2210,7 @@ function expenseRenderBudget() {
   var remaining = expenseData.budgetOverall - totalSpent;
 
   document.getElementById('expense-budget-overall-value').textContent = expenseFmt(expenseData.budgetOverall);
+  document.getElementById('expense-budget-repeat-badge').style.display = (expenseData.budgetOverall > 0 && expenseData.budgetOverallRepeat) ? '' : 'none';
   document.getElementById('expense-budget-progress-fill').style.width = pct + '%';
   document.getElementById('expense-budget-used-pct').textContent = 'Used · ' + Math.round(pct) + '%';
   document.getElementById('expense-budget-remaining').textContent = expenseFmt(Math.max(0, remaining));
@@ -2095,21 +2230,23 @@ function expenseRenderBudget() {
 
   var wrap = document.getElementById('expense-budget-by-category');
   wrap.innerHTML = '';
-  expenseData.categoryBudgets.forEach(function (b) {
+  expenseData.categoryBudgets.slice().sort(function (x, y) {
+    return expenseNameFor(x.categoryId).localeCompare(expenseNameFor(y.categoryId), 'vi', { sensitivity: 'base' });
+  }).forEach(function (b) {
     var spent = byCat[b.categoryId] || 0;
     var p = b.amount > 0 ? Math.min(100, (spent / b.amount) * 100) : 0;
     var row = document.createElement('div');
     row.className = 'expense-budget-cat-card';
     row.innerHTML =
       '<div class="expense-budget-cat-top">' +
-        '<div class="expense-budget-cat-name"><span class="expense-dot" style="background:' + expenseColorFor(b.categoryId) + '"></span>' + icdEscape(expenseNameFor(b.categoryId)) + '</div>' +
+        '<div class="expense-budget-cat-name"><span class="expense-dot" style="background:' + expenseColorFor(b.categoryId) + '"></span>' + icdEscape(expenseNameFor(b.categoryId)) + (b.repeat ? ' <span class="expense-repeat-badge" title="Repeats every month">↻</span>' : '') + '</div>' +
         '<div class="expense-budget-cat-nums">' + formatThousands(spent) + ' / ' + formatThousands(b.amount) + 'đ</div>' +
         '<button class="acc-edit-icon-btn expense-edit-cat-budget" title="Edit">✎</button>' +
         '<button class="acc-edit-icon-btn expense-del-cat-budget" title="Remove limit">🗑</button>' +
       '</div>' +
       '<div class="expense-progress-track"><div class="expense-progress-fill-sm" style="width:' + p + '%;background:' + (p >= 100 ? '#e8899f' : expenseColorFor(b.categoryId)) + '"></div></div>' +
       '<div class="expense-budget-cat-remain">' + (p >= 100 ? 'Over budget' : expenseFmt(b.amount - spent) + ' left') + '</div>';
-    row.querySelector('.expense-edit-cat-budget').onclick = function () { expenseOpenCategoryBudgetModal(b.categoryId, b.amount); };
+    row.querySelector('.expense-edit-cat-budget').onclick = function () { expenseOpenCategoryBudgetModal(b.categoryId, b.amount, b.repeat); };
     row.querySelector('.expense-del-cat-budget').onclick = function () { expenseConfirm('Remove the budget limit for "' + expenseNameFor(b.categoryId) + '"?', function () {
       google.script.run.withSuccessHandler(expenseApplyData).withFailureHandler(expenseFail).deleteExpenseCategoryBudget(expensePeriod, b.categoryId);
     }); };
@@ -2129,8 +2266,9 @@ function expenseRenderBudget() {
   }
 }
 
-function expenseOpenCategoryBudgetModal(categoryId, amount) {
+function expenseOpenCategoryBudgetModal(categoryId, amount, repeat) {
   expenseEditingCategoryBudgetId = categoryId;
+  document.getElementById('expense-cat-budget-repeat-checkbox').checked = !!repeat;
   var sel = document.getElementById('expense-cat-budget-select');
   var budgeted = expenseData.categoryBudgets.map(function (b) { return b.categoryId; });
   if (categoryId === null) {
@@ -2161,11 +2299,12 @@ function expenseSaveCategoryBudget() {
   google.script.run
     .withSuccessHandler(function (data) { hideLoading(); document.getElementById('expense-category-budget-modal').classList.remove('active'); expenseApplyData(data); })
     .withFailureHandler(expenseFail)
-    .setExpenseCategoryBudget(expensePeriod, categoryId, amount);
+    .setExpenseCategoryBudget(expensePeriod, categoryId, amount, document.getElementById('expense-cat-budget-repeat-checkbox').checked);
 }
 
 function expenseOpenOverallBudgetModal() {
   expenseSetAmountInputValue(document.getElementById('expense-budget-amount-input'), expenseData.budgetOverall);
+  document.getElementById('expense-budget-repeat-checkbox').checked = !!expenseData.budgetOverallRepeat;
   document.getElementById('expense-budget-modal').classList.add('active');
 }
 function expenseSaveOverallBudget() {
@@ -2174,33 +2313,44 @@ function expenseSaveOverallBudget() {
   google.script.run
     .withSuccessHandler(function (data) { hideLoading(); document.getElementById('expense-budget-modal').classList.remove('active'); expenseApplyData(data); })
     .withFailureHandler(expenseFail)
-    .setExpenseBudgetOverall(expensePeriod, amount);
+    .setExpenseBudgetOverall(expensePeriod, amount, document.getElementById('expense-budget-repeat-checkbox').checked);
 }
 
-/* ---- Income ---- */
-function expenseOpenIncomeModal() {
-  expenseSetAmountInputValue(document.getElementById('expense-income-amount-input'), expenseData.income);
+/* ---- Income (one row per payment: amount + source + date) ---- */
+function expenseOpenIncomeModal(item) {
+  expenseEditingIncomeId = item ? item.id : null;
+  document.getElementById('expense-income-modal-title').textContent = item ? 'Edit Income' : 'Add Income';
+  expenseSetAmountInputValue(document.getElementById('expense-income-amount-input'), item ? item.amount : 0);
+  document.getElementById('expense-income-source-input').value = item ? item.source : '';
+  document.getElementById('expense-income-date-input').value = item ? item.date : expenseMonthDefaultDate();
   document.getElementById('expense-income-modal').classList.add('active');
 }
 function expenseSaveIncome() {
   var amount = expenseAmountInputValue(document.getElementById('expense-income-amount-input'));
+  if (!amount || amount <= 0) { toast('Enter an amount'); return; }
+  var source = document.getElementById('expense-income-source-input').value.trim();
+  var date = document.getElementById('expense-income-date-input').value || expenseMonthDefaultDate();
   showLoading();
-  google.script.run
-    .withSuccessHandler(function (data) { hideLoading(); document.getElementById('expense-income-modal').classList.remove('active'); expenseApplyData(data); })
-    .withFailureHandler(expenseFail)
-    .setExpenseIncome(expensePeriod, amount);
+  var onDone = function (data) { hideLoading(); document.getElementById('expense-income-modal').classList.remove('active'); expenseApplyData(data); toast('Saved!'); };
+  if (expenseEditingIncomeId) {
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).updateExpenseIncomeEntry(expenseEditingIncomeId, amount, source, date, expensePeriod);
+  } else {
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).addExpenseIncomeEntry(amount, source, date);
+  }
 }
 
 /* ---- History tab ---- */
 function expenseRenderHistory() {
   document.getElementById('expense-history-month-label').textContent = expensePeriodLabel(expensePeriod);
   var catSel = document.getElementById('expense-history-category-filter');
-  if (!catSel.dataset.built) {
+  var catSig = expenseData.categories.map(function (c) { return c.id + ':' + c.name; }).join('|');
+  if (catSel.dataset.built !== catSig) {
     catSel.innerHTML = '<option value="">All categories</option>';
     expenseData.categories.forEach(function (c) {
       var opt = document.createElement('option'); opt.value = c.id; opt.textContent = c.name; catSel.appendChild(opt);
     });
-    catSel.dataset.built = '1';
+    catSel.value = expenseHistoryFilters.categoryId || '';
+    catSel.dataset.built = catSig;
   }
 
   var q = expenseHistoryFilters.search.toLowerCase();
@@ -2279,7 +2429,7 @@ function expenseRenderCategories() {
     row.querySelector('.expense-cat-del').onclick = function () {
       expenseConfirm('Delete category "' + c.name + '"?', function () {
         google.script.run
-          .withSuccessHandler(function (cats) { expenseData.categories = cats; expenseRenderCategories(); toast('Deleted'); })
+          .withSuccessHandler(function (cats) { expenseData.categories = expenseSortCategories(cats); expenseRenderCategories(); toast('Deleted'); })
           .withFailureHandler(function () { toast("Can't delete — this category still has expenses"); })
           .deleteExpenseCategory(c.id);
       });
@@ -2315,11 +2465,18 @@ function expenseSaveCategory() {
   if (!name) { toast('Enter a category name'); return; }
   var color = document.getElementById('expense-category-color-swatches').dataset.chosen || EXPENSE_COLORS[0];
   showLoading();
+  var idsBefore = expenseData.categories.map(function (c) { return c.id; });
   var onDone = function (cats) {
     hideLoading();
-    expenseData.categories = cats;
+    expenseData.categories = expenseSortCategories(cats);
     document.getElementById('expense-category-modal').classList.remove('active');
     expenseRenderCategories();
+    if (expenseCategoryReturnToEntry) {
+      // "+ New category" was pressed inside the Add Expense popup: refresh its chips and pick the new one.
+      expenseCategoryReturnToEntry = false;
+      var created = expenseData.categories.find(function (c) { return idsBefore.indexOf(c.id) === -1; });
+      expenseRenderEntryCategoryChips(created ? created.id : null);
+    }
     toast('Saved!');
   };
   if (expenseEditingCategoryId) {
@@ -2335,9 +2492,26 @@ function expenseOpenEntryModal(entry, presetDate) {
   document.getElementById('expense-entry-modal-title').textContent = entry ? 'Edit Expense' : 'Add Expense';
   expenseSetAmountInputValue(document.getElementById('expense-amount-input'), entry ? entry.amount : 0);
 
+  document.getElementById('expense-entry-category-grid').dataset.chosen = '';
+  expenseRenderEntryCategoryChips(entry ? entry.categoryId : null);
+
+  expensePendingDate = entry ? entry.date : (presetDate || expenseTodayStr());
+  expenseUpdateDateButtons();
+  document.getElementById('expense-note-input').value = entry ? entry.note : '';
+  document.getElementById('expense-entry-save-btn').textContent = entry ? 'Save Changes' : 'Add Expense';
+  document.getElementById('expense-entry-modal').classList.add('active');
+}
+
+// Category chips inside the Add Expense popup (alphabetical) + a "+ New category"
+// chip, so on a phone you can create a category right where you need it.
+function expenseRenderEntryCategoryChips(preferredId) {
   var catGrid = document.getElementById('expense-entry-category-grid');
+  var current = Number(catGrid.dataset.chosen) || null;
+  var selectedCat = preferredId || current || (expenseData.categories[0] ? expenseData.categories[0].id : null);
+  if (selectedCat && !expenseData.categories.some(function (c) { return c.id === selectedCat; })) {
+    selectedCat = expenseData.categories[0] ? expenseData.categories[0].id : null;
+  }
   catGrid.innerHTML = '';
-  var selectedCat = entry ? entry.categoryId : (expenseData.categories[0] ? expenseData.categories[0].id : null);
   expenseData.categories.forEach(function (c) {
     var chip = document.createElement('div');
     chip.className = 'expense-chip' + (c.id === selectedCat ? ' active' : '');
@@ -2351,17 +2525,12 @@ function expenseOpenEntryModal(entry, presetDate) {
     };
     catGrid.appendChild(chip);
   });
+  var add = document.createElement('div');
+  add.className = 'expense-chip expense-chip-add';
+  add.textContent = '+ New category';
+  add.onclick = function () { expenseCategoryReturnToEntry = true; expenseOpenCategoryModal(null); };
+  catGrid.appendChild(add);
   catGrid.dataset.chosen = selectedCat || '';
-  if (!expenseData.categories.length) {
-    catGrid.innerHTML = '<div class="empty-state" style="padding:12px 0;">No categories yet — add one in the Categories tab first.</div>';
-  }
-
-  expensePendingDate = entry ? entry.date : (presetDate || expenseTodayStr());
-  expenseUpdateDateButtons();
-  document.getElementById('expense-note-input').value = entry ? entry.note : '';
-  document.getElementById('expense-repeat-checkbox').checked = entry ? entry.repeatMonthly : false;
-  document.getElementById('expense-entry-save-btn').textContent = entry ? 'Save Changes' : 'Add Expense';
-  document.getElementById('expense-entry-modal').classList.add('active');
 }
 
 function expenseSetQuickAmount(v) {
@@ -2402,7 +2571,6 @@ function expenseSaveEntry() {
   var categoryId = Number(catGrid.dataset.chosen);
   if (!categoryId) { toast('Pick a category'); return; }
   var note = document.getElementById('expense-note-input').value.trim();
-  var repeatMonthly = document.getElementById('expense-repeat-checkbox').checked;
   var date = expensePendingDate;
 
   showLoading();
@@ -2413,9 +2581,9 @@ function expenseSaveEntry() {
     toast('Saved!');
   };
   if (expenseEditingEntryId) {
-    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).updateExpenseEntry(expenseEditingEntryId, amount, categoryId, note, date, repeatMonthly, expensePeriod);
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).updateExpenseEntry(expenseEditingEntryId, amount, categoryId, note, date, expensePeriod);
   } else {
-    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).addExpenseEntry(amount, categoryId, note, date, repeatMonthly);
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).addExpenseEntry(amount, categoryId, note, date);
   }
 }
 
@@ -2423,7 +2591,7 @@ function expenseSaveEntry() {
 function expenseApplyData(data) {
   // addExpenseEntry may return data for a DIFFERENT period (if a custom date
   // was picked outside the currently viewed month) — follow it either way.
-  expenseData = data;
+  expenseData = expenseNormalize(data);
   expensePeriod = data.period;
   expenseRenderShell();
   expenseRenderActiveTab();
@@ -2467,7 +2635,17 @@ function expenseWireEvents() {
   document.getElementById('open-expense').onclick = openExpense;
   document.getElementById('home-expense-widget').onclick = expenseOpenFromHomeWidget;
 
-  document.getElementById('expense-income-edit-link').onclick = expenseOpenIncomeModal;
+  document.getElementById('expense-income-add-link').onclick = function () { expenseOpenIncomeModal(null); };
+  document.getElementById('expense-income-add-btn').onclick = function () { expenseOpenIncomeModal(null); };
+  document.getElementById('expense-savings-edit-link').onclick = expenseOpenSavingsGoalModal;
+  document.getElementById('expense-savings-deposit-btn').onclick = function () { expenseOpenSavingsTxModal('deposit'); };
+  document.getElementById('expense-savings-spend-btn').onclick = function () { expenseOpenSavingsTxModal('spend'); };
+  document.getElementById('expense-savings-goal-close').onclick = function () { document.getElementById('expense-savings-goal-modal').classList.remove('active'); };
+  document.getElementById('expense-savings-goal-cancel').onclick = function () { document.getElementById('expense-savings-goal-modal').classList.remove('active'); };
+  document.getElementById('expense-savings-goal-save').onclick = expenseSaveSavingsGoal;
+  document.getElementById('expense-savings-tx-close').onclick = function () { document.getElementById('expense-savings-tx-modal').classList.remove('active'); };
+  document.getElementById('expense-savings-tx-cancel').onclick = function () { document.getElementById('expense-savings-tx-modal').classList.remove('active'); };
+  document.getElementById('expense-savings-tx-save').onclick = expenseSaveSavingsTx;
   document.getElementById('expense-overview-add-btn').onclick = function () { expenseOpenEntryModal(null); };
   document.getElementById('expense-view-stats-link').onclick = function () { expenseSwitchTab('stats'); };
   document.getElementById('expense-day-close-btn').onclick = function () { expenseOpenDay(expenseSelectedDay); };
@@ -2495,8 +2673,8 @@ function expenseWireEvents() {
   document.getElementById('expense-catbudget-cancel-btn').onclick = function () { document.getElementById('expense-category-budget-modal').classList.remove('active'); };
   document.getElementById('expense-catbudget-save-btn').onclick = expenseSaveCategoryBudget;
 
-  document.getElementById('expense-category-modal-close').onclick = function () { document.getElementById('expense-category-modal').classList.remove('active'); };
-  document.getElementById('expense-category-cancel-btn').onclick = function () { document.getElementById('expense-category-modal').classList.remove('active'); };
+  document.getElementById('expense-category-modal-close').onclick = function () { expenseCategoryReturnToEntry = false; document.getElementById('expense-category-modal').classList.remove('active'); };
+  document.getElementById('expense-category-cancel-btn').onclick = function () { expenseCategoryReturnToEntry = false; document.getElementById('expense-category-modal').classList.remove('active'); };
   document.getElementById('expense-category-save-btn').onclick = expenseSaveCategory;
 
   document.getElementById('expense-confirm-cancel-btn').onclick = function () { document.getElementById('expense-confirm-modal').classList.remove('active'); };
@@ -2518,6 +2696,17 @@ function expenseWireEvents() {
     expenseRenderHistory();
   };
 }
+
+// If the app stays open past midnight on the 1st: when it comes back to the
+// foreground while viewing "the old current month", jump to the new month.
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden || !expenseData) return;
+  var view = document.getElementById('expense-view');
+  if (!view || view.style.display === 'none') return;
+  if (expenseData.currentPeriod && expenseData.currentPeriod !== expenseCurrentPeriod() && expensePeriod === expenseData.currentPeriod) {
+    loadExpenseData(expenseCurrentPeriod());
+  }
+});
 
 /* ---------------------------------------------------------------- */
 /* HOME — TO DO LIST                                                   */
