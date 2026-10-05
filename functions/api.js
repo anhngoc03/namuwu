@@ -348,109 +348,131 @@ async function resetHomeData(env) {
 /* --------------------------- EXPENSE TRACKER ------------------------------ */
 
 function expenseTodayStr_() {
-  var d = new Date();
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  // Cloudflare chạy UTC → quy về giờ Việt Nam (UTC+7) để "hôm nay"/"tháng này" đúng với người dùng.
+  var d = new Date(Date.now() + 7 * 3600 * 1000);
+  return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
 }
 function expenseCurrentPeriod_() {
   return expenseTodayStr_().slice(0, 7);
 }
-function expenseLastDayOfMonth_(period) {
+function expenseNextPeriodStart_(period) {
   var y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7));
-  return new Date(y, m, 0).getDate();
+  m += 1; if (m > 12) { m = 1; y += 1; }
+  return y + '-' + String(m).padStart(2, '0') + '-01';
 }
 
-// Khoản chi đánh dấu "lặp lại hàng tháng": khi mở ĐÚNG tháng hiện tại (không
-// phải tháng quá khứ/tương lai xem lại), tự âm thầm tạo bản ghi cho tháng này
-// nếu chưa có, copy từ bản ghi mới nhất cùng recurring_key.
-async function expenseMaterializeRecurring_(env, period) {
-  if (period !== expenseCurrentPeriod_()) return; // chỉ tự tạo cho tháng hiện tại
+// Budget đánh dấu "Repeat every month": khi mở ĐÚNG tháng hiện tại mà tháng này
+// chưa có budget, tự copy từ tháng gần nhất trước đó — NHƯNG chỉ khi bản ghi
+// gần nhất đó đang bật repeat (tắt repeat ở tháng nào thì dừng từ đó).
+async function expenseMaterializeBudgets_(env, period) {
+  if (period !== expenseCurrentPeriod_()) return;
 
-  var templates = await sb(env, 'expense_entries?repeat_monthly=eq.true&recurring_key=not.is.null&select=recurring_key,amount,category_id,note,entry_date&order=entry_date.desc');
-  var seen = {};
-  var uniq = [];
-  templates.forEach(function (t) {
-    if (!seen[t.recurring_key]) { seen[t.recurring_key] = true; uniq.push(t); }
-  });
-  if (!uniq.length) return;
+  // Budget tổng
+  var cur = await sb(env, 'expense_budget?period=eq.' + period + '&select=period');
+  if (!cur.length) {
+    var prev = await sb(env, 'expense_budget?period=lt.' + period + '&select=period,amount,repeat_monthly&order=period.desc&limit=1');
+    if (prev.length && prev[0].repeat_monthly === true) {
+      await sb(env, 'expense_budget', {
+        method: 'POST',
+        body: JSON.stringify([{ period: period, amount: prev[0].amount, repeat_monthly: true }]),
+        headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }
+      });
+    }
+  }
 
-  var periodStart = period + '-01';
-  var nextPeriod = (function () {
-    var y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7));
-    m += 1; if (m > 12) { m = 1; y += 1; }
-    return y + '-' + String(m).padStart(2, '0') + '-01';
-  })();
-  var keysList = uniq.map(function (t) { return '"' + t.recurring_key + '"'; }).join(',');
-  var existing = await sb(env, 'expense_entries?entry_date=gte.' + periodStart + '&entry_date=lt.' + nextPeriod + '&recurring_key=in.(' + keysList + ')&select=recurring_key');
-  var existingKeys = {};
-  existing.forEach(function (e) { existingKeys[e.recurring_key] = true; });
-
-  var lastDay = expenseLastDayOfMonth_(period);
+  // Budget từng category
+  var curCat = await sb(env, 'expense_category_budget?period=eq.' + period + '&select=category_id');
+  var have = {};
+  curCat.forEach(function (r) { have[r.category_id] = true; });
+  var older = await sb(env, 'expense_category_budget?period=lt.' + period + '&select=category_id,amount,repeat_monthly,period&order=period.desc');
+  var latest = {};
+  older.forEach(function (r) { if (!latest[r.category_id]) latest[r.category_id] = r; });
   var toInsert = [];
-  uniq.forEach(function (t) {
-    if (existingKeys[t.recurring_key]) return;
-    var day = Number(String(t.entry_date).slice(8, 10));
-    var useDay = Math.min(day, lastDay);
-    toInsert.push({
-      amount: t.amount,
-      category_id: t.category_id,
-      note: t.note || '',
-      entry_date: period + '-' + String(useDay).padStart(2, '0'),
-      repeat_monthly: true,
-      recurring_key: t.recurring_key
-    });
+  Object.keys(latest).forEach(function (cid) {
+    var r = latest[cid];
+    if (have[cid] || r.repeat_monthly !== true) return;
+    toInsert.push({ period: period, category_id: r.category_id, amount: r.amount, repeat_monthly: true });
   });
   if (toInsert.length) {
-    await sb(env, 'expense_entries', { method: 'POST', body: JSON.stringify(toInsert), prefer: 'return=minimal' });
+    await sb(env, 'expense_category_budget', {
+      method: 'POST',
+      body: JSON.stringify(toInsert),
+      headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }
+    });
   }
+}
+
+async function expenseGetSavings_(env, period) {
+  var goalRows = await sb(env, 'expense_savings?id=eq.1&select=name,target');
+  var goal = goalRows.length ? goalRows[0] : { name: 'Billionaire ✮⋆˙', target: 0 };
+  var logs = await sb(env, 'expense_savings_log?select=id,kind,amount,note,entry_date&order=entry_date.desc,id.desc');
+  var balance = 0, monthDeposits = 0;
+  var periodStart = period + '-01', nextStart = expenseNextPeriodStart_(period);
+  logs.forEach(function (l) {
+    var a = Number(l.amount);
+    balance += l.kind === 'deposit' ? a : -a;
+    if (l.kind === 'deposit' && l.entry_date >= periodStart && l.entry_date < nextStart) monthDeposits += a;
+  });
+  return {
+    name: goal.name,
+    target: Number(goal.target) || 0,
+    balance: balance,                 // tiết kiệm KHÔNG reset theo tháng
+    monthDeposits: monthDeposits,     // phần nạp trong tháng đang xem → trừ vào Remaining
+    log: logs.slice(0, 100).map(function (l) {
+      return { id: l.id, kind: l.kind, amount: Number(l.amount), note: l.note || '', date: l.entry_date };
+    })
+  };
 }
 
 // Gộp toàn bộ dữ liệu 1 tháng cần cho Overview/Calendar/Stats/Budget/History
 // vào 1 lần gọi — frontend tự lọc/tổng hợp từ đây, backend chỉ trả data thô.
 async function getExpenseData(env, [period]) {
   period = period || expenseCurrentPeriod_();
-  await expenseMaterializeRecurring_(env, period);
+  await expenseMaterializeBudgets_(env, period);
 
   var periodStart = period + '-01';
-  var nextPeriod = (function () {
-    var y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7));
-    m += 1; if (m > 12) { m = 1; y += 1; }
-    return y + '-' + String(m).padStart(2, '0') + '-01';
-  })();
+  var nextPeriod = expenseNextPeriodStart_(period);
 
   var categories = await sb(env, 'expense_categories?select=id,name,color&order=name.asc');
-  var entries = await sb(env, 'expense_entries?entry_date=gte.' + periodStart + '&entry_date=lt.' + nextPeriod + '&select=id,amount,category_id,note,entry_date,repeat_monthly&order=entry_date.desc,id.desc');
-  var incomeRows = await sb(env, 'expense_income?period=eq.' + period + '&select=amount');
-  var budgetRows = await sb(env, 'expense_budget?period=eq.' + period + '&select=amount');
-  var catBudgetRows = await sb(env, 'expense_category_budget?period=eq.' + period + '&select=category_id,amount');
+  var entries = await sb(env, 'expense_entries?entry_date=gte.' + periodStart + '&entry_date=lt.' + nextPeriod + '&select=id,amount,category_id,note,entry_date&order=entry_date.desc,id.desc');
+  var incomeRows = await sb(env, 'expense_income_entries?entry_date=gte.' + periodStart + '&entry_date=lt.' + nextPeriod + '&select=id,amount,source,entry_date&order=entry_date.desc,id.desc');
+  var budgetRows = await sb(env, 'expense_budget?period=eq.' + period + '&select=amount,repeat_monthly');
+  var catBudgetRows = await sb(env, 'expense_category_budget?period=eq.' + period + '&select=category_id,amount,repeat_monthly');
+  var savings = await expenseGetSavings_(env, period);
 
+  var incomeEntries = incomeRows.map(function (r) {
+    return { id: r.id, amount: Number(r.amount), source: r.source || '', date: r.entry_date };
+  });
   return {
     period: period,
+    currentPeriod: expenseCurrentPeriod_(),
     categories: categories.map(function (c) { return { id: c.id, name: c.name, color: c.color }; }),
     entries: entries.map(function (e) {
-      return { id: e.id, amount: Number(e.amount), categoryId: e.category_id, note: e.note || '', date: e.entry_date, repeatMonthly: e.repeat_monthly === true };
+      return { id: e.id, amount: Number(e.amount), categoryId: e.category_id, note: e.note || '', date: e.entry_date };
     }),
-    income: incomeRows.length ? Number(incomeRows[0].amount) : 0,
+    incomeEntries: incomeEntries,
+    income: incomeEntries.reduce(function (s, r) { return s + r.amount; }, 0),
     budgetOverall: budgetRows.length ? Number(budgetRows[0].amount) : 0,
-    categoryBudgets: catBudgetRows.map(function (r) { return { categoryId: r.category_id, amount: Number(r.amount) }; })
+    budgetOverallRepeat: budgetRows.length ? budgetRows[0].repeat_monthly === true : false,
+    categoryBudgets: catBudgetRows.map(function (r) { return { categoryId: r.category_id, amount: Number(r.amount), repeat: r.repeat_monthly === true }; }),
+    savings: savings
   };
 }
 
-async function addExpenseEntry(env, [amount, categoryId, note, date, repeatMonthly]) {
-  var recurringKey = repeatMonthly ? (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()) : null;
+/* ---- Expenses (không còn lặp theo tháng — chỉ budget mới lặp) ---- */
+
+async function addExpenseEntry(env, [amount, categoryId, note, date]) {
   await sb(env, 'expense_entries', {
     method: 'POST',
-    body: JSON.stringify([{
-      amount: amount, category_id: categoryId, note: note || '', entry_date: date,
-      repeat_monthly: !!repeatMonthly, recurring_key: recurringKey
-    }])
+    body: JSON.stringify([{ amount: amount, category_id: categoryId, note: note || '', entry_date: date, repeat_monthly: false, recurring_key: null }])
   });
   return getExpenseData(env, [String(date).slice(0, 7)]);
 }
 
-async function updateExpenseEntry(env, [id, amount, categoryId, note, date, repeatMonthly, period]) {
+async function updateExpenseEntry(env, [id, amount, categoryId, note, date, period]) {
   await sb(env, 'expense_entries?id=eq.' + id, {
     method: 'PATCH',
-    body: JSON.stringify({ amount: amount, category_id: categoryId, note: note || '', entry_date: date, repeat_monthly: !!repeatMonthly })
+    body: JSON.stringify({ amount: amount, category_id: categoryId, note: note || '', entry_date: date, repeat_monthly: false })
   });
   return getExpenseData(env, [period]);
 }
@@ -460,37 +482,92 @@ async function deleteExpenseEntry(env, [id, period]) {
   return getExpenseData(env, [period]);
 }
 
-async function setExpenseIncome(env, [period, amount]) {
-  await sb(env, 'expense_income', {
+/* ---- Income: từng khoản có số tiền + nguồn + ngày ---- */
+
+async function addExpenseIncomeEntry(env, [amount, source, date]) {
+  await sb(env, 'expense_income_entries', {
     method: 'POST',
-    body: JSON.stringify([{ period: period, amount: amount }]),
-    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }
+    body: JSON.stringify([{ amount: amount, source: source || '', entry_date: date }]),
+    prefer: 'return=minimal'
+  });
+  return getExpenseData(env, [String(date).slice(0, 7)]);
+}
+
+async function updateExpenseIncomeEntry(env, [id, amount, source, date, period]) {
+  await sb(env, 'expense_income_entries?id=eq.' + id, {
+    method: 'PATCH',
+    body: JSON.stringify({ amount: amount, source: source || '', entry_date: date }),
+    prefer: 'return=minimal'
   });
   return getExpenseData(env, [period]);
 }
 
-async function setExpenseBudgetOverall(env, [period, amount]) {
+async function deleteExpenseIncomeEntry(env, [id, period]) {
+  await sb(env, 'expense_income_entries?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
+  return getExpenseData(env, [period]);
+}
+
+/* ---- Budget (có cờ repeat) ---- */
+
+async function setExpenseBudgetOverall(env, [period, amount, repeat]) {
   await sb(env, 'expense_budget', {
     method: 'POST',
-    body: JSON.stringify([{ period: period, amount: amount }]),
+    body: JSON.stringify([{ period: period, amount: amount, repeat_monthly: !!repeat }]),
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }
   });
   return getExpenseData(env, [period]);
 }
 
-async function setExpenseCategoryBudget(env, [period, categoryId, amount]) {
+async function setExpenseCategoryBudget(env, [period, categoryId, amount, repeat]) {
   await sb(env, 'expense_category_budget', {
     method: 'POST',
-    body: JSON.stringify([{ period: period, category_id: categoryId, amount: amount }]),
+    body: JSON.stringify([{ period: period, category_id: categoryId, amount: amount, repeat_monthly: !!repeat }]),
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }
   });
   return getExpenseData(env, [period]);
 }
 
+// Xoá budget category: tắt luôn repeat của các tháng cũ để nó không tự mọc lại.
 async function deleteExpenseCategoryBudget(env, [period, categoryId]) {
+  await sb(env, 'expense_category_budget?category_id=eq.' + categoryId, {
+    method: 'PATCH', body: JSON.stringify({ repeat_monthly: false }), prefer: 'return=minimal'
+  });
   await sb(env, 'expense_category_budget?period=eq.' + period + '&category_id=eq.' + categoryId, { method: 'DELETE', prefer: 'return=minimal' });
   return getExpenseData(env, [period]);
 }
+
+/* ---- Savings (1 mục tiêu; số dư KHÔNG reset theo tháng) ---- */
+
+async function saveExpenseSavingsGoal(env, [name, target, period]) {
+  await sb(env, 'expense_savings', {
+    method: 'POST',
+    body: JSON.stringify([{ id: 1, name: name || 'Billionaire ✮⋆˙', target: target || 0 }]),
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }
+  });
+  return getExpenseData(env, [period]);
+}
+
+// kind: 'deposit' (nạp — trừ vào Remaining của tháng) | 'spend' (tiêu từ tiết kiệm — không tính vào chi tiêu tháng)
+async function addExpenseSavingsLog(env, [kind, amount, note, date, period]) {
+  if (kind !== 'deposit' && kind !== 'spend') throw new Error('Loại giao dịch không hợp lệ');
+  if (kind === 'spend') {
+    var s = await expenseGetSavings_(env, String(date).slice(0, 7));
+    if (Number(amount) > s.balance) throw new Error('Not enough savings (balance ' + s.balance + ')');
+  }
+  await sb(env, 'expense_savings_log', {
+    method: 'POST',
+    body: JSON.stringify([{ kind: kind, amount: amount, note: note || '', entry_date: date }]),
+    prefer: 'return=minimal'
+  });
+  return getExpenseData(env, [period]);
+}
+
+async function deleteExpenseSavingsLog(env, [id, period]) {
+  await sb(env, 'expense_savings_log?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
+  return getExpenseData(env, [period]);
+}
+
+/* ---- Categories ---- */
 
 async function addExpenseCategory(env, [name, color]) {
   await sb(env, 'expense_categories', { method: 'POST', body: JSON.stringify([{ name: name, color: color }]) });
@@ -555,7 +632,12 @@ const ACTIONS = {
   addExpenseEntry,
   updateExpenseEntry,
   deleteExpenseEntry,
-  setExpenseIncome,
+  addExpenseIncomeEntry,
+  updateExpenseIncomeEntry,
+  deleteExpenseIncomeEntry,
+  saveExpenseSavingsGoal,
+  addExpenseSavingsLog,
+  deleteExpenseSavingsLog,
   setExpenseBudgetOverall,
   setExpenseCategoryBudget,
   deleteExpenseCategoryBudget,
