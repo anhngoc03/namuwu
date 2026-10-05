@@ -153,7 +153,7 @@ function showScreen(id) {
 // Maps each app-view to the navbar section it belongs to, purely for highlighting the active nav link.
 var NAV_SECTION_MAP_ = {
   'menu-view': 'home',
-  'accounts-view': 'tools', 'symbols-view': 'tools', 'saving-view': 'tools',
+  'accounts-view': 'tools', 'symbols-view': 'tools',
   'datediff-view': 'tools', 'eating-view': 'tools', 'qr-view': 'tools',
   'expense-view': 'tools',
   'memory-view': 'games', 'mochi-view': 'games', 'minesweeper-view': 'games'
@@ -164,7 +164,6 @@ var NAV_SECTION_MAP_ = {
 // password-gated, so a reload should never silently bypass that gate.
 var VIEW_OPENERS_ = {
   'symbols-view': loadSymbols,
-  'saving-view': openSaving,
   'datediff-view': openDateDiff,
   'eating-view': openEating,
   'qr-view': openQrCollection,
@@ -239,7 +238,6 @@ function toggleMobileNavSubmenu(section) {
 var MOBILE_NAV_OPENERS_ = {
   accounts: function () { openAccountsGate(); },
   symbols: loadSymbols,
-  saving: openSaving,
   datediff: openDateDiff,
   eating: openEating,
   qr: openQrCollection,
@@ -587,152 +585,6 @@ function saveSymbols() {
     })
     .withFailureHandler(function (err) { hideLoading(); toast('Error: ' + err.message); })
     .addSymbolsBatch(items);
-}
-
-/* ---------------------------------------------------------------- */
-/* SAVING                                                             */
-/* ---------------------------------------------------------------- */
-var savingDayCells = {};   // day number -> cell element
-var savingSavedDays = [];  // committed (persisted) days, from server
-var savingPendingDays = []; // clicked-but-not-yet-saved days, this session only (max 5)
-var savingGridBuilt = false;
-
-function buildSavingGrid() {
-  if (savingGridBuilt) return;
-  var grid = document.getElementById('saving-days-grid');
-  grid.innerHTML = '';
-  for (var d = 1; d <= 366; d++) {
-    (function (day) {
-      var cell = document.createElement('div');
-      cell.className = 'saving-day-cell';
-      cell.textContent = day;
-      cell.onclick = function () { savingPickDay(day); };
-      grid.appendChild(cell);
-      savingDayCells[day] = cell;
-    })(d);
-  }
-  savingGridBuilt = true;
-}
-
-function savingPickDay(day) {
-  var cell = savingDayCells[day];
-  if (!cell || cell.classList.contains('saved')) return;
-
-  var idx = savingPendingDays.indexOf(day);
-  if (idx !== -1) {
-    // Already picked — tapping again deselects it.
-    savingPendingDays.splice(idx, 1);
-    cell.classList.remove('pending');
-  } else {
-    // No cap — you can pick as many as you like.
-    savingPendingDays.push(day);
-    cell.classList.add('pending');
-  }
-  savingRenderPicksTable();
-}
-
-function savingRenderPicksTable() {
-  // The 5-cell table only ever shows/sums the first 5 picks (in selection order),
-  // even if more than 5 days are currently picked.
-  var firstFive = savingPendingDays.slice(0, 5);
-  for (var i = 0; i < 5; i++) {
-    var slot = document.getElementById('saving-pick-' + i);
-    slot.textContent = (i < firstFive.length) ? firstFive[i] : '';
-  }
-  var sum = firstFive.reduce(function (a, b) { return a + b; }, 0);
-  document.getElementById('saving-pick-sum').textContent = formatThousands(sum);
-}
-
-function savingClearPending() {
-  savingPendingDays.forEach(function (day) {
-    var cell = savingDayCells[day];
-    if (cell) cell.classList.remove('pending');
-  });
-  savingPendingDays = [];
-  savingRenderPicksTable();
-}
-
-function savingRenderTotal() {
-  var sum = savingSavedDays.reduce(function (a, b) { return a + b; }, 0);
-  document.getElementById('saving-total-box').textContent = formatThousands(sum);
-}
-
-function savingApplySavedState() {
-  Object.keys(savingDayCells).forEach(function (day) {
-    savingDayCells[day].classList.remove('saved', 'pending');
-  });
-  savingSavedDays.forEach(function (day) {
-    var cell = savingDayCells[day];
-    if (cell) cell.classList.add('saved');
-  });
-  savingRenderTotal();
-}
-
-function openSaving() {
-  buildSavingGrid();
-  showView('saving-view');
-  savingPendingDays = [];
-  savingRenderPicksTable();
-  document.getElementById('saving-random-number').textContent = '--';
-  showLoading();
-  google.script.run
-    .withSuccessHandler(function (days) {
-      hideLoading();
-      savingSavedDays = days;
-      savingApplySavedState();
-    })
-    .withFailureHandler(function (err) { hideLoading(); toast('Error: ' + err.message); })
-    .getSavingData();
-}
-
-function savingRandomize() {
-  var available = [];
-  for (var d = 1; d <= 366; d++) {
-    if (savingSavedDays.indexOf(d) === -1 && savingPendingDays.indexOf(d) === -1) {
-      available.push(d);
-    }
-  }
-  if (available.length === 0) { toast('All 366 days are already picked! ✿'); return; }
-
-  var n = available[Math.floor(Math.random() * available.length)];
-  var el = document.getElementById('saving-random-number');
-  el.textContent = n;
-  el.classList.remove('pop');
-  void el.offsetWidth; // restart animation
-  el.classList.add('pop');
-}
-
-function savingSave() {
-  if (savingPendingDays.length === 0) { toast('Pick at least one day first'); return; }
-  var toSave = savingPendingDays.slice();
-  showLoading();
-  google.script.run
-    .withSuccessHandler(function (days) {
-      hideLoading();
-      savingSavedDays = days;
-      savingPendingDays = [];
-      savingRenderPicksTable();
-      savingApplySavedState();
-      toast('Saved!');
-    })
-    .withFailureHandler(function (err) { hideLoading(); toast('Error: ' + err.message); })
-    .saveSavingDays(toSave);
-}
-
-function savingReset() {
-  showLoading();
-  google.script.run
-    .withSuccessHandler(function (days) {
-      hideLoading();
-      savingSavedDays = days;
-      savingPendingDays = [];
-      savingRenderPicksTable();
-      savingApplySavedState();
-      document.getElementById('saving-random-number').textContent = '--';
-      toast('Reset!');
-    })
-    .withFailureHandler(function (err) { hideLoading(); toast('Error: ' + err.message); })
-    .resetSaving();
 }
 
 /* ---------------------------------------------------------------- */
@@ -3547,7 +3399,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.getElementById('open-accounts').onclick = openAccountsGate;
   document.getElementById('open-symbols').onclick = loadSymbols;
-  document.getElementById('open-saving').onclick = openSaving;
   document.getElementById('open-datediff').onclick = openDateDiff;
   document.getElementById('open-memory').onclick = openMemory;
   document.getElementById('open-mochi').onclick = openMochi;
@@ -3597,10 +3448,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (e.code === 'Space' && mochiState === 'playing') { e.preventDefault(); mochiFlap(); }
   });
 
-  document.getElementById('saving-random-btn').onclick = savingRandomize;
-  document.getElementById('saving-clear').onclick = savingClearPending;
-  document.getElementById('saving-save').onclick = savingSave;
-  document.getElementById('saving-reset').onclick = savingReset;
 
   document.getElementById('datediff-start').onchange = datediffCalc;
   document.getElementById('datediff-end').onchange = datediffCalc;
