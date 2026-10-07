@@ -30,12 +30,11 @@
       <span>Tools</span><span class="nav-chevron">⌄</span>
     </button>
     <div class="app-nav-submenu" data-submenu="tools">
-      <button class="app-nav-sublink" data-open="accounts">Accounts</button>
       <button class="app-nav-sublink" data-open="datediff">Day Counter</button>
-      <button class="app-nav-sublink" data-open="eating">Eating Tracker</button>
-      <button class="app-nav-sublink" data-open="expense">Expenses</button>
+      <button class="app-nav-sublink" data-open="converter">PDF Converter</button>
       <button class="app-nav-sublink" data-open="qr">QR Collection</button>
       <button class="app-nav-sublink" data-open="symbols">Symbols</button>
+      <button class="app-nav-sublink" data-open="eating">Yakult</button>
     </div>
 
     <button class="app-nav-link app-nav-group-toggle" data-nav-section="games">
@@ -46,6 +45,14 @@
       <button class="app-nav-sublink" data-open="minesweeper">Minesweeper</button>
       <button class="app-nav-sublink" data-open="mochi">Mochi Fly</button>
     </div>
+
+    <button class="app-nav-link app-nav-group-toggle" data-nav-section="personal">
+      <span>Personal</span><span class="nav-chevron">⌄</span>
+    </button>
+    <div class="app-nav-submenu" data-submenu="personal">
+      <button class="app-nav-sublink" data-open="accounts">Account</button>
+      <button class="app-nav-sublink" data-open="expense">Expenses</button>
+    </div>
   </nav>
 
   <!-- ===== Desktop: floating pill dock (bottom-center), text-only — unchanged ===== -->
@@ -53,6 +60,7 @@
     <button class="app-nav-link active" data-nav-section="home">Home</button>
     <button class="app-nav-link" data-nav-section="tools">Tools</button>
     <button class="app-nav-link" data-nav-section="games">Games</button>
+    <button class="app-nav-link" data-nav-section="personal">Personal</button>
   </nav>
 
   <!-- ===== Expense tool's own mobile tab bar — ALSO a direct child of <body>
@@ -118,14 +126,6 @@
             <p class="section-desc">Useful things for everyday use.</p>
           </div>
           <div class="nav-card-grid">
-            <button id="open-accounts" class="nav-card" data-accent="blue">
-              <span class="nav-card-emoji">'ㅅ'</span>
-              <div class="nav-card-body">
-                <div class="nav-card-title">Accounts</div>
-                <div class="nav-card-desc">Store and manage saved accounts</div>
-              </div>
-              <div class="nav-card-arrow">→</div>
-            </button>
             <button id="open-symbols" class="nav-card" data-accent="lavender">
               <span class="nav-card-emoji">✿</span>
               <div class="nav-card-body">
@@ -142,11 +142,11 @@
               </div>
               <div class="nav-card-arrow">→</div>
             </button>
-            <button id="open-eating" class="nav-card" data-accent="green">
-              <span class="nav-card-emoji">𐂐</span>
+            <button id="open-converter" class="nav-card" data-accent="blue">
+              <span class="nav-card-emoji">⇄</span>
               <div class="nav-card-body">
-                <div class="nav-card-title">Eating Tracker</div>
-                <div class="nav-card-desc">Track monthly spending on snacks</div>
+                <div class="nav-card-title">PDF Converter</div>
+                <div class="nav-card-desc">Images, Word, Excel &amp; PowerPoint to PDF</div>
               </div>
               <div class="nav-card-arrow">→</div>
             </button>
@@ -158,11 +158,11 @@
               </div>
               <div class="nav-card-arrow">→</div>
             </button>
-            <button id="open-expense" class="nav-card" data-accent="pink">
-              <span class="nav-card-emoji">˃ᴗ˂</span>
+            <button id="open-eating" class="nav-card" data-accent="green">
+              <span class="nav-card-emoji">𐂐</span>
               <div class="nav-card-body">
-                <div class="nav-card-title">Expenses</div>
-                <div class="nav-card-desc">Track spending, budgets and income</div>
+                <div class="nav-card-title">Yakult</div>
+                <div class="nav-card-desc">Track your daily Yakult</div>
               </div>
               <div class="nav-card-arrow">→</div>
             </button>
@@ -196,6 +196,31 @@
               <div class="nav-card-body">
                 <div class="nav-card-title">Minesweeper</div>
                 <div class="nav-card-desc">Flag them all, dig safely</div>
+              </div>
+              <div class="nav-card-arrow">→</div>
+            </button>
+          </div>
+        </section>
+
+        <section class="content-section personal">
+          <div class="section-header">
+            <h2 class="section-title">Personal</h2>
+            <p class="section-desc">Just for me. Locked behind a password.</p>
+          </div>
+          <div class="nav-card-grid">
+            <button id="open-accounts" class="nav-card" data-accent="blue">
+              <span class="nav-card-emoji">'ㅅ'</span>
+              <div class="nav-card-body">
+                <div class="nav-card-title">Account</div>
+                <div class="nav-card-desc">Store and manage saved accounts</div>
+              </div>
+              <div class="nav-card-arrow">→</div>
+            </button>
+            <button id="open-expense" class="nav-card" data-accent="pink">
+              <span class="nav-card-emoji">˃ᴗ˂</span>
+              <div class="nav-card-body">
+                <div class="nav-card-title">Expenses</div>
+                <div class="nav-card-desc">Track spending, budgets and income</div>
               </div>
               <div class="nav-card-arrow">→</div>
             </button>
@@ -534,26 +559,14 @@
       <!-- -------- EATING TRACKER VIEW -------- -->
       <div id="eating-view" class="app-view" style="display:none;">
         <div class="page-header">
-          <h2 class="page-title">Eating Tracker</h2>
-          <p class="page-subtitle">A little log for little treats.</p>
+          <h2 class="page-title">Yakult</h2>
+          <p class="page-subtitle">Tap a day: 🥛 yes → no → clear.</p>
         </div>
 
         <div class="eating-stats">
           <div class="eating-stat-card">
             <div class="eating-stat-label">Yakult</div>
             <div class="eating-stat-value" id="eating-stat-yakult">0 times</div>
-          </div>
-          <div class="eating-stat-card">
-            <div class="eating-stat-label">Bubble Tea</div>
-            <div class="eating-stat-value" id="eating-stat-bubble">0 times — 0</div>
-          </div>
-          <div class="eating-stat-card">
-            <div class="eating-stat-label">Eating Out</div>
-            <div class="eating-stat-value" id="eating-stat-out">0 times — 0</div>
-          </div>
-          <div class="eating-stat-card total">
-            <div class="eating-stat-label">Total Spent</div>
-            <div class="eating-stat-value" id="eating-stat-total">0</div>
           </div>
           <div class="eating-stat-card">
             <div class="eating-stat-label">Days Tracked</div>
@@ -566,6 +579,76 @@
         </div>
 
         <div id="eating-calendar" class="eating-calendar"></div>
+      </div>
+
+      <!-- -------- PDF CONVERTER VIEW -------- -->
+      <div id="converter-view" class="app-view" style="display:none;">
+        <div class="page-header">
+          <h2 class="page-title">PDF Converter</h2>
+          <p class="page-subtitle">Everything stays in your browser. Nothing is uploaded or saved.</p>
+        </div>
+        <div class="conv-split">
+          <div class="conv-left">
+            <div id="conv-drop" class="conv-drop" tabindex="0">
+              <div class="conv-drop-icon">⇪</div>
+              <div class="conv-drop-title">Drop files here</div>
+              <div class="conv-drop-sub">or tap to browse · Images, Word, Excel, PowerPoint</div>
+              <input type="file" id="conv-file-input" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif,.docx,.xlsx,.xls,.pptx,image/*" hidden>
+            </div>
+            <div class="conv-list-head">
+              <span id="conv-count">No files yet</span>
+              <button id="conv-clear-btn" class="conv-link-btn" style="display:none;">Clear all</button>
+            </div>
+            <div id="conv-list" class="conv-list"></div>
+          </div>
+          <div class="conv-right">
+            <div class="conv-panel">
+              <div class="conv-panel-title">Options</div>
+              <div class="conv-opt-row">
+                <label for="conv-opt-mode">Output</label>
+                <select id="conv-opt-mode">
+                  <option value="merge">One PDF for all files</option>
+                  <option value="separate">One PDF per file</option>
+                </select>
+              </div>
+              <div class="conv-opt-row">
+                <label for="conv-opt-size">Page size (images)</label>
+                <select id="conv-opt-size">
+                  <option value="a4">A4</option>
+                  <option value="original">Same as image</option>
+                </select>
+              </div>
+              <div class="conv-opt-row" id="conv-row-orient">
+                <label for="conv-opt-orient">Orientation (A4)</label>
+                <select id="conv-opt-orient">
+                  <option value="auto">Auto</option>
+                  <option value="portrait">Portrait</option>
+                  <option value="landscape">Landscape</option>
+                </select>
+              </div>
+              <div class="conv-opt-row" id="conv-row-margin">
+                <label for="conv-opt-margin">Margin (A4)</label>
+                <select id="conv-opt-margin">
+                  <option value="0">None</option>
+                  <option value="12" selected>Small</option>
+                  <option value="24">Medium</option>
+                  <option value="40">Large</option>
+                </select>
+              </div>
+              <button id="conv-convert-btn" class="pill-btn conv-convert-btn" disabled>Convert to PDF</button>
+              <div id="conv-progress" class="conv-progress" style="display:none;">
+                <div class="conv-progress-track"><div id="conv-progress-fill" class="conv-progress-fill"></div></div>
+                <div id="conv-progress-text" class="conv-progress-text"></div>
+              </div>
+            </div>
+            <div class="conv-panel" id="conv-results-panel" style="display:none;">
+              <div class="conv-panel-title">Results</div>
+              <div id="conv-results"></div>
+              <button id="conv-save-all-btn" class="pill-btn secondary conv-save-all" style="display:none;">Save all (ZIP)</button>
+              <div class="conv-note">Files are kept in memory only. Clearing or reloading discards them.</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- -------- QR COLLECTION VIEW -------- -->
@@ -594,30 +677,6 @@
       <div class="modal-actions">
         <button id="home-reset-nope" class="pill-btn secondary">Nope</button>
         <button id="home-reset-yah" class="pill-btn">Yah</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= MODAL: Eating day entry ================= -->
-  <div id="eating-modal" class="modal-overlay">
-    <div class="modal-box">
-      <div class="modal-header">
-        <h3 id="eating-modal-title">Day 1</h3>
-        <button id="eating-modal-close" class="modal-close">✕</button>
-      </div>
-      <label>Yakult</label>
-      <div class="eating-yakult-toggle">
-        <button type="button" id="eating-yakult-yes" class="eating-toggle-btn">Yes</button>
-        <button type="button" id="eating-yakult-no" class="eating-toggle-btn">No</button>
-      </div>
-      <label for="eating-field-bubble">Bubble Tea</label>
-      <input type="text" id="eating-field-bubble" inputmode="numeric" placeholder="0" autocomplete="off" style="margin-bottom:10px;">
-      <label for="eating-field-out">Eating Out</label>
-      <input type="text" id="eating-field-out" inputmode="numeric" placeholder="0" autocomplete="off" style="margin-bottom:14px;">
-      <div class="eating-daily-total">Daily Total: <span id="eating-daily-total">0</span></div>
-      <div class="modal-actions">
-        <button id="eating-modal-cancel" class="pill-btn secondary">Cancel</button>
-        <button id="eating-modal-save" class="pill-btn">Save</button>
       </div>
     </div>
   </div>
@@ -843,8 +902,6 @@
 
       <div class="expense-field-caption">Date</div>
       <div class="expense-date-row">
-        <button type="button" class="pill-btn secondary" id="expense-date-today-btn">Today</button>
-        <button type="button" class="pill-btn secondary" id="expense-date-yesterday-btn">Yesterday</button>
         <input type="date" id="expense-date-custom-input">
       </div>
       <div class="expense-sub-line" id="expense-date-display" style="margin:4px 0 0;"></div>
@@ -987,6 +1044,7 @@
 
   <script src="qrcode.min.js"></script>
   <script src="gas-bridge.js"></script>
+  <script src="converter.js"></script>
   <script src="app.js"></script>
   <script src="enter-confirm.js"></script>
 </body>
