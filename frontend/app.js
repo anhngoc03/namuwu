@@ -1603,10 +1603,14 @@ var expenseEditingCategoryId = null;
 var expenseEditingCategoryBudgetId = null; // category id being budgeted (new or existing)
 var expenseConfirmAction = null;   // fn to run when the generic confirm modal says "Yah"
 var expenseStatsRange = 'month';   // '7' | '30' | 'month'
-var expenseHistoryFilters = { search: '', categoryId: '', amount: '' };
+var expenseHistoryFilters = { search: '', categoryId: '', walletId: '', amount: '' };
 var expenseEditingIncomeId = null;     // null = adding new income
 var expenseSavingsTxKind = 'deposit';  // 'deposit' | 'spend'
 var expenseEditingSavingsId = null;    // null = adding a new savings entry
+var expenseEditingWalletId = null;     // null = adding a new source
+var expenseEditingTransferId = null;   // null = adding a new transfer
+var expenseLastWallet = null;          // remembered across sessions (per browser) — default source in pickers
+try { expenseLastWallet = Number(localStorage.getItem('henlo_last_wallet')) || null; } catch (e) {}
 var expenseCategoryReturnToEntry = false; // true when "+ New category" was pressed inside the Add Expense popup
 
 // Dropdowns / chips: categories always alphabetical (Vietnamese-aware).
@@ -1617,8 +1621,52 @@ function expenseSortCategories(cats) {
 }
 function expenseNormalize(data) {
   data.categories = expenseSortCategories(data.categories);
+  data.wallets = (data.wallets || []).slice().sort(function (a, b) {
+    return String(a.name).localeCompare(String(b.name), 'vi', { sensitivity: 'base' });
+  });
+  data.transfers = data.transfers || [];
+  data.unassigned = data.unassigned || { balance: 0, count: 0 };
   return data;
 }
+
+/* ---- Sources (wallets) helpers ---- */
+function expenseWalletById(id) {
+  if (id === null || id === undefined) return null;
+  return (expenseData.wallets || []).find(function (w) { return String(w.id) === String(id); }) || null;
+}
+function expenseWalletName(id) { var w = expenseWalletById(id); return w ? w.name : 'No source'; }
+// " · Bank" tag for list rows (only when the person actually uses sources)
+function expenseWalletTag(id) {
+  if (!expenseData || !(expenseData.wallets || []).length) return '';
+  var w = expenseWalletById(id);
+  return ' · <span class="expense-wallet-chip">' + (w ? icdEscape(w.name) : 'No source') + '</span>';
+}
+function expenseRememberWallet(id) {
+  if (!id) return;
+  expenseLastWallet = Number(id);
+  try { localStorage.setItem('henlo_last_wallet', String(id)); } catch (e) {}
+}
+// Fills a <select> with sources (alphabetical). selectedId: preselect (null = the "none" option).
+// noneLabel: when given, a first "none" option is added (value '').
+function expenseFillWalletSelect(sel, selectedId, noneLabel) {
+  var wallets = expenseData.wallets || [];
+  sel.innerHTML = '';
+  if (noneLabel || !wallets.length) {
+    var o = document.createElement('option'); o.value = ''; o.textContent = noneLabel || 'No sources yet'; sel.appendChild(o);
+  }
+  wallets.forEach(function (w) {
+    var opt = document.createElement('option'); opt.value = w.id; opt.textContent = w.name; sel.appendChild(opt);
+  });
+  var want = '';
+  if (selectedId !== undefined && selectedId !== null) want = String(selectedId);
+  else if (selectedId === undefined) {   // new entry: default to last used, else first
+    var last = expenseLastWallet && expenseWalletById(expenseLastWallet) ? String(expenseLastWallet) : (wallets[0] ? String(wallets[0].id) : '');
+    want = last;
+  }
+  sel.value = want;
+  if (sel.value !== want) sel.value = sel.options.length ? sel.options[0].value : '';
+}
+function expenseSelValue(sel) { return sel.value ? Number(sel.value) : null; }
 function expenseVNDate(dateStr) { return dateStr.slice(8, 10) + '/' + dateStr.slice(5, 7); }
 function expenseMonthDefaultDate() {
   // Default date for new income/savings entries: today if viewing the current month, otherwise the 1st of the viewed month.
@@ -1768,8 +1816,155 @@ function expenseRenderOverview() {
   document.getElementById('expense-spent-count').textContent = expenseData.entries.length + (expenseData.entries.length === 1 ? ' entry' : ' entries');
   document.getElementById('expense-saved-value').textContent = expenseFmt(sv.monthDeposits);
 
+  expenseRenderWallets();
   expenseRenderSavings();
   expenseRenderIncomeList();
+}
+
+/* ---- Sources card + transfers ---- */
+function expenseRenderWallets() {
+  var wallets = expenseData.wallets || [];
+  var un = expenseData.unassigned || { balance: 0, count: 0 };
+  var totalEl = document.getElementById('expense-wallets-total');
+  var total = expenseData.walletTotal || 0;
+  totalEl.textContent = (total < 0 ? '−' : '') + expenseFmt(Math.abs(total));
+  totalEl.classList.toggle('neg', total < 0);
+  document.getElementById('expense-transfer-btn').style.display = wallets.length >= 2 ? '' : 'none';
+
+  var list = document.getElementById('expense-wallets-list');
+  list.innerHTML = '';
+  if (!wallets.length) {
+    list.innerHTML = '<div class="expense-wallet-empty">Add your sources (bank, cash, e-wallet…) to see where your money is.</div>';
+  }
+  wallets.forEach(function (w) {
+    var row = document.createElement('div');
+    row.className = 'expense-wallet-row';
+    row.innerHTML =
+      '<span class="expense-wallet-dot" style="background:' + w.color + '"></span>' +
+      '<div class="expense-wallet-name">' + icdEscape(w.name) + '</div>' +
+      '<div class="expense-wallet-bal' + (w.balance < 0 ? ' neg' : '') + '">' + (w.balance < 0 ? '−' : '') + expenseFmt(Math.abs(w.balance)) + '</div>' +
+      '<button class="acc-edit-icon-btn" title="Edit">✎</button>';
+    row.querySelector('button').onclick = function () { expenseOpenWalletModal(w); };
+    list.appendChild(row);
+  });
+  if (wallets.length && un.count > 0) {
+    var ur = document.createElement('div');
+    ur.className = 'expense-wallet-row unassigned';
+    ur.innerHTML =
+      '<span class="expense-wallet-dot" style="background:#e2dada"></span>' +
+      '<div class="expense-wallet-name">Unassigned<small>' + un.count + ' older entr' + (un.count === 1 ? 'y' : 'ies') + ' without a source — edit them to assign</small></div>' +
+      '<div class="expense-wallet-bal' + (un.balance < 0 ? ' neg' : '') + '">' + (un.balance < 0 ? '−' : '') + expenseFmt(Math.abs(un.balance)) + '</div>';
+    list.appendChild(ur);
+  }
+
+  var tl = document.getElementById('expense-transfers-list');
+  tl.innerHTML = '';
+  var trs = expenseData.transfers || [];
+  if (trs.length) {
+    var t = document.createElement('div'); t.className = 'expense-transfers-title'; t.textContent = 'Transfers this month'; tl.appendChild(t);
+    trs.forEach(function (tr) {
+      var row = document.createElement('div');
+      row.className = 'expense-history-row';
+      row.innerHTML =
+        '<div class="expense-history-row-main">' +
+          '<div class="expense-history-row-name">' + icdEscape(expenseWalletName(tr.from)) + ' → ' + icdEscape(expenseWalletName(tr.to)) + '</div>' +
+          '<div class="expense-history-row-cat">' + expenseVNDate(tr.date) + (tr.note ? ' · ' + icdEscape(tr.note) : '') + '</div>' +
+        '</div>' +
+        '<div class="expense-history-row-amt">' + expenseFmt(tr.amount) + '</div>' +
+        '<button class="acc-edit-icon-btn" title="Edit">✎</button>';
+      row.querySelector('button').onclick = function () { expenseOpenTransferModal(tr); };
+      tl.appendChild(row);
+    });
+  }
+}
+
+function expenseOpenWalletModal(w) {
+  expenseEditingWalletId = w ? w.id : null;
+  document.getElementById('expense-wallet-modal-title').textContent = w ? 'Edit Source' : 'Add Source';
+  document.getElementById('expense-wallet-name-input').value = w ? w.name : '';
+  expenseSetAmountInputValue(document.getElementById('expense-wallet-opening-input'), w ? w.opening : 0);
+  var chosen = w ? w.color : EXPENSE_COLORS[(expenseData.wallets || []).length % EXPENSE_COLORS.length];
+  var sw = document.getElementById('expense-wallet-color-swatches');
+  sw.innerHTML = '';
+  EXPENSE_COLORS.forEach(function (color) {
+    var dot = document.createElement('div');
+    dot.className = 'expense-swatch' + (color === chosen ? ' selected' : '');
+    dot.style.background = color;
+    dot.onclick = function () {
+      sw.querySelectorAll('.expense-swatch').forEach(function (x) { x.classList.remove('selected'); });
+      dot.classList.add('selected');
+      sw.dataset.chosen = color;
+    };
+    sw.appendChild(dot);
+  });
+  sw.dataset.chosen = chosen;
+  document.getElementById('expense-wallet-delete-btn').style.display = w ? 'block' : 'none';
+  document.getElementById('expense-wallet-modal').classList.add('active');
+}
+function expenseSaveWallet() {
+  var name = document.getElementById('expense-wallet-name-input').value.trim();
+  if (!name) { toast('Enter a name'); return; }
+  var color = document.getElementById('expense-wallet-color-swatches').dataset.chosen || EXPENSE_COLORS[0];
+  var opening = expenseAmountInputValue(document.getElementById('expense-wallet-opening-input'));
+  showLoading();
+  var onDone = function (data) { hideLoading(); document.getElementById('expense-wallet-modal').classList.remove('active'); expenseApplyData(data); toast('Saved!'); };
+  var run = google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail);
+  if (expenseEditingWalletId) run.updateExpenseWallet(expenseEditingWalletId, name, color, opening, expensePeriod);
+  else run.addExpenseWallet(name, color, opening, expensePeriod);
+}
+function expenseDeleteWallet() {
+  if (!expenseEditingWalletId) return;
+  var id = expenseEditingWalletId;
+  document.getElementById('expense-wallet-modal').classList.remove('active');
+  expenseConfirm('Delete this source?', function () {
+    showLoading();
+    google.script.run
+      .withSuccessHandler(function (data) { hideLoading(); expenseApplyData(data); })
+      .withFailureHandler(expenseFail)
+      .deleteExpenseWallet(id, expensePeriod);
+  });
+}
+
+function expenseOpenTransferModal(tr) {
+  expenseEditingTransferId = tr ? tr.id : null;
+  document.getElementById('expense-transfer-modal-title').textContent = tr ? 'Edit Transfer' : 'Transfer';
+  var fromSel = document.getElementById('expense-transfer-from'), toSel = document.getElementById('expense-transfer-to');
+  var first = expenseData.wallets[0], second = expenseData.wallets[1];
+  var fromDefault = expenseLastWallet && expenseWalletById(expenseLastWallet) ? expenseLastWallet : (first ? first.id : null);
+  expenseFillWalletSelect(fromSel, tr ? tr.from : fromDefault);
+  var toDefault = (expenseData.wallets.find(function (w) { return String(w.id) !== String(fromDefault); }) || second || {}).id;
+  expenseFillWalletSelect(toSel, tr ? tr.to : toDefault);
+  expenseSetAmountInputValue(document.getElementById('expense-transfer-amount'), tr ? tr.amount : 0);
+  document.getElementById('expense-transfer-date').value = tr ? tr.date : expenseMonthDefaultDate();
+  document.getElementById('expense-transfer-note').value = tr ? tr.note : '';
+  document.getElementById('expense-transfer-delete-btn').style.display = tr ? 'block' : 'none';
+  document.getElementById('expense-transfer-modal').classList.add('active');
+}
+function expenseSaveTransfer() {
+  var from = expenseSelValue(document.getElementById('expense-transfer-from')), to = expenseSelValue(document.getElementById('expense-transfer-to'));
+  if (!from || !to) { toast('Pick two sources'); return; }
+  if (from === to) { toast('Pick two different sources'); return; }
+  var amount = expenseAmountInputValue(document.getElementById('expense-transfer-amount'));
+  if (!amount || amount <= 0) { toast('Enter an amount'); return; }
+  var date = document.getElementById('expense-transfer-date').value || expenseMonthDefaultDate();
+  var note = document.getElementById('expense-transfer-note').value.trim();
+  showLoading();
+  var onDone = function (data) { hideLoading(); document.getElementById('expense-transfer-modal').classList.remove('active'); expenseApplyData(data); toast('Saved!'); };
+  var run = google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail);
+  if (expenseEditingTransferId) run.updateExpenseTransfer(expenseEditingTransferId, from, to, amount, note, date, expensePeriod);
+  else run.addExpenseTransfer(from, to, amount, note, date, expensePeriod);
+}
+function expenseDeleteTransfer() {
+  if (!expenseEditingTransferId) return;
+  var id = expenseEditingTransferId;
+  document.getElementById('expense-transfer-modal').classList.remove('active');
+  expenseConfirm('Delete this transfer?', function () {
+    showLoading();
+    google.script.run
+      .withSuccessHandler(function (data) { hideLoading(); expenseApplyData(data); })
+      .withFailureHandler(expenseFail)
+      .deleteExpenseTransfer(id, expensePeriod);
+  });
 }
 
 /* ---- Income list (irregular income: one row per payment) ---- */
@@ -1787,7 +1982,7 @@ function expenseRenderIncomeList() {
     row.innerHTML =
       '<div class="expense-history-row-main">' +
         '<div class="expense-history-row-name">' + icdEscape(it.source || 'Income') + '</div>' +
-        '<div class="expense-history-row-cat">' + expenseVNDate(it.date) + '</div>' +
+        '<div class="expense-history-row-cat">' + expenseVNDate(it.date) + expenseWalletTag(it.walletId) + '</div>' +
       '</div>' +
       '<div class="expense-history-row-amt expense-income-amt">+' + expenseFmt(it.amount) + '</div>' +
       '<button class="acc-edit-icon-btn expense-inc-edit" title="Edit">✎</button>' +
@@ -1822,7 +2017,7 @@ function expenseRenderSavings() {
     row.innerHTML =
       '<div class="expense-history-row-main">' +
         '<div class="expense-history-row-name">' + (isDep ? 'Deposit' : 'Spent from savings') + (l.note ? ' · ' + icdEscape(l.note) : '') + '</div>' +
-        '<div class="expense-history-row-cat">' + expenseVNDate(l.date) + (isDep && !l.deduct ? ' · not deducted' : '') + '</div>' +
+        '<div class="expense-history-row-cat">' + expenseVNDate(l.date) + (isDep && !l.deduct ? ' · not deducted' : (l.walletId ? expenseWalletTag(l.walletId) : '')) + '</div>' +
       '</div>' +
       '<div class="expense-history-row-amt ' + (isDep ? 'expense-income-amt' : '') + '">' + (isDep ? '+' : '−') + expenseFmt(l.amount) + '</div>' +
       '<button class="acc-edit-icon-btn expense-sv-edit" title="Edit">✎</button>' +
@@ -1865,7 +2060,16 @@ function expenseOpenSavingsTxModal(kind, item) {
   // "Deduct from this month's balance" only makes sense for deposits; default ON for new ones.
   document.getElementById('expense-savings-tx-deduct-row').style.display = kind === 'deposit' ? '' : 'none';
   document.getElementById('expense-savings-tx-deduct').checked = item ? item.deduct !== false : true;
+  document.getElementById('expense-savings-tx-wallet-caption').textContent = kind === 'deposit' ? 'Take from source' : 'Return to source';
+  expenseFillWalletSelect(document.getElementById('expense-savings-tx-wallet'), item ? item.walletId : undefined,
+    kind === 'deposit' ? 'No source' : 'None (money not returned to a source)');
+  expenseSavingsTxToggleWallet();
   document.getElementById('expense-savings-tx-modal').classList.add('active');
+}
+// A deposit that is NOT deducted is money already in the fund — it doesn't touch any source.
+function expenseSavingsTxToggleWallet() {
+  var show = expenseSavingsTxKind === 'spend' || document.getElementById('expense-savings-tx-deduct').checked;
+  document.getElementById('expense-savings-tx-wallet-row').style.display = show ? '' : 'none';
 }
 function expenseSaveSavingsTx() {
   var amount = expenseAmountInputValue(document.getElementById('expense-savings-tx-amount'));
@@ -1874,11 +2078,13 @@ function expenseSaveSavingsTx() {
   var date = document.getElementById('expense-savings-tx-date').value || expenseMonthDefaultDate();
   var note = document.getElementById('expense-savings-tx-note').value.trim();
   var deduct = document.getElementById('expense-savings-tx-deduct').checked;
+  var walletId = (expenseSavingsTxKind === 'spend' || deduct) ? expenseSelValue(document.getElementById('expense-savings-tx-wallet')) : null;
+  expenseRememberWallet(walletId);
   showLoading();
   var onDone = function (data) { hideLoading(); document.getElementById('expense-savings-tx-modal').classList.remove('active'); expenseApplyData(data); toast('Saved!'); };
   var run = google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail);
-  if (expenseEditingSavingsId) run.updateExpenseSavingsLog(expenseEditingSavingsId, amount, note, date, deduct, expensePeriod);
-  else run.addExpenseSavingsLog(expenseSavingsTxKind, amount, note, date, expensePeriod, deduct);
+  if (expenseEditingSavingsId) run.updateExpenseSavingsLog(expenseEditingSavingsId, amount, note, date, deduct, expensePeriod, walletId);
+  else run.addExpenseSavingsLog(expenseSavingsTxKind, amount, note, date, expensePeriod, deduct, walletId);
 }
 
 /* ---- Calendar tab ---- */
@@ -2182,6 +2388,8 @@ function expenseOpenIncomeModal(item) {
   expenseSetAmountInputValue(document.getElementById('expense-income-amount-input'), item ? item.amount : 0);
   document.getElementById('expense-income-source-input').value = item ? item.source : '';
   document.getElementById('expense-income-date-input').value = item ? item.date : expenseMonthDefaultDate();
+  var incSel = document.getElementById('expense-income-wallet');
+  expenseFillWalletSelect(incSel, item ? item.walletId : undefined, (item && item.walletId == null && (expenseData.wallets || []).length) ? 'No source (unassigned)' : null);
   document.getElementById('expense-income-modal').classList.add('active');
 }
 function expenseSaveIncome() {
@@ -2189,12 +2397,14 @@ function expenseSaveIncome() {
   if (!amount || amount <= 0) { toast('Enter an amount'); return; }
   var source = document.getElementById('expense-income-source-input').value.trim();
   var date = document.getElementById('expense-income-date-input').value || expenseMonthDefaultDate();
+  var walletId = expenseSelValue(document.getElementById('expense-income-wallet'));
+  expenseRememberWallet(walletId);
   showLoading();
   var onDone = function (data) { hideLoading(); document.getElementById('expense-income-modal').classList.remove('active'); expenseApplyData(data); toast('Saved!'); };
   if (expenseEditingIncomeId) {
-    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).updateExpenseIncomeEntry(expenseEditingIncomeId, amount, source, date, expensePeriod);
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).updateExpenseIncomeEntry(expenseEditingIncomeId, amount, source, date, expensePeriod, walletId);
   } else {
-    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).addExpenseIncomeEntry(amount, source, date);
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).addExpenseIncomeEntry(amount, source, date, walletId);
   }
 }
 
@@ -2212,8 +2422,24 @@ function expenseRenderHistory() {
     catSel.dataset.built = catSig;
   }
 
+  var walSel = document.getElementById('expense-history-wallet-filter');
+  var walSig = (expenseData.wallets || []).map(function (w) { return w.id + ':' + w.name; }).join('|');
+  walSel.style.display = (expenseData.wallets || []).length ? '' : 'none';
+  if (walSel.dataset.built !== walSig) {
+    walSel.innerHTML = '<option value="">All sources</option>';
+    (expenseData.wallets || []).forEach(function (w) {
+      var opt = document.createElement('option'); opt.value = w.id; opt.textContent = w.name; walSel.appendChild(opt);
+    });
+    var optNone = document.createElement('option'); optNone.value = 'none'; optNone.textContent = 'No source'; walSel.appendChild(optNone);
+    walSel.value = expenseHistoryFilters.walletId || '';
+    if (walSel.value !== (expenseHistoryFilters.walletId || '')) { walSel.value = ''; expenseHistoryFilters.walletId = ''; }
+    walSel.dataset.built = walSig;
+  }
+
   var q = expenseHistoryFilters.search.toLowerCase();
   var filtered = expenseData.entries.filter(function (e) {
+    if (expenseHistoryFilters.walletId === 'none' && e.walletId != null) return false;
+    if (expenseHistoryFilters.walletId && expenseHistoryFilters.walletId !== 'none' && String(e.walletId) !== String(expenseHistoryFilters.walletId)) return false;
     if (q && icdEscape(e.note).toLowerCase().indexOf(q) === -1 && expenseNameFor(e.categoryId).toLowerCase().indexOf(q) === -1) return false;
     if (expenseHistoryFilters.categoryId && String(e.categoryId) !== String(expenseHistoryFilters.categoryId)) return false;
     if (expenseHistoryFilters.amount === 'lt100') return e.amount < 100000;
@@ -2249,7 +2475,7 @@ function expenseRenderHistory() {
       row.innerHTML =
         '<div class="expense-history-row-main">' +
           '<div class="expense-history-row-name">' + icdEscape(e.note || expenseNameFor(e.categoryId)) + '</div>' +
-          '<div class="expense-history-row-cat"><span class="expense-dot" style="background:' + expenseColorFor(e.categoryId) + '"></span>' + icdEscape(expenseNameFor(e.categoryId)) + '</div>' +
+          '<div class="expense-history-row-cat"><span class="expense-dot" style="background:' + expenseColorFor(e.categoryId) + '"></span>' + icdEscape(expenseNameFor(e.categoryId)) + expenseWalletTag(e.walletId) + '</div>' +
         '</div>' +
         '<div class="expense-history-row-amt">' + expenseFmt(e.amount) + '</div>' +
         '<button class="acc-edit-icon-btn expense-hist-edit" title="Edit">✎</button>' +
@@ -2354,6 +2580,8 @@ function expenseOpenEntryModal(entry, presetDate) {
   document.getElementById('expense-entry-category-grid').dataset.chosen = '';
   expenseRenderEntryCategoryChips(entry ? entry.categoryId : null);
 
+  expenseFillWalletSelect(document.getElementById('expense-entry-wallet'), entry ? entry.walletId : undefined,
+    (entry && entry.walletId == null && (expenseData.wallets || []).length) ? 'No source (unassigned)' : null);
   expensePendingDate = entry ? entry.date : (presetDate || expenseTodayStr());
   expenseUpdateDateButtons();
   document.getElementById('expense-note-input').value = entry ? entry.note : '';
@@ -2417,6 +2645,8 @@ function expenseSaveEntry() {
   if (!categoryId) { toast('Pick a category'); return; }
   var note = document.getElementById('expense-note-input').value.trim();
   var date = expensePendingDate;
+  var walletId = expenseSelValue(document.getElementById('expense-entry-wallet'));
+  expenseRememberWallet(walletId);
 
   showLoading();
   var onDone = function (data) {
@@ -2426,9 +2656,9 @@ function expenseSaveEntry() {
     toast('Saved!');
   };
   if (expenseEditingEntryId) {
-    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).updateExpenseEntry(expenseEditingEntryId, amount, categoryId, note, date, expensePeriod);
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).updateExpenseEntry(expenseEditingEntryId, amount, categoryId, note, date, expensePeriod, walletId);
   } else {
-    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).addExpenseEntry(amount, categoryId, note, date);
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail).addExpenseEntry(amount, categoryId, note, date, walletId);
   }
 }
 
@@ -2535,6 +2765,21 @@ function expenseWireEvents() {
     expenseHistoryFilters.categoryId = this.value;
     expenseRenderHistory();
   };
+  document.getElementById('expense-history-wallet-filter').onchange = function () {
+    expenseHistoryFilters.walletId = this.value;
+    expenseRenderHistory();
+  };
+  document.getElementById('expense-wallet-add-btn').onclick = function () { expenseOpenWalletModal(null); };
+  document.getElementById('expense-transfer-btn').onclick = function () { expenseOpenTransferModal(null); };
+  document.getElementById('expense-wallet-modal-close').onclick = function () { document.getElementById('expense-wallet-modal').classList.remove('active'); };
+  document.getElementById('expense-wallet-cancel-btn').onclick = function () { document.getElementById('expense-wallet-modal').classList.remove('active'); };
+  document.getElementById('expense-wallet-save-btn').onclick = expenseSaveWallet;
+  document.getElementById('expense-wallet-delete-btn').onclick = expenseDeleteWallet;
+  document.getElementById('expense-transfer-modal-close').onclick = function () { document.getElementById('expense-transfer-modal').classList.remove('active'); };
+  document.getElementById('expense-transfer-cancel-btn').onclick = function () { document.getElementById('expense-transfer-modal').classList.remove('active'); };
+  document.getElementById('expense-transfer-save-btn').onclick = expenseSaveTransfer;
+  document.getElementById('expense-transfer-delete-btn').onclick = expenseDeleteTransfer;
+  document.getElementById('expense-savings-tx-deduct').onchange = expenseSavingsTxToggleWallet;
   document.getElementById('expense-history-amount-filter').onchange = function () {
     expenseHistoryFilters.amount = this.value;
     expenseRenderHistory();
