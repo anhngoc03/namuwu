@@ -28,7 +28,7 @@
   function callApi(action, args) {
     return fetch(API_BASE_URL, {
       method: 'POST',
-      body: JSON.stringify({ action: action, args: args })
+      body: JSON.stringify({ action: action, args: args, token: window.__personalToken || null })
     })
       .then(function (res) {
         if (!res.ok) {
@@ -39,6 +39,10 @@
       .then(function (payload) {
         if (!payload || payload.ok !== true) {
           var msg = (payload && payload.error) ? payload.error : 'Unknown server error';
+          if (msg === 'Unauthorized' || /Unauthorized/.test(msg)) {
+            window.__personalToken = null;
+            try { window.dispatchEvent(new CustomEvent('personal-unauthorized')); } catch (e) {}
+          }
           throw new Error(msg);
         }
         return payload.data;
