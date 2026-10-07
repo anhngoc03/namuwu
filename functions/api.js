@@ -467,7 +467,7 @@ async function expenseCarryIn_(env, period) {
 async function expenseGetSavings_(env, period) {
   var goalRows = await sb(env, 'expense_savings?id=eq.1&select=name,target');
   var goal = goalRows.length ? goalRows[0] : { name: 'Billionaire ✮⋆˙', target: 0 };
-  var logs = await sb(env, 'expense_savings_log?select=id,kind,amount,note,entry_date,deduct&order=entry_date.desc,id.desc');
+  var logs = await sb(env, 'expense_savings_log?select=id,kind,amount,note,entry_date,deduct,wallet_id&order=entry_date.desc,id.desc');
   var balance = 0, monthDeposits = 0;
   var periodStart = period + '-01', nextStart = expenseNextPeriodStart_(period);
   logs.forEach(function (l) {
@@ -481,9 +481,64 @@ async function expenseGetSavings_(env, period) {
     balance: balance,                 // tiết kiệm KHÔNG reset theo tháng
     monthDeposits: monthDeposits,     // phần nạp CÓ TRỪ trong tháng đang xem → trừ vào Remaining
     log: logs.slice(0, 100).map(function (l) {
-      return { id: l.id, kind: l.kind, amount: Number(l.amount), note: l.note || '', date: l.entry_date, deduct: l.deduct !== false };
+      return { id: l.id, kind: l.kind, amount: Number(l.amount), note: l.note || '', date: l.entry_date, deduct: l.deduct !== false, walletId: l.wallet_id };
     })
   };
+}
+
+/* ---- Nguồn tiền (wallets) ---- */
+
+// Đọc hết các dòng của 1 bảng (phân trang 1000 dòng/lần) — chỉ lấy các cột cần.
+async function expenseFetchAll_(env, table, select) {
+  var out = [], offset = 0, page = 1000;
+  for (;;) {
+    var rows = await sb(env, table + '?select=' + select + '&order=id.asc&limit=' + page + '&offset=' + offset);
+    out = out.concat(rows);
+    if (rows.length < page) break;
+    offset += page;
+  }
+  return out;
+}
+
+// Số dư mỗi nguồn (cộng dồn mọi tháng):
+//   ban đầu + income − chi tiêu − nạp quỹ (có trừ) + rút quỹ ± chuyển tiền.
+// Nạp quỹ KHÔNG trừ (deduct=false) là tiền có sẵn trong quỹ → không đụng nguồn nào.
+// "Chưa phân loại" = income/chi tiêu cũ chưa gán nguồn; vẫn tính vào Tổng.
+async function expenseWallets_(env) {
+  var wallets = await sb(env, 'expense_wallets?select=id,name,color,opening&order=id.asc');
+  var bal = {};
+  wallets.forEach(function (w) { bal[w.id] = Number(w.opening) || 0; });
+  var un = { balance: 0, count: 0 };
+  function add(wid, amt) { if (wid !== null && wid !== undefined && bal[wid] !== undefined) bal[wid] += amt; }
+
+  (await expenseFetchAll_(env, 'expense_income_entries', 'wallet_id,amount')).forEach(function (r) {
+    var a = Number(r.amount);
+    if (r.wallet_id === null) { un.balance += a; un.count++; } else add(r.wallet_id, a);
+  });
+  (await expenseFetchAll_(env, 'expense_entries', 'wallet_id,amount')).forEach(function (r) {
+    var a = Number(r.amount);
+    if (r.wallet_id === null) { un.balance -= a; un.count++; } else add(r.wallet_id, -a);
+  });
+  (await expenseFetchAll_(env, 'expense_savings_log', 'wallet_id,kind,amount,deduct')).forEach(function (r) {
+    var a = Number(r.amount);
+    if (r.wallet_id === null) return;
+    if (r.kind === 'deposit') { if (r.deduct !== false) add(r.wallet_id, -a); }
+    else add(r.wallet_id, a);
+  });
+  (await expenseFetchAll_(env, 'expense_transfers', 'from_wallet,to_wallet,amount')).forEach(function (r) {
+    var a = Number(r.amount);
+    add(r.from_wallet, -a); add(r.to_wallet, a);
+  });
+  var total = un.balance;
+  var list = wallets.map(function (w) {
+    total += bal[w.id];
+    return { id: w.id, name: w.name, color: w.color, opening: Number(w.opening) || 0, balance: bal[w.id] };
+  });
+  return { wallets: list, total: total, unassigned: un };
+}
+
+function expenseWalletIdOrNull_(v) {
+  return (v === undefined || v === null || v === '' || Number(v) === 0) ? null : Number(v);
 }
 
 // Gộp toàn bộ dữ liệu 1 tháng cần cho Overview/Calendar/Stats/Budget/History
@@ -496,22 +551,30 @@ async function getExpenseData(env, [period]) {
   var nextPeriod = expenseNextPeriodStart_(period);
 
   var categories = await sb(env, 'expense_categories?select=id,name,color&order=name.asc');
-  var entries = await sb(env, 'expense_entries?entry_date=gte.' + periodStart + '&entry_date=lt.' + nextPeriod + '&select=id,amount,category_id,note,entry_date&order=entry_date.desc,id.desc');
-  var incomeRows = await sb(env, 'expense_income_entries?entry_date=gte.' + periodStart + '&entry_date=lt.' + nextPeriod + '&select=id,amount,source,entry_date&order=entry_date.desc,id.desc');
+  var entries = await sb(env, 'expense_entries?entry_date=gte.' + periodStart + '&entry_date=lt.' + nextPeriod + '&select=id,amount,category_id,note,entry_date,wallet_id&order=entry_date.desc,id.desc');
+  var incomeRows = await sb(env, 'expense_income_entries?entry_date=gte.' + periodStart + '&entry_date=lt.' + nextPeriod + '&select=id,amount,source,entry_date,wallet_id&order=entry_date.desc,id.desc');
+  var transferRows = await sb(env, 'expense_transfers?entry_date=gte.' + periodStart + '&entry_date=lt.' + nextPeriod + '&select=id,from_wallet,to_wallet,amount,note,entry_date&order=entry_date.desc,id.desc');
+  var walletInfo = await expenseWallets_(env);
   var budgetRows = await sb(env, 'expense_budget?period=eq.' + period + '&select=amount,repeat_monthly');
   var catBudgetRows = await sb(env, 'expense_category_budget?period=eq.' + period + '&select=category_id,amount,repeat_monthly');
   var savings = await expenseGetSavings_(env, period);
   var carryIn = await expenseCarryIn_(env, period);
 
   var incomeEntries = incomeRows.map(function (r) {
-    return { id: r.id, amount: Number(r.amount), source: r.source || '', date: r.entry_date };
+    return { id: r.id, amount: Number(r.amount), source: r.source || '', date: r.entry_date, walletId: r.wallet_id };
   });
   return {
     period: period,
     currentPeriod: expenseCurrentPeriod_(),
     categories: categories.map(function (c) { return { id: c.id, name: c.name, color: c.color }; }),
     entries: entries.map(function (e) {
-      return { id: e.id, amount: Number(e.amount), categoryId: e.category_id, note: e.note || '', date: e.entry_date };
+      return { id: e.id, amount: Number(e.amount), categoryId: e.category_id, note: e.note || '', date: e.entry_date, walletId: e.wallet_id };
+    }),
+    wallets: walletInfo.wallets,
+    walletTotal: walletInfo.total,
+    unassigned: walletInfo.unassigned,
+    transfers: transferRows.map(function (t) {
+      return { id: t.id, from: t.from_wallet, to: t.to_wallet, amount: Number(t.amount), note: t.note || '', date: t.entry_date };
     }),
     incomeEntries: incomeEntries,
     income: incomeEntries.reduce(function (s, r) { return s + r.amount; }, 0),
@@ -525,18 +588,20 @@ async function getExpenseData(env, [period]) {
 
 /* ---- Expenses (không còn lặp theo tháng — chỉ budget mới lặp) ---- */
 
-async function addExpenseEntry(env, [amount, categoryId, note, date]) {
+async function addExpenseEntry(env, [amount, categoryId, note, date, walletId]) {
   await sb(env, 'expense_entries', {
     method: 'POST',
-    body: JSON.stringify([{ amount: amount, category_id: categoryId, note: note || '', entry_date: date, repeat_monthly: false, recurring_key: null }])
+    body: JSON.stringify([{ amount: amount, category_id: categoryId, note: note || '', entry_date: date, repeat_monthly: false, recurring_key: null, wallet_id: expenseWalletIdOrNull_(walletId) }])
   });
   return getExpenseData(env, [String(date).slice(0, 7)]);
 }
 
-async function updateExpenseEntry(env, [id, amount, categoryId, note, date, period]) {
+async function updateExpenseEntry(env, [id, amount, categoryId, note, date, period, walletId]) {
+  var patch = { amount: amount, category_id: categoryId, note: note || '', entry_date: date, repeat_monthly: false };
+  if (walletId !== undefined) patch.wallet_id = expenseWalletIdOrNull_(walletId);
   await sb(env, 'expense_entries?id=eq.' + id, {
     method: 'PATCH',
-    body: JSON.stringify({ amount: amount, category_id: categoryId, note: note || '', entry_date: date, repeat_monthly: false })
+    body: JSON.stringify(patch)
   });
   return getExpenseData(env, [period]);
 }
@@ -548,19 +613,21 @@ async function deleteExpenseEntry(env, [id, period]) {
 
 /* ---- Income: từng khoản có số tiền + nguồn + ngày ---- */
 
-async function addExpenseIncomeEntry(env, [amount, source, date]) {
+async function addExpenseIncomeEntry(env, [amount, source, date, walletId]) {
   await sb(env, 'expense_income_entries', {
     method: 'POST',
-    body: JSON.stringify([{ amount: amount, source: source || '', entry_date: date }]),
+    body: JSON.stringify([{ amount: amount, source: source || '', entry_date: date, wallet_id: expenseWalletIdOrNull_(walletId) }]),
     prefer: 'return=minimal'
   });
   return getExpenseData(env, [String(date).slice(0, 7)]);
 }
 
-async function updateExpenseIncomeEntry(env, [id, amount, source, date, period]) {
+async function updateExpenseIncomeEntry(env, [id, amount, source, date, period, walletId]) {
+  var patch = { amount: amount, source: source || '', entry_date: date };
+  if (walletId !== undefined) patch.wallet_id = expenseWalletIdOrNull_(walletId);
   await sb(env, 'expense_income_entries?id=eq.' + id, {
     method: 'PATCH',
-    body: JSON.stringify({ amount: amount, source: source || '', entry_date: date }),
+    body: JSON.stringify(patch),
     prefer: 'return=minimal'
   });
   return getExpenseData(env, [period]);
@@ -613,7 +680,7 @@ async function saveExpenseSavingsGoal(env, [name, target, period]) {
 
 // kind: 'deposit' (nạp) | 'spend' (tiêu từ tiết kiệm — không tính vào chi tiêu tháng)
 // deduct (chỉ cho deposit): true = lấy từ tiền tháng này → trừ vào Remaining; false = tiền có sẵn, không trừ.
-async function addExpenseSavingsLog(env, [kind, amount, note, date, period, deduct]) {
+async function addExpenseSavingsLog(env, [kind, amount, note, date, period, deduct, walletId]) {
   if (kind !== 'deposit' && kind !== 'spend') throw new Error('Loại giao dịch không hợp lệ');
   if (kind === 'spend') {
     var s = await expenseGetSavings_(env, String(date).slice(0, 7));
@@ -621,18 +688,20 @@ async function addExpenseSavingsLog(env, [kind, amount, note, date, period, dedu
   }
   await sb(env, 'expense_savings_log', {
     method: 'POST',
-    body: JSON.stringify([{ kind: kind, amount: amount, note: note || '', entry_date: date, deduct: kind === 'deposit' ? deduct !== false : false }]),
+    body: JSON.stringify([{ kind: kind, amount: amount, note: note || '', entry_date: date, deduct: kind === 'deposit' ? deduct !== false : false, wallet_id: expenseWalletIdOrNull_(walletId) }]),
     prefer: 'return=minimal'
   });
   return getExpenseData(env, [period]);
 }
 
-async function updateExpenseSavingsLog(env, [id, amount, note, date, deduct, period]) {
+async function updateExpenseSavingsLog(env, [id, amount, note, date, deduct, period, walletId]) {
   var rows = await sb(env, 'expense_savings_log?id=eq.' + id + '&select=kind');
   if (!rows.length) throw new Error('Entry not found');
+  var patch = { amount: amount, note: note || '', entry_date: date, deduct: rows[0].kind === 'deposit' ? deduct !== false : false };
+  if (walletId !== undefined) patch.wallet_id = expenseWalletIdOrNull_(walletId);
   await sb(env, 'expense_savings_log?id=eq.' + id, {
     method: 'PATCH',
-    body: JSON.stringify({ amount: amount, note: note || '', entry_date: date, deduct: rows[0].kind === 'deposit' ? deduct !== false : false }),
+    body: JSON.stringify(patch),
     prefer: 'return=minimal'
   });
   return getExpenseData(env, [period]);
@@ -640,6 +709,65 @@ async function updateExpenseSavingsLog(env, [id, amount, note, date, deduct, per
 
 async function deleteExpenseSavingsLog(env, [id, period]) {
   await sb(env, 'expense_savings_log?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
+  return getExpenseData(env, [period]);
+}
+
+/* ---- Nguồn tiền + chuyển tiền ---- */
+
+async function addExpenseWallet(env, [name, color, opening, period]) {
+  if (!String(name || '').trim()) throw new Error('Enter a name');
+  await sb(env, 'expense_wallets', {
+    method: 'POST',
+    body: JSON.stringify([{ name: String(name).trim(), color: color || '#bfe3ff', opening: Number(opening) || 0 }]),
+    prefer: 'return=minimal'
+  });
+  return getExpenseData(env, [period]);
+}
+
+async function updateExpenseWallet(env, [id, name, color, opening, period]) {
+  if (!String(name || '').trim()) throw new Error('Enter a name');
+  await sb(env, 'expense_wallets?id=eq.' + id, {
+    method: 'PATCH',
+    body: JSON.stringify({ name: String(name).trim(), color: color || '#bfe3ff', opening: Number(opening) || 0 }),
+    prefer: 'return=minimal'
+  });
+  return getExpenseData(env, [period]);
+}
+
+// Còn giao dịch/chuyển tiền dùng nguồn này thì Postgres chặn (FK restrict) → báo lỗi dễ hiểu.
+async function deleteExpenseWallet(env, [id, period]) {
+  try {
+    await sb(env, 'expense_wallets?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
+  } catch (e) {
+    throw new Error('This source still has transactions. Move or delete them first.');
+  }
+  return getExpenseData(env, [period]);
+}
+
+async function addExpenseTransfer(env, [fromId, toId, amount, note, date, period]) {
+  if (!fromId || !toId || Number(fromId) === Number(toId)) throw new Error('Pick two different sources');
+  if (!(Number(amount) > 0)) throw new Error('Enter an amount');
+  await sb(env, 'expense_transfers', {
+    method: 'POST',
+    body: JSON.stringify([{ from_wallet: Number(fromId), to_wallet: Number(toId), amount: Number(amount), note: note || '', entry_date: date }]),
+    prefer: 'return=minimal'
+  });
+  return getExpenseData(env, [period || String(date).slice(0, 7)]);
+}
+
+async function updateExpenseTransfer(env, [id, fromId, toId, amount, note, date, period]) {
+  if (!fromId || !toId || Number(fromId) === Number(toId)) throw new Error('Pick two different sources');
+  if (!(Number(amount) > 0)) throw new Error('Enter an amount');
+  await sb(env, 'expense_transfers?id=eq.' + id, {
+    method: 'PATCH',
+    body: JSON.stringify({ from_wallet: Number(fromId), to_wallet: Number(toId), amount: Number(amount), note: note || '', entry_date: date }),
+    prefer: 'return=minimal'
+  });
+  return getExpenseData(env, [period]);
+}
+
+async function deleteExpenseTransfer(env, [id, period]) {
+  await sb(env, 'expense_transfers?id=eq.' + id, { method: 'DELETE', prefer: 'return=minimal' });
   return getExpenseData(env, [period]);
 }
 
@@ -715,6 +843,12 @@ const ACTIONS = {
   setExpenseBudgetOverall,
   setExpenseCategoryBudget,
   deleteExpenseCategoryBudget,
+  addExpenseWallet,
+  updateExpenseWallet,
+  deleteExpenseWallet,
+  addExpenseTransfer,
+  updateExpenseTransfer,
+  deleteExpenseTransfer,
   addExpenseCategory,
   updateExpenseCategory,
   deleteExpenseCategory,
