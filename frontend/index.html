@@ -270,6 +270,19 @@
             </div>
           </div>
 
+          <div class="expense-card expense-wallets-card">
+            <div class="expense-wallets-head">
+              <div>
+                <div class="expense-sub-line" style="margin:0;">Total balance · all sources</div>
+                <div class="expense-wallets-total" id="expense-wallets-total">0đ</div>
+              </div>
+              <button class="pill-btn secondary expense-transfer-btn" id="expense-transfer-btn">⇄ Transfer</button>
+            </div>
+            <div id="expense-wallets-list"></div>
+            <div class="expense-income-add-wrap"><button class="pill-btn expense-income-add-btn" id="expense-wallet-add-btn">+ Add source</button></div>
+            <div id="expense-transfers-list"></div>
+          </div>
+
           <div class="expense-card expense-savings-card">
             <div class="expense-savings-head">
               <div>
@@ -377,6 +390,7 @@
           <div class="expense-history-filters">
             <input type="text" id="expense-history-search" placeholder="Search notes, e.g. coffee" autocomplete="off">
             <select id="expense-history-category-filter"></select>
+            <select id="expense-history-wallet-filter"></select>
             <select id="expense-history-amount-filter">
               <option value="">All amounts</option>
               <option value="lt100">Under 100k</option>
@@ -900,6 +914,9 @@
       <div class="expense-field-caption">Category</div>
       <div class="expense-chip-grid" id="expense-entry-category-grid"></div>
 
+      <div class="expense-field-caption">Source</div>
+      <select id="expense-entry-wallet" class="expense-modal-select"></select>
+
       <div class="expense-field-caption">Date</div>
       <div class="expense-date-row">
         <input type="date" id="expense-date-custom-input">
@@ -926,6 +943,8 @@
       <div class="expense-amount-row"><input type="text" id="expense-income-amount-input" class="expense-amount-field" placeholder="0" inputmode="numeric"><span>đ</span></div>
       <div class="expense-field-caption">Source</div>
       <input type="text" id="expense-income-source-input" placeholder="e.g. Salary, Freelance" autocomplete="off">
+      <div class="expense-field-caption">Goes into</div>
+      <select id="expense-income-wallet" class="expense-modal-select"></select>
       <div class="expense-field-caption">Date received</div>
       <input type="date" id="expense-income-date-input">
       <div class="modal-actions">
@@ -1000,12 +1019,61 @@
       <input type="text" id="expense-savings-tx-note" placeholder="e.g. Bonus" autocomplete="off">
       <div class="expense-field-caption">Date</div>
       <input type="date" id="expense-savings-tx-date">
+      <div id="expense-savings-tx-wallet-row">
+        <div class="expense-field-caption" id="expense-savings-tx-wallet-caption">From source</div>
+        <select id="expense-savings-tx-wallet" class="expense-modal-select"></select>
+      </div>
       <label class="expense-checkbox-row" id="expense-savings-tx-deduct-row">
         <input type="checkbox" id="expense-savings-tx-deduct" checked> Deduct from this month's balance
       </label>
       <div class="modal-actions">
         <button class="pill-btn secondary" id="expense-savings-tx-cancel">Cancel</button>
         <button class="pill-btn" id="expense-savings-tx-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="expense-wallet-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="expense-wallet-modal-title">Add Source</h3>
+        <button id="expense-wallet-modal-close" class="modal-close">✕</button>
+      </div>
+      <div class="expense-field-caption">Name</div>
+      <input type="text" id="expense-wallet-name-input" placeholder="e.g. Bank, Cash, E-wallet" autocomplete="off">
+      <div class="expense-field-caption">Color</div>
+      <div class="expense-swatches" id="expense-wallet-color-swatches"></div>
+      <div class="expense-field-caption">Starting balance</div>
+      <div class="expense-amount-row"><input type="text" id="expense-wallet-opening-input" class="expense-amount-field" placeholder="0" inputmode="numeric"><span>đ</span></div>
+      <div class="expense-hint-small">What this source holds right now, before any transactions you add here.</div>
+      <button type="button" class="expense-danger-link" id="expense-wallet-delete-btn">Delete this source</button>
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="expense-wallet-cancel-btn">Cancel</button>
+        <button class="pill-btn" id="expense-wallet-save-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="expense-transfer-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="expense-transfer-modal-title">Transfer</h3>
+        <button id="expense-transfer-modal-close" class="modal-close">✕</button>
+      </div>
+      <div class="expense-field-caption">From</div>
+      <select id="expense-transfer-from" class="expense-modal-select"></select>
+      <div class="expense-field-caption">To</div>
+      <select id="expense-transfer-to" class="expense-modal-select"></select>
+      <div class="expense-field-caption">Amount</div>
+      <div class="expense-amount-row"><input type="text" id="expense-transfer-amount" class="expense-amount-field" placeholder="0" inputmode="numeric"><span>đ</span></div>
+      <div class="expense-field-caption">Date</div>
+      <input type="date" id="expense-transfer-date">
+      <div class="expense-field-caption">Note (optional)</div>
+      <input type="text" id="expense-transfer-note" placeholder="e.g. ATM withdrawal" autocomplete="off">
+      <button type="button" class="expense-danger-link" id="expense-transfer-delete-btn">Delete this transfer</button>
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="expense-transfer-cancel-btn">Cancel</button>
+        <button class="pill-btn" id="expense-transfer-save-btn">Save</button>
       </div>
     </div>
   </div>
