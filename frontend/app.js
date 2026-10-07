@@ -3,7 +3,7 @@
 /* ---------------------------------------------------------------- */
 function scatterFlowers() {
   const field = document.getElementById('flower-field');
-  const colors = ['#ffb6c1', '#b0e0e6', '#dde874'];
+  const colors = ['#ffc8dd', '#bfe3ff', '#d8ccff', '#bfead7', '#ffd4b8'];
   const count = window.innerWidth < 760 ? 18 : 34;
   for (let i = 0; i < count; i++) {
     const el = document.createElement('div');
@@ -153,21 +153,23 @@ function showScreen(id) {
 // Maps each app-view to the navbar section it belongs to, purely for highlighting the active nav link.
 var NAV_SECTION_MAP_ = {
   'menu-view': 'home',
-  'accounts-view': 'tools', 'symbols-view': 'tools',
-  'datediff-view': 'tools', 'eating-view': 'tools', 'qr-view': 'tools',
-  'expense-view': 'tools',
+  'accounts-view': 'personal', 'expense-view': 'personal',
+  'symbols-view': 'tools', 'datediff-view': 'tools', 'eating-view': 'tools',
+  'qr-view': 'tools', 'converter-view': 'tools',
   'memory-view': 'games', 'mochi-view': 'games', 'minesweeper-view': 'games'
 };
 
 // Which function actually "opens" each view (loads its data, etc.) — used to restore
-// the right page after a reload. 'accounts-view' is deliberately excluded: it's
-// password-gated, so a reload should never silently bypass that gate.
+// the right page after a reload. The Personal views (accounts-view, expense-view)
+// go through requirePersonal() so a reload can never bypass the password gate.
 var VIEW_OPENERS_ = {
+  'accounts-view': function () { requirePersonal(loadAccounts); },
+  'converter-view': function () { openConverter(); },
   'symbols-view': loadSymbols,
   'datediff-view': openDateDiff,
   'eating-view': openEating,
   'qr-view': openQrCollection,
-  'expense-view': openExpense,
+  'expense-view': function () { requirePersonal(openExpense); },
   'memory-view': openMemory,
   'mochi-view': openMochi,
   'minesweeper-view': openMinesweeper
@@ -236,12 +238,13 @@ function toggleMobileNavSubmenu(section) {
 // Which opener function each small drawer item ("data-open") jumps to —
 // same functions the old Tools/Games cards and desktop dock already use.
 var MOBILE_NAV_OPENERS_ = {
-  accounts: function () { openAccountsGate(); },
+  accounts: function () { requirePersonal(loadAccounts); },
+  converter: function () { openConverter(); },
   symbols: loadSymbols,
   datediff: openDateDiff,
   eating: openEating,
   qr: openQrCollection,
-  expense: openExpense,
+  expense: function () { requirePersonal(openExpense); },
   memory: openMemory,
   mochi: openMochi,
   minesweeper: openMinesweeper
@@ -251,24 +254,21 @@ var MOBILE_NAV_OPENERS_ = {
 // 'tools' = only the Tools cards, 'games' = only the Games cards. Each is exclusive now.
 var currentHomeSection_ = 'home';
 function showHomeSection(section) {
+  // Personal is never shown without the password having been entered this session.
+  if (section === 'personal' && !personalUnlocked) section = 'home';
   currentHomeSection_ = section;
-  var home = document.querySelector('.home-section');
-  var tools = document.querySelector('.content-section.tools');
-  var games = document.querySelector('.content-section.games');
+  var parts = {
+    home: document.querySelector('.home-section'),
+    tools: document.querySelector('.content-section.tools'),
+    games: document.querySelector('.content-section.games'),
+    personal: document.querySelector('.content-section.personal')
+  };
+  Object.keys(parts).forEach(function (k) {
+    if (parts[k]) parts[k].style.display = (k === section) ? '' : 'none';
+  });
   if (section === 'home') {
-    if (home) home.style.display = '';
-    if (tools) tools.style.display = 'none';
-    if (games) games.style.display = 'none';
     loadHomeData();
     expenseLoadHomeWidget();
-  } else if (section === 'tools') {
-    if (home) home.style.display = 'none';
-    if (tools) tools.style.display = '';
-    if (games) games.style.display = 'none';
-  } else if (section === 'games') {
-    if (home) home.style.display = 'none';
-    if (tools) tools.style.display = 'none';
-    if (games) games.style.display = '';
   }
   setNavActive(section);
   saveNavState_('menu-view', section);
@@ -281,7 +281,7 @@ function showView(id) {
     showHomeSection(currentHomeSection_);
   } else {
     setNavActive(NAV_SECTION_MAP_[id] || 'home');
-    if (id !== 'accounts-view') saveNavState_(id);
+    saveNavState_(id);
   }
 
   // The Expense tool's own mobile tab bar lives at the body level now (see
@@ -328,32 +328,66 @@ var currentType = null;
 var rowUid_ = 0; // shared counter for unique dynamic-field names (used by Symbols' Add rows)
 var accPad;
 
-function openAccountsGate() {
+/* ---- Personal password gate ----
+   One password for the whole Personal area (Account + Expenses). Asked once per
+   page load; the server hands back a signed token (valid ~12h) that gas-bridge
+   attaches to every request. Nothing is stored in localStorage, so closing the tab
+   or reloading asks again. */
+var personalUnlocked = false;
+var personalAfterUnlock_ = null;
+
+function requirePersonal(fn) {
+  if (personalUnlocked) { fn(); return; }
+  openPersonalGate(fn);
+}
+
+function openPersonalGate(afterFn) {
   stopSymbolsPolling();
+  personalAfterUnlock_ = afterFn || null;
   document.getElementById('accounts-modal').classList.add('active');
   accPad = PassCode('acc-gate-boxes', 'acc-gate-pad', function (code, resetFn) {
     showLoading();
     google.script.run
-      .withSuccessHandler(function (ok) {
+      .withSuccessHandler(function (r) {
         hideLoading();
-        if (ok) {
+        if (r && r.ok) {
+          personalUnlocked = true;
+          window.__personalToken = r.token;
           accPad.showSuccess('Login successful (๑ᵔ⌔ᵔ๑)');
           setTimeout(function () {
             document.getElementById('accounts-modal').classList.remove('active');
-            loadAccounts();
+            var fn = personalAfterUnlock_; personalAfterUnlock_ = null;
+            if (fn) fn();
           }, 550);
+        } else if (r && r.lockedSeconds) {
+          var mins = Math.max(1, Math.ceil(r.lockedSeconds / 60));
+          accPad.showError('Too many tries. Locked for ' + mins + ' more minute' + (mins === 1 ? '' : 's') + ' ʕ´-ก̀ʔᐝ');
+          accPad.errorShake();
         } else {
-          accPad.showError('Incorrect password ʕ´-ก̀ʔᐝ');
+          var left = r && typeof r.attemptsLeft === 'number' ? ' (' + r.attemptsLeft + ' left)' : '';
+          accPad.showError('Incorrect password' + left + ' ʕ´-ก̀ʔᐝ');
           accPad.errorShake();
         }
       })
       .withFailureHandler(function (err) { hideLoading(); accPad.showError('Something went wrong ʕ´-ก̀ʔᐝ'); resetFn(); })
-      .checkPassword('DS_accounts', code);
+      .personalLogin(code);
   }, 'acc-gate-status');
   // Always start from a clean slate — no digits, no leftover status text.
   accPad.reset();
   accPad.clearStatus();
 }
+
+// Token expired / rejected by the server → lock again and go home.
+window.addEventListener('personal-unauthorized', function () {
+  if (!personalUnlocked) return;
+  personalUnlocked = false;
+  window.__personalToken = null;
+  hideLoading();
+  toast('Session expired — please log in again');
+  goHome('home');
+});
+
+function openAccountsGate() { requirePersonal(loadAccounts); }
 
 function loadAccounts() {
   showView('accounts-view');
@@ -1452,8 +1486,7 @@ function icdEscape(s) {
 /* EATING TRACKER                                                      */
 /* ---------------------------------------------------------------- */
 var eatingData = [];
-var eatingEditingDay = null;
-var eatingYakultSelection = false;
+var eatingBusy_ = false;
 
 function openEating() {
   showView('eating-view');
@@ -1474,103 +1507,66 @@ function loadEatingData() {
 }
 
 function renderEatingStats() {
-  var yakultTimes = 0;
-  var bubbleTimes = 0, bubbleTotal = 0;
-  var outTimes = 0, outTotal = 0;
-  var totalSpent = 0, daysTracked = 0;
-
+  var yes = 0, tracked = 0;
   eatingData.forEach(function (d) {
-    if (d.yakultMarked) {
-      daysTracked++;
-      if (d.yakultYes) yakultTimes++;
-    }
-    if (d.bubbleTea > 0) { bubbleTimes++; bubbleTotal += d.bubbleTea; }
-    if (d.eatingOut > 0) { outTimes++; outTotal += d.eatingOut; }
-    totalSpent += d.sum;
+    if (d.yakultMarked) tracked++;
+    if (d.yakultMarked && d.yakultYes) yes++;
   });
+  document.getElementById('eating-stat-yakult').textContent = yes + (yes === 1 ? ' time' : ' times');
+  document.getElementById('eating-stat-days').textContent = tracked + ' / 31';
+}
 
-  document.getElementById('eating-stat-yakult').textContent =
-    yakultTimes + (yakultTimes === 1 ? ' time' : ' times');
-  document.getElementById('eating-stat-bubble').textContent =
-    bubbleTimes + (bubbleTimes === 1 ? ' time — ' : ' times — ') + formatThousands(bubbleTotal);
-  document.getElementById('eating-stat-out').textContent =
-    outTimes + (outTimes === 1 ? ' time — ' : ' times — ') + formatThousands(outTotal);
-  document.getElementById('eating-stat-total').textContent = formatThousands(totalSpent);
-  document.getElementById('eating-stat-days').textContent = daysTracked + ' / 31';
+function eatingStateOf_(d) {
+  if (!d.yakultMarked) return null;
+  return d.yakultYes ? 'yes' : 'no';
 }
 
 function renderEatingCalendar() {
   var grid = document.getElementById('eating-calendar');
   grid.innerHTML = '';
   eatingData.forEach(function (d) {
-    var hasData = d.yakultMarked || d.bubbleTea > 0 || d.eatingOut > 0;
+    var st = eatingStateOf_(d);
     var cell = document.createElement('div');
-    cell.className = 'eating-day-cell' + (hasData ? ' has-data' : '');
-
-    var icons = '';
-    if (d.yakultYes) icons += '🥛';
-    if (d.bubbleTea > 0) icons += '🧋';
-    if (d.eatingOut > 0) icons += '🍱';
-
+    cell.className = 'eating-day-cell' + (st ? ' has-data state-' + st : '');
     cell.innerHTML =
       '<div class="eating-day-num">' + d.day + '</div>' +
-      (icons ? '<div class="eating-day-icons">' + icons + '</div>' : '') +
-      (hasData ? '<div class="eating-day-sum">' + formatThousands(d.sum) + '</div>' : '');
-    cell.onclick = function () { openEatingModal(d.day); };
+      (st === 'yes' ? '<div class="eating-day-icons">🥛</div>' : '') +
+      (st === 'no' ? '<div class="eating-day-icons eating-day-no">✕</div>' : '');
+    cell.onclick = function () { eatingCycleDay(d.day); };
     grid.appendChild(cell);
   });
 }
 
-function selectEatingYakult(val) {
-  eatingYakultSelection = val;
-  document.getElementById('eating-yakult-yes').classList.toggle('selected', val === true);
-  document.getElementById('eating-yakult-no').classList.toggle('selected', val === false);
-}
-
-// Strips everything but digits and re-formats the field's own value with "." separators live.
-function eatingFormatFieldLive(el) {
-  var digits = el.value.replace(/[^\d]/g, '');
-  el.value = digits ? formatThousands(Number(digits)) : '';
-}
-
-function eatingParseAmount(id) {
-  var raw = document.getElementById(id).value.replace(/\./g, '');
-  return Number(raw) || 0;
-}
-
-function openEatingModal(day) {
-  eatingEditingDay = day;
+// Tap a day: unmarked → yes → no → unmarked. Updates instantly, then syncs;
+// rolls back with a toast if the server call fails.
+function eatingCycleDay(day) {
+  if (eatingBusy_) return;
   var entry = eatingData[day - 1];
-  document.getElementById('eating-modal-title').textContent = 'Day ' + day;
-  selectEatingYakult(entry.yakultMarked ? entry.yakultYes : false);
-  document.getElementById('eating-field-bubble').value = entry.bubbleTea ? formatThousands(entry.bubbleTea) : '';
-  document.getElementById('eating-field-out').value = entry.eatingOut ? formatThousands(entry.eatingOut) : '';
-  updateEatingDailyTotalPreview();
-  document.getElementById('eating-modal').classList.add('active');
-}
-
-function updateEatingDailyTotalPreview() {
-  var b = eatingParseAmount('eating-field-bubble');
-  var o = eatingParseAmount('eating-field-out');
-  document.getElementById('eating-daily-total').textContent = formatThousands(b + o);
-}
-
-function saveEatingDayEntry() {
-  var b = eatingParseAmount('eating-field-bubble');
-  var o = eatingParseAmount('eating-field-out');
-
-  showLoading();
+  if (!entry) return;
+  var prev = { yakultMarked: entry.yakultMarked, yakultYes: entry.yakultYes };
+  var cur = eatingStateOf_(entry);
+  var next = cur === null ? 'yes' : (cur === 'yes' ? 'no' : null);
+  entry.yakultMarked = next !== null;
+  entry.yakultYes = next === 'yes';
+  renderEatingStats();
+  renderEatingCalendar();
+  eatingBusy_ = true;
   google.script.run
     .withSuccessHandler(function (list) {
-      hideLoading();
+      eatingBusy_ = false;
       eatingData = list;
       renderEatingStats();
       renderEatingCalendar();
-      document.getElementById('eating-modal').classList.remove('active');
-      toast('Saved successfully');
     })
-    .withFailureHandler(function (err) { hideLoading(); toast('Error: ' + err.message); })
-    .saveEatingDay(eatingEditingDay, eatingYakultSelection, b, o);
+    .withFailureHandler(function (err) {
+      eatingBusy_ = false;
+      entry.yakultMarked = prev.yakultMarked;
+      entry.yakultYes = prev.yakultYes;
+      renderEatingStats();
+      renderEatingCalendar();
+      toast('Error: ' + err.message);
+    })
+    .saveEatingDay(day, next);
 }
 
 function openEatingReset() {
@@ -1586,7 +1582,6 @@ function confirmEatingReset() {
       renderEatingStats();
       renderEatingCalendar();
       document.getElementById('eating-reset-modal').classList.remove('active');
-      toast('Data has been reset');
     })
     .withFailureHandler(function (err) { hideLoading(); toast('Error: ' + err.message); })
     .resetEatingData();
@@ -1596,7 +1591,7 @@ function confirmEatingReset() {
 /* EXPENSE TRACKER                                                     */
 /* ---------------------------------------------------------------- */
 var EXPENSE_MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-var EXPENSE_COLORS = ['#f6b8c6','#bcdfd0','#f6e2a0','#c9c0ee','#f3c89a','#a9d3ee','#e3c6c6'];
+var EXPENSE_COLORS = ['#ffc8dd','#ffb3c6','#ffd4b8','#fff0a8','#d9f0a8','#bfead7','#a8e6df','#bfe3ff','#a9c8ff','#d8ccff','#e8c8f5','#e3c6c6'];
 
 var expenseData = null;            // last payload from getExpenseData
 var expensePeriod = null;          // 'YYYY-MM' currently viewed
@@ -2402,26 +2397,12 @@ function expenseSetQuickAmount(v) {
   expenseSetAmountInputValue(input, expenseAmountInputValue(input) + v);
 }
 
-function expensePickDate(which) {
-  var today = expenseTodayStr();
-  if (which === 'today') expensePendingDate = today;
-  else if (which === 'yesterday') {
-    var d = new Date(); d.setDate(d.getDate() - 1);
-    expensePendingDate = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-  }
-  expenseUpdateDateButtons();
-}
 function expensePickCustomDate(value) {
   if (!value) return;
   expensePendingDate = value;
   expenseUpdateDateButtons();
 }
 function expenseUpdateDateButtons() {
-  var today = expenseTodayStr();
-  var y = new Date(); y.setDate(y.getDate() - 1);
-  var yesterday = y.getFullYear() + '-' + String(y.getMonth()+1).padStart(2,'0') + '-' + String(y.getDate()).padStart(2,'0');
-  document.getElementById('expense-date-today-btn').classList.toggle('active', expensePendingDate === today);
-  document.getElementById('expense-date-yesterday-btn').classList.toggle('active', expensePendingDate === yesterday);
   document.getElementById('expense-date-custom-input').value = expensePendingDate;
   var d = new Date(expensePendingDate + 'T00:00:00');
   var weekday = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
@@ -2477,7 +2458,7 @@ function expenseLoadHomeWidget() {
     .withFailureHandler(function () { el.textContent = '—'; })
     .getExpenseTodayTotal();
 }
-function expenseOpenFromHomeWidget() { openExpense(); }
+function expenseOpenFromHomeWidget() { requirePersonal(openExpense); }
 
 /* ---- static event wiring (called once, from DOMContentLoaded) ---- */
 function expenseWireEvents() {
@@ -2496,7 +2477,7 @@ function expenseWireEvents() {
     b.onclick = function () { expenseSetQuickAmount(Number(b.dataset.amount)); };
   });
 
-  document.getElementById('open-expense').onclick = openExpense;
+  document.getElementById('open-expense').onclick = function () { requirePersonal(openExpense); };
   document.getElementById('home-expense-widget').onclick = expenseOpenFromHomeWidget;
 
   document.getElementById('expense-income-add-link').onclick = function () { expenseOpenIncomeModal(null); };
@@ -2517,9 +2498,8 @@ function expenseWireEvents() {
   document.getElementById('expense-new-category-btn').onclick = function () { expenseOpenCategoryModal(null); };
   document.getElementById('expense-mobile-add-btn').onclick = function () { expenseOpenEntryModal(null); };
 
-  document.getElementById('expense-date-today-btn').onclick = function () { expensePickDate('today'); };
-  document.getElementById('expense-date-yesterday-btn').onclick = function () { expensePickDate('yesterday'); };
   document.getElementById('expense-date-custom-input').onchange = function () { expensePickCustomDate(this.value); };
+  document.getElementById('expense-date-custom-input').oninput = function () { expensePickCustomDate(this.value); };
 
   document.getElementById('expense-entry-modal-close').onclick = function () { document.getElementById('expense-entry-modal').classList.remove('active'); };
   document.getElementById('expense-entry-cancel-btn').onclick = function () { document.getElementById('expense-entry-modal').classList.remove('active'); };
@@ -3364,6 +3344,11 @@ document.addEventListener('DOMContentLoaded', function () {
   var savedNav = null;
   try { savedNav = JSON.parse(localStorage.getItem('henlo_nav') || 'null'); } catch (e) { savedNav = null; }
   if (savedNav && savedNav.view && savedNav.view !== 'menu-view' && typeof VIEW_OPENERS_[savedNav.view] === 'function') {
+    if (savedNav.view === 'accounts-view' || savedNav.view === 'expense-view') {
+      // Personal views: land on Home first, then ask for the password.
+      showView('menu-view');
+      showHomeSection('home');
+    }
     VIEW_OPENERS_[savedNav.view]();
   } else {
     showView('menu-view');
@@ -3379,8 +3364,10 @@ document.addEventListener('DOMContentLoaded', function () {
   // navigating immediately.
   document.querySelectorAll('.app-nav-link:not(.app-nav-group-toggle)').forEach(function (btn) {
     btn.onclick = function () {
-      goHome(btn.dataset.navSection);
+      var sec = btn.dataset.navSection;
       closeMobileNavDrawer();
+      if (sec === 'personal') requirePersonal(function () { goHome('personal'); });
+      else goHome(sec);
     };
   });
   document.querySelectorAll('.app-nav-group-toggle').forEach(function (btn) {
@@ -3398,6 +3385,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('mobile-nav-scrim').onclick = closeMobileNavDrawer;
 
   document.getElementById('open-accounts').onclick = openAccountsGate;
+  document.getElementById('open-converter').onclick = function () { openConverter(); };
   document.getElementById('open-symbols').onclick = loadSymbols;
   document.getElementById('open-datediff').onclick = openDateDiff;
   document.getElementById('open-memory').onclick = openMemory;
@@ -3416,13 +3404,6 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('eating-reset-cancel').onclick = function () { document.getElementById('eating-reset-modal').classList.remove('active'); };
   document.getElementById('eating-reset-close').onclick = function () { document.getElementById('eating-reset-modal').classList.remove('active'); };
   document.getElementById('eating-reset-confirm').onclick = confirmEatingReset;
-  document.getElementById('eating-modal-cancel').onclick = function () { document.getElementById('eating-modal').classList.remove('active'); };
-  document.getElementById('eating-modal-close').onclick = function () { document.getElementById('eating-modal').classList.remove('active'); };
-  document.getElementById('eating-modal-save').onclick = saveEatingDayEntry;
-  document.getElementById('eating-yakult-yes').onclick = function () { selectEatingYakult(true); };
-  document.getElementById('eating-yakult-no').onclick = function () { selectEatingYakult(false); };
-  document.getElementById('eating-field-bubble').oninput = function () { eatingFormatFieldLive(this); updateEatingDailyTotalPreview(); };
-  document.getElementById('eating-field-out').oninput = function () { eatingFormatFieldLive(this); updateEatingDailyTotalPreview(); };
 
   document.querySelectorAll('.mochi-color-swatch').forEach(function (btn) {
     btn.onclick = function () {
