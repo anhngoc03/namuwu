@@ -37,12 +37,82 @@ async function sb(env, path, options = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-/* ---------------------------- AUTH ---------------------------- */
+/* ---------------------------- AUTH (PERSONAL) ---------------------------- */
+// Personal = Account + Expense. Mật khẩu 4 số lưu ở bảng `pass` (menu = 'DS_personal',
+// tạm fallback 'DS_accounts' nếu chưa đổi tên). Đăng nhập đúng → server cấp TOKEN có
+// chữ ký HMAC (hạn 12 giờ, cần biến môi trường PERSONAL_SECRET). Mọi action của Account
+// và Expense đều bị từ chối nếu không kèm token hợp lệ → gọi thẳng /api cũng không lấy được.
+// Sai 5 lần liên tiếp → khoá đăng nhập 15 phút (đếm ở bảng personal_auth).
 
-async function checkPassword(env, [menu, pass]) {
-  const rows = await sb(env, `pass?menu=eq.${encodeURIComponent(menu)}&select=pass`);
-  if (!rows || !rows.length) return false;
-  return String(rows[0].pass || '').trim() === String(pass || '').trim();
+const PERSONAL_TOKEN_TTL_MS = 12 * 3600 * 1000;
+const PERSONAL_MAX_FAILS = 5;
+const PERSONAL_LOCK_MS = 15 * 60 * 1000;
+const ACCOUNT_ACTIONS_ = ['getAccountsData', 'addAccountRow', 'updateAccountRow', 'saveAccountType'];
+
+function isPersonalAction_(action) {
+  if (ACCOUNT_ACTIONS_.indexOf(action) !== -1) return true;
+  // Mọi action Expense đều cần token, trừ ô tóm tắt "Today's spending" ở Home (giữ công khai theo yêu cầu).
+  return /Expense/.test(action) && action !== 'getExpenseTodayTotal';
+}
+
+async function personalSign_(env, text) {
+  if (!env.PERSONAL_SECRET) throw new Error('PERSONAL_SECRET is not set on the server');
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(env.PERSONAL_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(text)));
+  let bin = '';
+  for (let i = 0; i < sig.length; i++) bin += String.fromCharCode(sig[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function personalMakeToken_(env) {
+  const exp = String(Date.now() + PERSONAL_TOKEN_TTL_MS);
+  return exp + '.' + await personalSign_(env, 'personal.' + exp);
+}
+
+async function personalVerifyToken_(env, token) {
+  if (!token || typeof token !== 'string') return false;
+  const dot = token.indexOf('.');
+  if (dot < 1) return false;
+  const exp = token.slice(0, dot), sig = token.slice(dot + 1);
+  if (!/^\d+$/.test(exp) || Number(exp) < Date.now()) return false;
+  const expect = await personalSign_(env, 'personal.' + exp);
+  if (sig.length !== expect.length) return false;
+  let diff = 0;
+  for (let i = 0; i < sig.length; i++) diff |= sig.charCodeAt(i) ^ expect.charCodeAt(i);
+  return diff === 0;
+}
+
+// Luôn trả object (không throw khi sai mật khẩu) để frontend hiện thông báo đúng:
+//   { ok:true, token } | { ok:false, attemptsLeft } | { ok:false, lockedSeconds }
+async function personalLogin(env, [code]) {
+  await personalSign_(env, 'check'); // báo lỗi rõ ràng nếu thiếu PERSONAL_SECRET
+  let rows = await sb(env, 'personal_auth?id=eq.1&select=fails,locked_until');
+  if (!rows.length) {
+    await sb(env, 'personal_auth', { method: 'POST', body: JSON.stringify([{ id: 1, fails: 0, locked_until: null }]), prefer: 'return=minimal' });
+    rows = [{ fails: 0, locked_until: null }];
+  }
+  const now = Date.now();
+  const lockedUntil = rows[0].locked_until ? Date.parse(rows[0].locked_until) : 0;
+  if (lockedUntil > now) return { ok: false, lockedSeconds: Math.ceil((lockedUntil - now) / 1000) };
+
+  let pr = await sb(env, 'pass?menu=eq.DS_personal&select=pass');
+  if (!pr.length) pr = await sb(env, 'pass?menu=eq.DS_accounts&select=pass');
+  const good = pr.length && String(pr[0].pass || '').trim() === String(code || '').trim();
+
+  if (good) {
+    await sb(env, 'personal_auth?id=eq.1', { method: 'PATCH', body: JSON.stringify({ fails: 0, locked_until: null }), prefer: 'return=minimal' });
+    return { ok: true, token: await personalMakeToken_(env) };
+  }
+  const fails = (Number(rows[0].fails) || 0) + 1;
+  if (fails >= PERSONAL_MAX_FAILS) {
+    await sb(env, 'personal_auth?id=eq.1', {
+      method: 'PATCH', body: JSON.stringify({ fails: 0, locked_until: new Date(now + PERSONAL_LOCK_MS).toISOString() }), prefer: 'return=minimal'
+    });
+    return { ok: false, lockedSeconds: Math.ceil(PERSONAL_LOCK_MS / 1000) };
+  }
+  await sb(env, 'personal_auth?id=eq.1', { method: 'PATCH', body: JSON.stringify({ fails: fails }), prefer: 'return=minimal' });
+  return { ok: false, attemptsLeft: PERSONAL_MAX_FAILS - fails };
 }
 
 /* -------------------------- ACCOUNTS --------------------------- */
@@ -166,23 +236,21 @@ async function submitMochiScore(env, [name, score]) {
 /* --------------------------- EATING TRACKER ------------------------------ */
 
 async function getEatingData(env) {
-  const rows = await sb(env, 'eating?select=day,yakult,bubble_tea,eating_out,sum&order=day.asc');
+  const rows = await sb(env, 'eating?select=day,yakult&order=day.asc');
   return rows.map((r) => ({
     day: r.day,
     yakultMarked: r.yakult !== null,
-    yakultYes: r.yakult === true,
-    bubbleTea: Number(r.bubble_tea) || 0,
-    eatingOut: Number(r.eating_out) || 0,
-    sum: Number(r.sum) || 0
+    yakultYes: r.yakult === true
   }));
 }
 
-async function saveEatingDay(env, [day, yakultYes, bubbleTea, eatingOut]) {
-  const b = Number(bubbleTea) || 0;
-  const e = Number(eatingOut) || 0;
+// state: 'yes' | 'no' | null (chưa ghi). Bấm ô ngày trên frontend xoay vòng: chưa ghi → yes → no → chưa ghi.
+async function saveEatingDay(env, [day, state]) {
+  const val = state === 'yes' ? true : state === 'no' ? false : null;
   await sb(env, `eating?day=eq.${Number(day)}`, {
     method: 'PATCH',
-    body: JSON.stringify({ yakult: !!yakultYes, bubble_tea: b, eating_out: e, sum: b + e })
+    body: JSON.stringify({ yakult: val }),
+    prefer: 'return=minimal'
   });
   return getEatingData(env);
 }
@@ -190,7 +258,7 @@ async function saveEatingDay(env, [day, yakultYes, bubbleTea, eatingOut]) {
 async function resetEatingData(env) {
   await sb(env, 'eating?day=gt.0', {
     method: 'PATCH',
-    body: JSON.stringify({ yakult: null, bubble_tea: 0, eating_out: 0, sum: 0 }),
+    body: JSON.stringify({ yakult: null }),
     prefer: 'return=minimal'
   });
   return getEatingData(env);
@@ -607,7 +675,7 @@ async function getExpenseTodayTotal(env) {
  * ============================================================ */
 
 const ACTIONS = {
-  checkPassword,
+  personalLogin,
   getAccountsData,
   addAccountRow,
   updateAccountRow,
@@ -653,10 +721,14 @@ const ACTIONS = {
   getExpenseTodayTotal
 };
 
-async function handle(env, action, args) {
+async function handle(env, action, args, token) {
   const fn = ACTIONS[action];
   if (typeof fn !== 'function') {
     throw new Error('Action không hợp lệ: ' + action);
+  }
+  // Account + Expense chỉ dùng được khi kèm token Personal hợp lệ.
+  if (isPersonalAction_(action) && !(await personalVerifyToken_(env, token))) {
+    throw new Error('Unauthorized');
   }
   // Các hàm không cần tham số (getAccountsData, getSymbolsData, ...) vẫn nhận
   // được mảng args rỗng [] một cách an toàn vì chỉ những hàm cần mới destructure nó.
@@ -667,7 +739,7 @@ async function handle(env, action, args) {
 export async function onRequestPost(context) {
   try {
     const body = await context.request.json();
-    const data = await handle(context.env, body.action, body.args);
+    const data = await handle(context.env, body.action, body.args, body.token);
     return new Response(JSON.stringify({ ok: true, data }), {
       headers: { 'Content-Type': 'application/json' }
     });
@@ -685,7 +757,7 @@ export async function onRequestGet(context) {
     const url = new URL(context.request.url);
     const action = url.searchParams.get('action');
     const args = url.searchParams.get('args') ? JSON.parse(url.searchParams.get('args')) : [];
-    const data = await handle(context.env, action, args);
+    const data = await handle(context.env, action, args, url.searchParams.get('token'));
     return new Response(JSON.stringify({ ok: true, data }), {
       headers: { 'Content-Type': 'application/json' }
     });
