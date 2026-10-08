@@ -2557,10 +2557,10 @@ function expenseSaveCategory() {
     document.getElementById('expense-category-modal').classList.remove('active');
     expenseRenderCategories();
     if (expenseCategoryReturnToEntry) {
-      // "+ New category" was pressed inside the Add Expense popup: refresh its chips and pick the new one.
+      // "+ New category" was picked inside the Add Expense popup: refresh its dropdown and pick the new one.
       expenseCategoryReturnToEntry = false;
       var created = expenseData.categories.find(function (c) { return idsBefore.indexOf(c.id) === -1; });
-      expenseRenderEntryCategoryChips(created ? created.id : null);
+      expenseRenderEntryCategorySelect(created ? created.id : null);
     }
     toast('Saved!');
   };
@@ -2577,8 +2577,7 @@ function expenseOpenEntryModal(entry, presetDate) {
   document.getElementById('expense-entry-modal-title').textContent = entry ? 'Edit Expense' : 'Add Expense';
   expenseSetAmountInputValue(document.getElementById('expense-amount-input'), entry ? entry.amount : 0);
 
-  document.getElementById('expense-entry-category-grid').dataset.chosen = '';
-  expenseRenderEntryCategoryChips(entry ? entry.categoryId : null);
+  expenseRenderEntryCategorySelect(entry ? entry.categoryId : null);
 
   expenseFillWalletSelect(document.getElementById('expense-entry-wallet'), entry ? entry.walletId : undefined,
     (entry && entry.walletId == null && (expenseData.wallets || []).length) ? 'No source (unassigned)' : null);
@@ -2589,35 +2588,32 @@ function expenseOpenEntryModal(entry, presetDate) {
   document.getElementById('expense-entry-modal').classList.add('active');
 }
 
-// Category chips inside the Add Expense popup (alphabetical) + a "+ New category"
-// chip, so on a phone you can create a category right where you need it.
-function expenseRenderEntryCategoryChips(preferredId) {
-  var catGrid = document.getElementById('expense-entry-category-grid');
-  var current = Number(catGrid.dataset.chosen) || null;
-  var selectedCat = preferredId || current || (expenseData.categories[0] ? expenseData.categories[0].id : null);
-  if (selectedCat && !expenseData.categories.some(function (c) { return c.id === selectedCat; })) {
-    selectedCat = expenseData.categories[0] ? expenseData.categories[0].id : null;
-  }
-  catGrid.innerHTML = '';
+// Category dropdown inside the Add Expense popup (alphabetical). Starts on a
+// "— Pick a category —" placeholder so the choice is always deliberate; the last
+// option "+ New category" opens the Category modal right where you need it.
+var EXPENSE_NEW_CATEGORY_OPT = '__new__';
+function expenseRenderEntryCategorySelect(selectedId) {
+  var sel = document.getElementById('expense-entry-category');
+  sel.innerHTML = '';
+  var ph = document.createElement('option'); ph.value = ''; ph.textContent = '— Pick a category —'; sel.appendChild(ph);
   expenseData.categories.forEach(function (c) {
-    var chip = document.createElement('div');
-    chip.className = 'expense-chip' + (c.id === selectedCat ? ' active' : '');
-    chip.style.setProperty('--chip-color', c.color);
-    chip.innerHTML = '<span class="expense-dot" style="background:' + c.color + '"></span>' + icdEscape(c.name);
-    chip.dataset.id = c.id;
-    chip.onclick = function () {
-      catGrid.querySelectorAll('.expense-chip').forEach(function (x) { x.classList.remove('active'); });
-      chip.classList.add('active');
-      catGrid.dataset.chosen = c.id;
-    };
-    catGrid.appendChild(chip);
+    var opt = document.createElement('option'); opt.value = c.id; opt.textContent = c.name; sel.appendChild(opt);
   });
-  var add = document.createElement('div');
-  add.className = 'expense-chip expense-chip-add';
-  add.textContent = '+ New category';
-  add.onclick = function () { expenseCategoryReturnToEntry = true; expenseOpenCategoryModal(null); };
-  catGrid.appendChild(add);
-  catGrid.dataset.chosen = selectedCat || '';
+  var add = document.createElement('option'); add.value = EXPENSE_NEW_CATEGORY_OPT; add.textContent = '+ New category'; sel.appendChild(add);
+  var want = selectedId ? String(selectedId) : '';
+  sel.value = want;
+  if (sel.value !== want) sel.value = '';
+  sel.dataset.prev = sel.value;
+}
+function expenseOnEntryCategoryChange() {
+  var sel = document.getElementById('expense-entry-category');
+  if (sel.value === EXPENSE_NEW_CATEGORY_OPT) {
+    sel.value = sel.dataset.prev || '';   // stays on the old pick if the Category modal is cancelled
+    expenseCategoryReturnToEntry = true;
+    expenseOpenCategoryModal(null);
+    return;
+  }
+  sel.dataset.prev = sel.value;
 }
 
 function expenseSetQuickAmount(v) {
@@ -2640,8 +2636,7 @@ function expenseUpdateDateButtons() {
 function expenseSaveEntry() {
   var amount = expenseAmountInputValue(document.getElementById('expense-amount-input'));
   if (!amount || amount <= 0) { toast('Enter an amount'); return; }
-  var catGrid = document.getElementById('expense-entry-category-grid');
-  var categoryId = Number(catGrid.dataset.chosen);
+  var categoryId = Number(document.getElementById('expense-entry-category').value);
   if (!categoryId) { toast('Pick a category'); return; }
   var note = document.getElementById('expense-note-input').value.trim();
   var date = expensePendingDate;
@@ -2728,6 +2723,7 @@ function expenseWireEvents() {
   document.getElementById('expense-new-category-btn').onclick = function () { expenseOpenCategoryModal(null); };
   document.getElementById('expense-mobile-add-btn').onclick = function () { expenseOpenEntryModal(null); };
 
+  document.getElementById('expense-entry-category').onchange = expenseOnEntryCategoryChange;
   document.getElementById('expense-date-custom-input').onchange = function () { expensePickCustomDate(this.value); };
   document.getElementById('expense-date-custom-input').oninput = function () { expensePickCustomDate(this.value); };
 
