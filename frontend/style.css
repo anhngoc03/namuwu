@@ -1278,6 +1278,16 @@ body.mobile-nav-open .mobile-nav-toggle{
 /* Income card: the Add button is small, centred, with even spacing, and the
    last row drops its divider so the button never sits on a line. */
 .expense-income-add-wrap{ display:flex; justify-content:center; margin-top:16px; }
+
+/* Folded history lists (transfers / income / savings): ▼ under the list slides it open */
+.expense-collapse{ display:grid; grid-template-rows:0fr; transition:grid-template-rows .35s ease; }
+.expense-collapse.open{ grid-template-rows:1fr; }
+.expense-collapse-inner{ overflow:hidden; min-height:0; }
+.expense-collapse-toggle{
+  display:block; margin:6px auto 0; padding:4px 14px; background:none; border:none; cursor:pointer;
+  color:var(--exp-pink-deep); font-size:14px; line-height:1; transition:transform .35s ease;
+}
+.expense-collapse-toggle.open{ transform:rotate(180deg); }
 .expense-income-add-btn{ padding:9px 22px; font-size:13px; width:auto; margin:0; }
 #expense-income-list .expense-history-row:last-child{ border-bottom:none; }
 #expense-savings-log .expense-history-row:last-child{ border-bottom:none; }

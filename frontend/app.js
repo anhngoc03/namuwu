@@ -1673,8 +1673,11 @@ function expenseMonthDefaultDate() {
   return expensePeriod === expenseCurrentPeriod() ? expenseTodayStr() : expensePeriod + '-01';
 }
 // Remaining = money carried over from earlier months + this month's income
+//             + savings withdrawals returned to a source (not counted as income)
 //             − this month's expenses − savings deposits that were deducted.
-function expenseAvailable() { return (expenseData.carryIn || 0) + expenseData.income; }
+function expenseAvailable() {
+  return (expenseData.carryIn || 0) + expenseData.income + (expenseData.savings ? expenseData.savings.monthWithdrawals || 0 : 0);
+}
 function expenseRemaining() {
   return expenseAvailable() - expenseEntriesTotal(expenseData.entries) - (expenseData.savings ? expenseData.savings.monthDeposits : 0);
 }
@@ -1875,7 +1878,38 @@ function expenseRenderWallets() {
       row.querySelector('button').onclick = function () { expenseOpenTransferModal(tr); };
       tl.appendChild(row);
     });
+    expenseMakeCollapsible(tl, 'transfers');
   }
+}
+
+// History lists (transfers / income / savings) start folded; a ▼ under the list
+// slides the rows open. Open/closed is remembered per list until the page reloads.
+var expenseCollapseOpen = {};
+function expenseMakeCollapsible(list, key) {
+  var rows = list.querySelectorAll(':scope > .expense-history-row');
+  if (!rows.length) return;
+  var open = !!expenseCollapseOpen[key];
+  var wrap = document.createElement('div');
+  wrap.className = 'expense-collapse' + (open ? ' open' : '');
+  var inner = document.createElement('div');
+  inner.className = 'expense-collapse-inner';
+  rows.forEach(function (r) { inner.appendChild(r); });
+  wrap.appendChild(inner);
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'expense-collapse-toggle' + (open ? ' open' : '');
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  btn.setAttribute('aria-label', 'Show / hide history');
+  btn.textContent = '▼';
+  btn.onclick = function () {
+    open = !open;
+    expenseCollapseOpen[key] = open;
+    wrap.classList.toggle('open', open);
+    btn.classList.toggle('open', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  list.appendChild(wrap);
+  list.appendChild(btn);
 }
 
 function expenseOpenWalletModal(w) {
@@ -1995,6 +2029,7 @@ function expenseRenderIncomeList() {
     };
     list.appendChild(row);
   });
+  expenseMakeCollapsible(list, 'income');
 }
 
 /* ---- Savings card ---- */
@@ -2030,6 +2065,7 @@ function expenseRenderSavings() {
     };
     list.appendChild(row);
   });
+  expenseMakeCollapsible(list, 'savings');
 }
 
 function expenseOpenSavingsGoalModal() {
@@ -2331,6 +2367,13 @@ function expenseRenderBudget() {
   }
 }
 
+// Sum of category budgets this month, optionally leaving one category out (the one being edited).
+function expenseCategoryBudgetsTotal(exceptCategoryId) {
+  return expenseData.categoryBudgets.reduce(function (sum, b) {
+    return b.categoryId === exceptCategoryId ? sum : sum + b.amount;
+  }, 0);
+}
+
 function expenseOpenCategoryBudgetModal(categoryId, amount, repeat) {
   expenseEditingCategoryBudgetId = categoryId;
   document.getElementById('expense-cat-budget-repeat-checkbox').checked = !!repeat;
@@ -2348,6 +2391,10 @@ function expenseOpenCategoryBudgetModal(categoryId, amount, repeat) {
   document.getElementById('expense-cat-budget-label').textContent = categoryId ? expenseNameFor(categoryId) : '';
   document.getElementById('expense-cat-budget-label').style.display = categoryId ? '' : 'none';
   expenseSetAmountInputValue(document.getElementById('expense-cat-budget-amount'), amount);
+  var room = expenseData.budgetOverall - expenseCategoryBudgetsTotal(categoryId);
+  document.getElementById('expense-cat-budget-room').textContent = expenseData.budgetOverall > 0
+    ? 'Up to ' + expenseFmt(Math.max(0, room)) + ' left in your monthly budget (' + expenseFmt(expenseData.budgetOverall) + ')'
+    : 'Set a monthly budget first';
   document.getElementById('expense-category-budget-modal').classList.add('active');
 }
 
@@ -2360,6 +2407,9 @@ function expenseSaveCategoryBudget() {
   }
   var amount = expenseAmountInputValue(document.getElementById('expense-cat-budget-amount'));
   if (!amount || amount <= 0) { toast('Enter a budget amount'); return; }
+  if (!(expenseData.budgetOverall > 0)) { toast('Set a monthly budget first'); return; }
+  var room = expenseData.budgetOverall - expenseCategoryBudgetsTotal(categoryId);
+  if (amount > room) { toast('Too much — only ' + expenseFmt(Math.max(0, room)) + ' left in your monthly budget'); return; }
   showLoading();
   google.script.run
     .withSuccessHandler(function (data) { hideLoading(); document.getElementById('expense-category-budget-modal').classList.remove('active'); expenseApplyData(data); })
@@ -2374,6 +2424,8 @@ function expenseOpenOverallBudgetModal() {
 }
 function expenseSaveOverallBudget() {
   var amount = expenseAmountInputValue(document.getElementById('expense-budget-amount-input'));
+  var catTotal = expenseCategoryBudgetsTotal(null);
+  if (amount < catTotal) { toast('Category budgets add up to ' + expenseFmt(catTotal) + ' — monthly budget must be at least that'); return; }
   showLoading();
   google.script.run
     .withSuccessHandler(function (data) { hideLoading(); document.getElementById('expense-budget-modal').classList.remove('active'); expenseApplyData(data); })

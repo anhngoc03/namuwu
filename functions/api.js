@@ -454,32 +454,37 @@ async function expenseSumBefore_(env, table, dateCol, start, extra) {
   return total;
 }
 
-// Tiền thừa mang sang: thu − chi − tiền nạp tiết kiệm (có trừ) của TẤT CẢ các tháng trước tháng đang xem.
+// Tiền thừa mang sang: thu − chi − tiền nạp tiết kiệm (có trừ) + tiền rút tiết kiệm về nguồn
+// của TẤT CẢ các tháng trước tháng đang xem.
 // Tính động → sửa/xoá khoản ở tháng cũ thì các tháng sau tự cập nhật. Âm thì mang số âm sang.
 async function expenseCarryIn_(env, period) {
   var start = period + '-01';
   var inc = await expenseSumBefore_(env, 'expense_income_entries', 'entry_date', start, '');
   var exp = await expenseSumBefore_(env, 'expense_entries', 'entry_date', start, '');
   var dep = await expenseSumBefore_(env, 'expense_savings_log', 'entry_date', start, '&kind=eq.deposit&deduct=eq.true');
-  return inc - exp - dep;
+  var wd = await expenseSumBefore_(env, 'expense_savings_log', 'entry_date', start, '&kind=eq.spend&wallet_id=not.is.null');
+  return inc - exp - dep + wd;
 }
 
 async function expenseGetSavings_(env, period) {
   var goalRows = await sb(env, 'expense_savings?id=eq.1&select=name,target');
   var goal = goalRows.length ? goalRows[0] : { name: 'Billionaire ✮⋆˙', target: 0 };
   var logs = await sb(env, 'expense_savings_log?select=id,kind,amount,note,entry_date,deduct,wallet_id&order=entry_date.desc,id.desc');
-  var balance = 0, monthDeposits = 0;
+  var balance = 0, monthDeposits = 0, monthWithdrawals = 0;
   var periodStart = period + '-01', nextStart = expenseNextPeriodStart_(period);
   logs.forEach(function (l) {
     var a = Number(l.amount);
     balance += l.kind === 'deposit' ? a : -a;
-    if (l.kind === 'deposit' && l.deduct !== false && l.entry_date >= periodStart && l.entry_date < nextStart) monthDeposits += a;
+    var inMonth = l.entry_date >= periodStart && l.entry_date < nextStart;
+    if (l.kind === 'deposit' && l.deduct !== false && inMonth) monthDeposits += a;
+    if (l.kind === 'spend' && l.wallet_id !== null && inMonth) monthWithdrawals += a;
   });
   return {
     name: goal.name,
     target: Number(goal.target) || 0,
     balance: balance,                 // tiết kiệm KHÔNG reset theo tháng
     monthDeposits: monthDeposits,     // phần nạp CÓ TRỪ trong tháng đang xem → trừ vào Remaining
+    monthWithdrawals: monthWithdrawals, // phần rút VỀ NGUỒN trong tháng đang xem → cộng vào Remaining (không tính là Income)
     log: logs.slice(0, 100).map(function (l) {
       return { id: l.id, kind: l.kind, amount: Number(l.amount), note: l.note || '', date: l.entry_date, deduct: l.deduct !== false, walletId: l.wallet_id };
     })
