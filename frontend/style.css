@@ -1279,13 +1279,21 @@ body.mobile-nav-open .mobile-nav-toggle{
    last row drops its divider so the button never sits on a line. */
 .expense-income-add-wrap{ display:flex; justify-content:center; margin-top:16px; }
 
-/* Folded history lists (transfers / income / savings): ▼ under the list slides it open */
+/* Folded history lists (transfers / income / savings): ▼ slides the list open and turns in place */
 .expense-collapse{ display:grid; grid-template-rows:0fr; transition:grid-template-rows .35s ease; }
 .expense-collapse.open{ grid-template-rows:1fr; }
 .expense-collapse-inner{ overflow:hidden; min-height:0; }
+.expense-collapse-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .expense-collapse-toggle{
-  display:block; margin:6px auto 0; padding:4px 14px; background:none; border:none; cursor:pointer;
-  color:var(--exp-pink-deep); font-size:14px; line-height:1; transition:transform .35s ease;
+  display:flex; align-items:center; justify-content:center; flex:none;
+  width:28px; height:28px; margin:6px auto 0; padding:0; background:none; border:none; cursor:pointer;
+  transition:transform .35s ease;
+}
+.expense-collapse-head .expense-collapse-toggle{ margin:0; }
+.expense-transfers-head{ margin:16px 0 4px; }
+.expense-transfers-head .expense-transfers-title{ margin:0; }
+.expense-collapse-toggle::before{
+  content:''; border-left:6px solid transparent; border-right:6px solid transparent; border-top:9px solid var(--exp-pink-deep);
 }
 .expense-collapse-toggle.open{ transform:rotate(180deg); }
 .expense-income-add-btn{ padding:9px 22px; font-size:13px; width:auto; margin:0; }

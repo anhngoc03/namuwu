@@ -1864,7 +1864,9 @@ function expenseRenderWallets() {
   tl.innerHTML = '';
   var trs = expenseData.transfers || [];
   if (trs.length) {
-    var t = document.createElement('div'); t.className = 'expense-transfers-title'; t.textContent = 'Transfers this month'; tl.appendChild(t);
+    var head = document.createElement('div'); head.className = 'expense-collapse-head expense-transfers-head';
+    var t = document.createElement('div'); t.className = 'expense-transfers-title'; t.textContent = 'Transfers this month';
+    head.appendChild(t); tl.appendChild(head);
     trs.forEach(function (tr) {
       var row = document.createElement('div');
       row.className = 'expense-history-row';
@@ -1878,14 +1880,17 @@ function expenseRenderWallets() {
       row.querySelector('button').onclick = function () { expenseOpenTransferModal(tr); };
       tl.appendChild(row);
     });
-    expenseMakeCollapsible(tl, 'transfers');
+    expenseMakeCollapsible(tl, 'transfers', head);
   }
 }
 
-// History lists (transfers / income / savings) start folded; a ▼ under the list
-// slides the rows open. Open/closed is remembered per list until the page reloads.
+// History lists (transfers / income / savings) start folded; a ▼ slides the rows
+// open and turns in place. With a header row (list title) the ▼ sits at its right
+// end; without one it sits centred above the list. Open/closed is remembered per
+// list until the page reloads.
 var expenseCollapseOpen = {};
-function expenseMakeCollapsible(list, key) {
+function expenseMakeCollapsible(list, key, header) {
+  if (header) header.querySelectorAll('.expense-collapse-toggle').forEach(function (x) { x.remove(); });
   var rows = list.querySelectorAll(':scope > .expense-history-row');
   if (!rows.length) return;
   var open = !!expenseCollapseOpen[key];
@@ -1900,7 +1905,6 @@ function expenseMakeCollapsible(list, key) {
   btn.className = 'expense-collapse-toggle' + (open ? ' open' : '');
   btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   btn.setAttribute('aria-label', 'Show / hide history');
-  btn.textContent = '▼';
   btn.onclick = function () {
     open = !open;
     expenseCollapseOpen[key] = open;
@@ -1908,8 +1912,9 @@ function expenseMakeCollapsible(list, key) {
     btn.classList.toggle('open', open);
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   };
+  if (header) header.appendChild(btn);
+  else list.appendChild(btn);
   list.appendChild(wrap);
-  list.appendChild(btn);
 }
 
 function expenseOpenWalletModal(w) {
@@ -2004,8 +2009,10 @@ function expenseDeleteTransfer() {
 /* ---- Income list (irregular income: one row per payment) ---- */
 function expenseRenderIncomeList() {
   var list = document.getElementById('expense-income-list');
+  var head = document.getElementById('expense-income-head');
   list.innerHTML = '';
   var items = expenseData.incomeEntries || [];
+  expenseMakeCollapsible(list, 'income', head);   // clears the old ▼ (list is empty here)
   if (!items.length) {
     list.innerHTML = '<div class="empty-state" style="padding:10px 0;">No income recorded this month</div>';
     return;
@@ -2029,7 +2036,7 @@ function expenseRenderIncomeList() {
     };
     list.appendChild(row);
   });
-  expenseMakeCollapsible(list, 'income');
+  expenseMakeCollapsible(list, 'income', head);
 }
 
 /* ---- Savings card ---- */
