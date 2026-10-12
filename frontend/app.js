@@ -143,6 +143,34 @@ function formatThousands(n) {
 }
 
 /* ---------------------------------------------------------------- */
+/* LIGHT / DARK — ☼/☾ switch; follows the system until one is picked  */
+/* ---------------------------------------------------------------- */
+var themeMedia_ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+function themeIsDark() {
+  var t = document.documentElement.getAttribute('data-theme');
+  if (t) return t === 'dark';
+  return !!(themeMedia_ && themeMedia_.matches);
+}
+function syncThemeSwitches_() {
+  var dark = themeIsDark();
+  document.querySelectorAll('.theme-switch').forEach(function (b) {
+    b.classList.toggle('is-dark', dark);
+    b.setAttribute('aria-pressed', dark ? 'true' : 'false');
+  });
+}
+function toggleTheme() {
+  var next = themeIsDark() ? 'light' : 'dark';
+  var root = document.documentElement;
+  root.classList.add('theme-anim');
+  root.setAttribute('data-theme', next);
+  try { localStorage.setItem('henlo_theme', next); } catch (e) {}
+  syncThemeSwitches_();
+  clearTimeout(window.__themeAnimT);
+  window.__themeAnimT = setTimeout(function () { root.classList.remove('theme-anim'); }, 500);
+}
+if (themeMedia_ && themeMedia_.addEventListener) themeMedia_.addEventListener('change', syncThemeSwitches_);
+
+/* ---------------------------------------------------------------- */
 /* HIDE AMOUNTS (eye button) — blurs money figures, remembered        */
 /* ---------------------------------------------------------------- */
 function moneyHidden() { try { return localStorage.getItem('henlo_hide_money') === '1'; } catch (e) { return false; } }
@@ -3848,6 +3876,8 @@ document.addEventListener('DOMContentLoaded', function () {
   routeFromLocation_();
 
   applyMoneyHidden_(moneyHidden());
+  syncThemeSwitches_();
+  document.querySelectorAll('.theme-switch').forEach(function (b) { b.onclick = toggleTheme; });
   document.querySelectorAll('.money-eye-btn').forEach(function (b) { b.onclick = toggleMoneyHidden; });
 
   window.addEventListener('resize', syncFixedHeaderOffsets);
