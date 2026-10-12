@@ -115,8 +115,55 @@ function PassCode(boxesId, padId, onComplete, statusId) {
 /* ---------------------------------------------------------------- */
 /* LOADING OVERLAY                                                    */
 /* ---------------------------------------------------------------- */
-function showLoading() { document.getElementById('loading-overlay').classList.add('active'); }
-function hideLoading() { document.getElementById('loading-overlay').classList.remove('active'); }
+// Light loading: blocks taps right away (no double saves) but only shows the
+// little flower pill if the wait passes 300ms, so quick calls don't flash.
+var loadingTimer_ = null;
+function showLoading() {
+  var el = document.getElementById('loading-overlay');
+  el.classList.add('pending');
+  clearTimeout(loadingTimer_);
+  loadingTimer_ = setTimeout(function () { el.classList.add('active'); }, 300);
+}
+function hideLoading() {
+  clearTimeout(loadingTimer_);
+  var el = document.getElementById('loading-overlay');
+  el.classList.remove('pending', 'active');
+}
+
+/* ---------------------------------------------------------------- */
+/* CUTE TOUCHES — confetti, phone buzz                                */
+/* ---------------------------------------------------------------- */
+function buzz(pattern) {
+  try { if (navigator.vibrate && matchMedia('(pointer: coarse)').matches) navigator.vibrate(pattern || 8); } catch (e) {}
+}
+// A short burst of pastel confetti from (x, y) — defaults to the top centre.
+function confetti(x, y, count) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var colors = ['#ffc8dd', '#bfe3ff', '#d8ccff', '#bfead7', '#ffd4b8', '#fff0a8', '#e8899f'];
+  var shapes = ['✿', '●', '■', '♥', '★'];
+  x = x == null ? window.innerWidth / 2 : x;
+  y = y == null ? window.innerHeight * 0.3 : y;
+  count = count || 36;
+  var layer = document.createElement('div');
+  layer.className = 'confetti-layer';
+  for (var i = 0; i < count; i++) {
+    var c = document.createElement('span');
+    c.className = 'confetti-bit';
+    c.textContent = shapes[i % shapes.length];
+    var angle = Math.random() * Math.PI * 2, dist = 80 + Math.random() * 160;
+    c.style.left = x + 'px'; c.style.top = y + 'px';
+    c.style.color = colors[i % colors.length];
+    c.style.fontSize = (10 + Math.random() * 10) + 'px';
+    c.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+    c.style.setProperty('--dy', (Math.sin(angle) * dist * 0.6 - 60) + 'px');
+    c.style.setProperty('--rot', (Math.random() * 720 - 360) + 'deg');
+    c.style.animationDelay = (Math.random() * 80) + 'ms';
+    layer.appendChild(c);
+  }
+  document.body.appendChild(layer);
+  buzz([10, 40, 14]);
+  setTimeout(function () { layer.remove(); }, 1700);
+}
 
 /* ---------------------------------------------------------------- */
 /* TOAST                                                              */
@@ -1049,6 +1096,7 @@ function memoryOnWin() {
   if (isRecord) setTimeout(function () { memoryPlaySfx('newRecord'); }, 260);
   document.getElementById('memory-result-time').textContent = memoryFormatTime(memoryElapsedSeconds);
   document.getElementById('memory-result-modal').classList.add('active');
+  confetti(null, null, 50);
   memoryLoadLeaderboard();
 }
 
@@ -1476,6 +1524,7 @@ function mochiGameOver() {
   document.getElementById('mochi-player-name').value = '';
   mochiScoreSaved = false;
   document.getElementById('mochi-result-modal').classList.add('active');
+  if (isRecord) confetti(null, null, 50);
   mochiLoadLeaderboardInto('mochi-result-leaderboard-body');
 }
 
@@ -2306,7 +2355,12 @@ function expenseSaveSavingsTx() {
   var walletId = (expenseSavingsTxKind === 'spend' || deduct) ? expenseSelValue(document.getElementById('expense-savings-tx-wallet')) : null;
   expenseRememberWallet(walletId);
   showLoading();
-  var onDone = function (data) { hideLoading(); document.getElementById('expense-savings-tx-modal').classList.remove('active'); expenseApplyData(data); toast('Saved!'); };
+  var wasReached = expenseData.savings && expenseData.savings.target > 0 && expenseData.savings.balance >= expenseData.savings.target;
+  var onDone = function (data) {
+    hideLoading(); document.getElementById('expense-savings-tx-modal').classList.remove('active'); expenseApplyData(data); toast('Saved!');
+    var sv = expenseData.savings;
+    if (!wasReached && sv && sv.target > 0 && sv.balance >= sv.target) { confetti(null, null, 70); toast('Savings goal reached ✿'); }
+  };
   var run = google.script.run.withSuccessHandler(onDone).withFailureHandler(expenseFail);
   if (expenseEditingSavingsId) run.updateExpenseSavingsLog(expenseEditingSavingsId, amount, note, date, deduct, expensePeriod, walletId);
   else run.addExpenseSavingsLog(expenseSavingsTxKind, amount, note, date, expensePeriod, deduct, walletId);
@@ -3136,6 +3190,13 @@ function homeToggleCheck(item) {
   var next = !item.checked;
   item.checked = next; // optimistic — animation gạch ngang chạy ngay, không cần chờ server
   renderHomeList();
+  if (next) {
+    var allDone = homeData.every(function (t) { return t.checked || t.row === null; });
+    var box = document.querySelector('.todo-item.checked .todo-check');
+    var r = box ? box.getBoundingClientRect() : null;
+    if (allDone) confetti(null, null, 60);
+    else { buzz(10); if (r) confetti(r.left + r.width / 2, r.top + r.height / 2, 14); }
+  }
   google.script.run
     .withSuccessHandler(function (list) { homeData = list; })
     .withFailureHandler(function (err) {
@@ -3536,6 +3597,7 @@ function msGameOver(won) {
     document.getElementById('ms-player-name').value = '';
     msScoreSaved = false;
     document.getElementById('ms-win-modal').classList.add('active');
+    confetti(null, null, 50);
     msLoadLeaderboardInto('ms-win-leaderboard-body');
   } else {
     setTimeout(function () {
@@ -3874,6 +3936,10 @@ document.addEventListener('DOMContentLoaded', function () {
   // Open whatever the URL points at ("/" = Home, "/tools/yakult", "/personal/expenses"…).
   try { localStorage.removeItem('henlo_nav'); } catch (e) {}   // old "last page" memory, replaced by URLs
   routeFromLocation_();
+
+  document.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('button, .todo-check, .eating-day-cell, .expense-cal-cell, .symbol-cell, .nav-card')) buzz(6);
+  }, true);
 
   applyMoneyHidden_(moneyHidden());
   syncThemeSwitches_();

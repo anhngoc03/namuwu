@@ -83,7 +83,9 @@ h1,h2,h3{ font-family:inherit; margin:0; }
 .shake{ animation:shakeX .4s; }
 
 .screen.active{ animation:levelPageEnter var(--dur-page) var(--ease-soft) both; }
-.app-view{ animation:levelSectionEnter var(--dur-section) var(--ease-soft) both; }
+.app-view{ animation:viewEnter .38s cubic-bezier(.22,.9,.3,1) both; }
+@keyframes viewEnter{ from{ opacity:0; transform:translateY(14px) scale(.99); } to{ opacity:1; transform:none; } }
+.home-section, .content-section{ animation:viewEnter .34s cubic-bezier(.22,.9,.3,1) both; }
 
 .acc-card, .icd-card, .nav-card, .memory-card{
   animation:levelComponentEnter var(--dur-component) var(--ease-soft) both;
@@ -95,8 +97,6 @@ h1,h2,h3{ font-family:inherit; margin:0; }
 .acc-card:nth-child(5), .icd-card:nth-child(5), .nav-card:nth-child(5){ animation-delay:120ms; }
 .nav-card:nth-child(6){ animation-delay:150ms; }
 
-.modal-overlay.active{ animation:backdropEnter var(--dur-section) var(--ease-soft) both; }
-.modal-overlay.active .modal-box{ animation:modalEnter var(--dur-section) var(--ease-soft) both; }
 
 button, .symbol-cell{ transition: transform var(--dur-micro) ease, box-shadow var(--dur-micro) ease; }
 @media (hover: hover) and (pointer: fine){
@@ -431,9 +431,13 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
    ============================================================ */
 .modal-overlay{
   position:fixed; inset:0; background:rgba(90,74,74,0.35);
-  display:none; align-items:center; justify-content:center; z-index:50; padding:16px;
+  display:flex; align-items:center; justify-content:center; z-index:50; padding:16px;
+  visibility:hidden; opacity:0; pointer-events:none;
+  transition:opacity .22s var(--ease-soft), visibility 0s linear .22s;
 }
-.modal-overlay.active{ display:flex; }
+.modal-overlay.active{ visibility:visible; opacity:1; pointer-events:auto; transition:opacity .22s var(--ease-soft); }
+.modal-overlay .modal-box{ transform:translateY(10px) scale(.96); transition:transform .28s cubic-bezier(.34,1.3,.64,1); }
+.modal-overlay.active .modal-box{ transform:none; }
 .modal-box{
   background:var(--cream); border-radius:var(--r-xl); padding:0 var(--sp-6) var(--sp-6);
   max-width:440px; width:100%; max-height:85vh; overflow-y:auto;
@@ -466,14 +470,18 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
 .modal-actions{ display:flex; gap:10px; justify-content:center; margin-top:var(--sp-4); }
 
 .loading-overlay{
-  position:fixed; inset:0; z-index:200; background:var(--overlay-cream);
-  display:none; align-items:center; justify-content:center;
+  position:fixed; inset:0; z-index:200; background:transparent;
+  display:none; align-items:flex-start; justify-content:center; padding-top:18px;
 }
-.loading-overlay.active{ display:flex; }
-.loading-box{ background:none; box-shadow:none; padding:0; border-radius:0; }
-.loading-flowers{ display:flex; gap:16px; }
+.loading-overlay.pending, .loading-overlay.active{ display:flex; }
+.loading-box{
+  background:var(--surface); box-shadow:var(--shadow-card); padding:8px 18px; border-radius:999px;
+  opacity:0; transform:translateY(-12px) scale(.9); transition:opacity .25s ease, transform .3s cubic-bezier(.34,1.4,.64,1);
+}
+.loading-overlay.active .loading-box{ opacity:1; transform:none; }
+.loading-flowers{ display:flex; gap:10px; }
 .loading-flowers span{
-  font-size:34px; color:var(--pink); opacity:0.25; display:inline-block;
+  font-size:20px; color:var(--pink); opacity:0.25; display:inline-block;
   animation: flowerChase 1.35s ease-in-out infinite;
 }
 .loading-flowers span:nth-child(1){ animation-delay:0s; color:var(--pink); }
@@ -488,7 +496,7 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
 
 .toast{
   position:fixed; bottom:24px; left:50%;
-  background:var(--ink); color:#fff; padding:10px 20px; border-radius:var(--r-pill);
+  background:var(--ink); color:var(--cream); padding:10px 20px; border-radius:var(--r-pill);
   font-size:14px; font-weight:600; z-index:100; opacity:0;
   transform:translate(-50%, 8px);
   transition:opacity var(--dur-section) var(--ease-soft), transform var(--dur-section) var(--ease-soft);
@@ -499,7 +507,7 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
    so it never interferes with the regular bottom .toast used everywhere else. */
 .top-toast{
   position:fixed; top:16px; left:50%;
-  background:var(--ink); color:#fff; padding:10px 20px; border-radius:var(--r-pill);
+  background:var(--ink); color:var(--cream); padding:10px 20px; border-radius:var(--r-pill);
   font-size:14px; font-weight:600; z-index:210; opacity:0;
   white-space:nowrap; max-width:calc(100vw - 32px); overflow:hidden; text-overflow:ellipsis;
   transform:translate(-50%, -10px);
@@ -1634,4 +1642,44 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
 .mobile-nav-drawer .theme-switch-row{
   display:flex; align-items:center; justify-content:space-between; margin-top:18px; padding:12px 16px;
   border-top:1px solid var(--line); font-size:14px; font-weight:700; color:var(--exp-muted);
+}
+
+/* ============================================================
+   CUTE TOUCHES — confetti, the mochi mascot on empty screens,
+   and small motion everywhere
+   ============================================================ */
+.confetti-layer{ position:fixed; inset:0; pointer-events:none; z-index:500; overflow:hidden; }
+.confetti-bit{
+  position:absolute; transform:translate(-50%,-50%); line-height:1; will-change:transform, opacity;
+  animation:confettiFly 1.4s cubic-bezier(.15,.7,.35,1) both;
+}
+@keyframes confettiFly{
+  0%  { opacity:1; transform:translate(-50%,-50%) scale(.4) rotate(0); }
+  60% { opacity:1; transform:translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1) rotate(calc(var(--rot) * .7)); }
+  100%{ opacity:0; transform:translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) + 140px)) scale(.9) rotate(var(--rot)); }
+}
+
+/* Mascot: every empty-state that had the ✿ icon gets a little mochi friend instead */
+.empty-state .empty-icon{
+  width:72px; height:58px; margin:0 auto 10px; font-size:0; color:transparent;
+  background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 64'><ellipse cx='40' cy='58' rx='24' ry='4' fill='%23000' opacity='.08'/><path d='M10 44C10 22 24 10 40 10s30 12 30 34c0 9-8 12-30 12S10 53 10 44z' fill='%23ffd9e3' stroke='%23e8899f' stroke-width='2.5'/><circle cx='30' cy='36' r='3' fill='%235a4a4a'/><circle cx='50' cy='36' r='3' fill='%235a4a4a'/><path d='M36 42q4 4 8 0' fill='none' stroke='%235a4a4a' stroke-width='2.2' stroke-linecap='round'/><ellipse cx='24' cy='42' rx='4' ry='2.5' fill='%23ff9bb0' opacity='.55'/><ellipse cx='56' cy='42' rx='4' ry='2.5' fill='%23ff9bb0' opacity='.55'/><path d='M40 10c2-5 7-6 9-4' fill='none' stroke='%236fc9a1' stroke-width='2.5' stroke-linecap='round'/></svg>") center/contain no-repeat;
+  animation:mascotBob 2.6s ease-in-out infinite;
+}
+@keyframes mascotBob{
+  0%,100%{ transform:translateY(0) rotate(-3deg); }
+  50%    { transform:translateY(-6px) rotate(3deg); }
+}
+
+/* small motion: rows/tiles ease in, tiles lift, toasts pop */
+.expense-history-row, .expense-day-row, .expense-category-row, .expense-wallet-row, .expense-budget-cat-card{
+  animation:levelComponentEnter .28s var(--ease-soft) both;
+}
+@media (hover: hover) and (pointer: fine){
+  .home-tile:hover, .expense-card:hover{ box-shadow:var(--shadow-modal); }
+}
+.home-tile, .expense-card{ transition:box-shadow .25s ease, transform .2s ease; }
+.home-tile:active{ transform:scale(.97); }
+.toast, .top-toast{ transition:opacity .25s ease, transform .35s cubic-bezier(.34,1.4,.64,1) !important; }
+.progress-anim, .expense-progress-fill, .expense-progress-fill-sm, .expense-savings-fill, .expense-stat-bar-fill{
+  transition:width .7s cubic-bezier(.22,.9,.3,1);
 }
