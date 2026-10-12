@@ -407,6 +407,7 @@ function openPersonalGate(afterFn) {
         if (r && r.ok) {
           personalUnlocked = true;
           window.__personalToken = r.token;
+          personalLastActive_ = Date.now();
           accPad.showSuccess('Login successful (๑ᵔ⌔ᵔ๑)');
           setTimeout(function () {
             document.getElementById('accounts-modal').classList.remove('active');
@@ -440,6 +441,31 @@ window.addEventListener('personal-unauthorized', function () {
   toast('Session expired — please log in again');
   goHome('home');
 });
+
+// Auto-lock: 10 minutes without touching anything → Personal locks again.
+// Checked every 20s and whenever the tab comes back (timers sleep in background tabs).
+var PERSONAL_IDLE_MS = 10 * 60 * 1000;
+var personalLastActive_ = Date.now();
+['pointerdown', 'keydown', 'wheel', 'touchstart', 'scroll'].forEach(function (ev) {
+  window.addEventListener(ev, function () { personalLastActive_ = Date.now(); }, { passive: true, capture: true });
+});
+function lockPersonal(reason) {
+  if (!personalUnlocked) return;
+  personalUnlocked = false;
+  window.__personalToken = null;
+  document.querySelectorAll('.modal-overlay.active').forEach(function (m) { m.classList.remove('active'); });
+  hideLoading();
+  var onPersonal = /^\/personal/.test(location.pathname);
+  if (onPersonal) goHome('home');
+  if (reason) toast(reason);
+}
+function checkPersonalIdle_() {
+  if (personalUnlocked && Date.now() - personalLastActive_ > PERSONAL_IDLE_MS) {
+    lockPersonal('Locked after 10 minutes of no activity ʕ•ᴥ•ʔ');
+  }
+}
+setInterval(checkPersonalIdle_, 20000);
+document.addEventListener('visibilitychange', function () { if (!document.hidden) checkPersonalIdle_(); });
 
 function openAccountsGate() { requirePersonal(loadAccounts); }
 
