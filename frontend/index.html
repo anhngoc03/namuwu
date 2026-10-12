@@ -97,12 +97,33 @@
 
       <div id="menu-view" class="app-view">
         <section class="home-section">
-          <div class="home-intro">
-            <img id="home-login-img" class="home-intro-img" src="/images/home-avatar.jpeg" alt="Henlo human">
-            <p class="home-intro-tagline">My deadline isn't done, but I'm sure done ✿</p>
+          <div class="home-greeting">
+            <img id="home-login-img" class="home-greeting-img" src="/images/home-avatar.jpeg" alt="">
+            <div>
+              <h1 class="home-greeting-title" id="home-greeting-title">Henlo human ✿</h1>
+              <p class="home-greeting-sub" id="home-greeting-sub">My deadline isn't done, but I'm sure done ✿</p>
+            </div>
           </div>
 
-          <div class="home-todo-panel">
+          <div class="home-tiles">
+            <button type="button" class="home-tile home-tile-expense" id="home-expense-widget">
+              <span class="home-tile-label">Spent today</span>
+              <span class="home-tile-value money" id="home-expense-widget-value">—</span>
+              <span class="home-tile-link">Expenses →</span>
+            </button>
+            <button type="button" class="home-tile home-tile-yakult" id="home-yakult-tile">
+              <span class="home-tile-label">Yakult streak</span>
+              <span class="home-tile-value" id="home-yakult-streak">—</span>
+              <span class="home-tile-link">Yakult →</span>
+            </button>
+            <button type="button" class="home-tile home-tile-todo" id="home-todo-tile">
+              <span class="home-tile-label">To-do</span>
+              <span class="home-tile-value" id="home-todo-count">—</span>
+              <span class="home-tile-link" id="home-todo-sub">left</span>
+            </button>
+          </div>
+
+          <div class="home-todo-panel" id="home-todo-panel">
             <div class="home-todo-header">
               <h2 class="home-todo-title">TO DO LIST</h2>
               <div class="home-todo-toolbar">
@@ -111,12 +132,6 @@
               </div>
             </div>
             <div id="home-todo-list" class="home-todo-list"></div>
-          </div>
-
-          <div class="home-expense-widget" id="home-expense-widget">
-            <div class="home-expense-widget-label">Today's spending</div>
-            <div class="home-expense-widget-value money" id="home-expense-widget-value">—</div>
-            <div class="home-expense-widget-link">Open Expenses →</div>
           </div>
         </section>
 

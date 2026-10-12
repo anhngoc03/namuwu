@@ -332,8 +332,10 @@ function showHomeSection(section) {
     if (parts[k]) parts[k].style.display = (k === section) ? '' : 'none';
   });
   if (section === 'home') {
+    renderHomeGreeting();
     loadHomeData();
     expenseLoadHomeWidget();
+    loadHomeYakultTile();
   }
   setNavActive(section);
   setPath_(SECTION_PATHS_[section]);
@@ -2915,6 +2917,10 @@ function expenseWireEvents() {
 
   document.getElementById('open-expense').onclick = function () { requirePersonal(openExpense); };
   document.getElementById('home-expense-widget').onclick = expenseOpenFromHomeWidget;
+  document.getElementById('home-yakult-tile').onclick = openEating;
+  document.getElementById('home-todo-tile').onclick = function () {
+    document.getElementById('home-todo-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   document.getElementById('expense-income-add-link').onclick = function () { expenseOpenIncomeModal(null); };
   document.getElementById('expense-income-add-btn').onclick = function () { expenseOpenIncomeModal(null); };
@@ -3009,6 +3015,51 @@ document.addEventListener('visibilitychange', function () {
 /* ---------------------------------------------------------------- */
 var homeData = [];          // [{ row, checked, todolist, deadline }]
 var homeEditingRow = null;  // null = không có dòng nào đang sửa | 'new' = dòng vừa Add chưa lưu | <rowNumber> = đang sửa dòng đó
+
+/* ---- Home header: greeting by time of day + 3 tiles (spent today, Yakult
+   streak, to-dos left). The to-do tile is filled from renderHomeList(). ---- */
+function renderHomeGreeting() {
+  var h = new Date().getHours();
+  var hello = h < 5 ? 'Still up' : h < 11 ? 'Good morning' : h < 13 ? 'Hello' : h < 18 ? 'Good afternoon' : 'Good evening';
+  var days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  var d = new Date();
+  document.getElementById('home-greeting-title').textContent = hello + ', human ✿';
+  document.getElementById('home-greeting-sub').textContent =
+    days[d.getDay()] + ', ' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + ' · My deadline isn\'t done, but I\'m sure done';
+}
+
+// Days in a row with a Yakult, counting back from today (today not ticked yet
+// doesn't break the streak — it starts from yesterday then).
+function yakultStreak_(list) {
+  var today = new Date().getDate();
+  var byDay = {};
+  (list || []).forEach(function (d) { byDay[d.day] = d; });
+  var isYes = function (day) { var d = byDay[day]; return d && d.yakultMarked && d.yakultYes; };
+  var day = isYes(today) ? today : today - 1;
+  var n = 0;
+  while (day >= 1 && isYes(day)) { n++; day--; }
+  return n;
+}
+function loadHomeYakultTile() {
+  var el = document.getElementById('home-yakult-streak');
+  google.script.run
+    .withSuccessHandler(function (list) {
+      var n = yakultStreak_(list);
+      el.textContent = n + (n === 1 ? ' day' : ' days') + (n >= 3 ? ' 🔥' : '');
+    })
+    .withFailureHandler(function () { el.textContent = '—'; })
+    .getEatingData();
+}
+function renderHomeTodoTile_() {
+  var left = homeData.filter(function (t) { return !t.checked && t.row !== null; });
+  var today = expenseTodayStr();
+  var overdue = left.filter(function (t) { return t.deadline && t.deadline < today; }).length;
+  var dueToday = left.filter(function (t) { return t.deadline === today; }).length;
+  document.getElementById('home-todo-count').textContent = left.length ? String(left.length) : 'All done';
+  document.getElementById('home-todo-sub').textContent =
+    overdue ? overdue + ' overdue' : dueToday ? dueToday + ' due today' : left.length ? (left.length === 1 ? 'thing left' : 'things left') : '✓ nothing left';
+  document.getElementById('home-todo-tile').classList.toggle('alert', overdue > 0);
+}
 
 function loadHomeData() {
   google.script.run
@@ -3116,6 +3167,7 @@ function renderHomeList() {
   var container = document.getElementById('home-todo-list');
   if (!container) return;
   container.innerHTML = '';
+  renderHomeTodoTile_();
 
   if (homeData.length === 0) {
     container.innerHTML = '<div class="empty-state"><span class="empty-icon">✿</span>Chưa có việc nào cả, thêm mới thôi!</div>';

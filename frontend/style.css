@@ -242,20 +242,6 @@ button:disabled{ opacity:0.45; cursor:not-allowed; transform:none !important; }
 #menu-view{ width:100%; }
 .home-section{ width:100%; max-width:760px; margin:0 auto; }
 
-.home-intro{
-  display:flex; align-items:center; gap:var(--sp-5);
-  justify-content:center; text-align:left;
-  margin:var(--sp-6) 0 var(--sp-8);
-}
-.home-intro-img{
-  width:96px; height:96px; object-fit:cover; border-radius:50%;
-  border:4px solid var(--white); box-shadow:var(--shadow-card);
-  flex:0 0 auto;
-}
-.home-intro-tagline{
-  font-size:15px; font-weight:700; color:var(--pink-deep);
-  max-width:300px; margin:0; line-height:1.5;
-}
 
 .home-todo-panel{
   background:var(--white); border-radius:var(--r-xl); padding:var(--sp-6);
@@ -866,9 +852,6 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
   .navbar-logout{ padding:7px 14px; font-size:13px; }
   .page-container{ padding:calc(var(--navbar-h) + var(--sp-4)) var(--sp-4) 60px; }
 
-  .home-intro{ flex-direction:column; text-align:center; margin:var(--sp-4) 0 var(--sp-6); }
-  .home-intro-img{ width:76px; height:76px; }
-  .home-intro-tagline{ max-width:100%; font-size:14px; }
   .home-todo-panel{ padding:var(--sp-4); }
   .home-todo-title{ font-size:17px; }
   .todo-edit-row .todo-deadline-input{ width:130px; }
@@ -1207,14 +1190,6 @@ body.mobile-nav-open .mobile-nav-toggle{
 .expense-field-caption{ font-size:12px; font-weight:700; color:var(--exp-muted); margin:14px 0 6px; }
 .expense-field-caption:first-of-type{ margin-top:4px; }
 
-/* Home widget */
-.home-expense-widget{
-  background:#fff; border-radius:22px; box-shadow:var(--exp-shadow); padding:18px 20px; margin-top:14px; cursor:pointer;
-}
-.home-expense-widget-label{ font-size:12px; font-weight:700; color:var(--exp-muted); }
-.home-expense-widget-value{ font-size:24px; font-weight:700; margin:4px 0; }
-.home-expense-widget-link{ font-size:12px; font-weight:700; color:var(--exp-pink-deep); }
-
 /* Mobile bottom tab bar for the Expense tool only. It now lives as a direct
    child of <body> (see index.html) instead of inside #expense-view, so its
    "position: fixed" actually sticks to the real screen bottom — #app-screen
@@ -1525,3 +1500,39 @@ body.money-hidden :is(.money, .expense-wallet-bal, .expense-history-row-amt, .ex
 .expense-insight.bad .expense-insight-icon{ background:#fdeaf0; color:var(--exp-pink-deep); }
 .expense-insight.warn .expense-insight-icon{ background:#fdf3d8; color:#a3791f; }
 .expense-insight b{ font-weight:800; }
+
+/* ============================================================
+   HOME — greeting + 3 tiles above the to-do list
+   ============================================================ */
+.home-greeting{ display:flex; align-items:center; gap:16px; margin:var(--sp-4) 0 var(--sp-5); }
+.home-greeting-img{
+  width:64px; height:64px; border-radius:50%; object-fit:cover; flex:none;
+  border:3px solid var(--white); box-shadow:var(--shadow-card);
+}
+.home-greeting-title{ font-size:24px; font-weight:800; color:var(--pink-deep); line-height:1.2; }
+.home-greeting-sub{ margin:4px 0 0; font-size:13px; font-weight:600; color:var(--ink); opacity:.6; }
+
+.home-tiles{ display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:var(--sp-5); }
+.home-tile{
+  display:flex; flex-direction:column; align-items:flex-start; gap:4px; min-width:0; text-align:left;
+  padding:14px 14px 12px; border:none; border-radius:var(--r-lg); cursor:pointer; font-family:inherit; color:var(--ink);
+  box-shadow:var(--shadow-card); animation:levelComponentEnter var(--dur-component) var(--ease-soft) both;
+}
+.home-tile:nth-child(2){ animation-delay:40ms; }
+.home-tile:nth-child(3){ animation-delay:80ms; }
+.home-tile-expense{ background:var(--tile-pink, #fdeaf0); }
+.home-tile-yakult{ background:var(--tile-mint, #e4f6ec); }
+.home-tile-todo{ background:var(--tile-lilac, #f1ecfb); }
+.home-tile-label{ font-size:11px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; opacity:.55; }
+.home-tile-value{ font-size:20px; font-weight:800; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+.home-tile-link{ font-size:12px; font-weight:700; color:var(--pink-deep); }
+.home-tile-todo.alert .home-tile-link{ color:#d1566e; }
+@media (max-width:760px){
+  .home-tiles{ gap:8px; }
+  .home-tile{ padding:12px 10px 10px; border-radius:var(--r-md); }
+  .home-tile-label{ font-size:10px; letter-spacing:.3px; }
+  .home-tile-value{ font-size:16px; }
+  .home-tile-link{ font-size:11px; }
+  .home-greeting-title{ font-size:20px; }
+  .home-greeting-img{ width:52px; height:52px; }
+}
