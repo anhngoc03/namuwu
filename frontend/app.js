@@ -143,6 +143,20 @@ function formatThousands(n) {
 }
 
 /* ---------------------------------------------------------------- */
+/* HIDE AMOUNTS (eye button) — blurs money figures, remembered        */
+/* ---------------------------------------------------------------- */
+function moneyHidden() { try { return localStorage.getItem('henlo_hide_money') === '1'; } catch (e) { return false; } }
+function applyMoneyHidden_(hidden) {
+  document.body.classList.toggle('money-hidden', hidden);
+  document.querySelectorAll('.money-eye-btn').forEach(function (b) { b.setAttribute('aria-pressed', hidden ? 'true' : 'false'); });
+}
+function toggleMoneyHidden() {
+  var hidden = !document.body.classList.contains('money-hidden');
+  try { localStorage.setItem('henlo_hide_money', hidden ? '1' : '0'); } catch (e) {}
+  applyMoneyHidden_(hidden);
+}
+
+/* ---------------------------------------------------------------- */
 /* SCREEN NAVIGATION                                                  */
 /* ---------------------------------------------------------------- */
 function showScreen(id) {
@@ -1899,9 +1913,67 @@ function expenseRenderOverview() {
   document.getElementById('expense-spent-count').textContent = expenseData.entries.length + (expenseData.entries.length === 1 ? ' entry' : ' entries');
   document.getElementById('expense-saved-value').textContent = expenseFmt(sv.monthDeposits);
 
+  expenseRenderInsights();
   expenseRenderWallets();
   expenseRenderSavings();
   expenseRenderIncomeList();
+}
+
+/* ---- Insights: vs last month (same point in the month), month-end forecast,
+   and a heads-up for any budget that is 80%+ used ---- */
+function expenseRenderInsights() {
+  var card = document.getElementById('expense-insights-card');
+  var box = document.getElementById('expense-insights');
+  var lines = [];
+  var money = function (n) { return '<b class="money">' + expenseFmt(n) + '</b>'; };
+  var isCurrentMonth = expensePeriod === expenseCurrentPeriod();
+  var lastDay = expenseLastDay(expensePeriod);
+  var dayNow = isCurrentMonth ? new Date().getDate() : lastDay;
+  var spent = expenseEntriesTotal(expenseData.entries);
+
+  // 1) Compared with last month, up to the same day of the month.
+  var prev = expenseData.prevEntries || [];
+  if (prev.length) {
+    var prevSame = prev.reduce(function (sum, e) { return Number(e.date.slice(8, 10)) <= dayNow ? sum + e.amount : sum; }, 0);
+    var label = isCurrentMonth ? 'by this day last month' : 'last month';
+    if (prevSame > 0) {
+      var diff = Math.round((spent - prevSame) / prevSame * 100);
+      var kind = diff > 0 ? 'up' : (diff < 0 ? 'down' : 'same');
+      lines.push({ icon: kind === 'up' ? '↑' : (kind === 'down' ? '↓' : '＝'), kind: kind === 'up' ? 'bad' : 'good',
+        html: (diff === 0 ? 'About the same as ' : '<b>' + Math.abs(diff) + '% ' + (diff > 0 ? 'more' : 'less') + '</b> than ') + label +
+              ' (' + money(spent) + ' vs ' + money(prevSame) + ')' });
+    } else {
+      lines.push({ icon: '＝', kind: 'neutral', html: 'Nothing spent ' + label + ' to compare with' });
+    }
+  }
+
+  // 2) Forecast for the month (current month only, after the first day).
+  if (isCurrentMonth && dayNow >= 2 && spent > 0) {
+    var forecast = spent / dayNow * lastDay;
+    var budget = expenseData.budgetOverall || 0;
+    var tail = '';
+    if (budget > 0) tail = forecast > budget ? ' — <b>over budget</b> by ' + money(forecast - budget) : ' — within budget';
+    lines.push({ icon: '≈', kind: budget > 0 && forecast > budget ? 'bad' : 'neutral',
+      html: 'At this pace you\'ll spend about ' + money(forecast) + ' by ' + lastDay + '/' + expensePeriod.slice(5, 7) + tail });
+  }
+
+  // 3) Budgets that are 80% or more used.
+  if (expenseData.budgetOverall > 0) {
+    var p = Math.round(spent / expenseData.budgetOverall * 100);
+    if (p >= 80) lines.push({ icon: '!', kind: 'warn', html: 'You\'ve used <b>' + p + '%</b> of your monthly budget' });
+  }
+  var byCat = {};
+  expenseData.entries.forEach(function (e) { byCat[e.categoryId] = (byCat[e.categoryId] || 0) + e.amount; });
+  (expenseData.categoryBudgets || []).forEach(function (b) {
+    if (!(b.amount > 0)) return;
+    var cp = Math.round((byCat[b.categoryId] || 0) / b.amount * 100);
+    if (cp >= 80) lines.push({ icon: '!', kind: 'warn', html: icdEscape(expenseNameFor(b.categoryId)) + ': <b>' + cp + '%</b> of its budget used' });
+  });
+
+  card.style.display = lines.length ? '' : 'none';
+  box.innerHTML = lines.map(function (l) {
+    return '<div class="expense-insight ' + l.kind + '"><span class="expense-insight-icon">' + l.icon + '</span><span>' + l.html + '</span></div>';
+  }).join('');
 }
 
 /* ---- Sources card + transfers ---- */
@@ -2407,9 +2479,9 @@ function expenseRenderBudget() {
   var isCurrentMonth = expensePeriod === expenseCurrentPeriod();
   if (expenseData.budgetOverall > 0 && isCurrentMonth) {
     var daysLeft = Math.max(1, expenseLastDay(expensePeriod) - new Date().getDate() + 1);
-    if (pct >= 100) { hintEl.textContent = "You've gone over budget this month."; hintEl.className = 'expense-hint over'; }
-    else if (pct >= 90) { hintEl.textContent = "Almost at your limit — maybe slow down a little."; hintEl.className = 'expense-hint warn'; }
-    else { hintEl.textContent = daysLeft + ' days left, about ' + expenseFmt(remaining / daysLeft) + '/day keeps you comfortable.'; hintEl.className = 'expense-hint'; }
+    if (pct >= 100) { hintEl.textContent = "You've gone over budget this month."; hintEl.className = 'expense-hint money over'; }
+    else if (pct >= 90) { hintEl.textContent = "Almost at your limit — maybe slow down a little."; hintEl.className = 'expense-hint money warn'; }
+    else { hintEl.textContent = daysLeft + ' days left, about ' + expenseFmt(remaining / daysLeft) + '/day keeps you comfortable.'; hintEl.className = 'expense-hint money'; }
     hintEl.style.display = '';
   } else { hintEl.style.display = 'none'; }
 
@@ -3722,6 +3794,9 @@ document.addEventListener('DOMContentLoaded', function () {
   // Open whatever the URL points at ("/" = Home, "/tools/yakult", "/personal/expenses"…).
   try { localStorage.removeItem('henlo_nav'); } catch (e) {}   // old "last page" memory, replaced by URLs
   routeFromLocation_();
+
+  applyMoneyHidden_(moneyHidden());
+  document.querySelectorAll('.money-eye-btn').forEach(function (b) { b.onclick = toggleMoneyHidden; });
 
   window.addEventListener('resize', syncFixedHeaderOffsets);
 

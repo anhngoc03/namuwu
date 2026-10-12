@@ -1493,3 +1493,35 @@ body.mobile-nav-open .mobile-nav-toggle{
 .expense-danger-link{ display:none; background:none; border:none; font-family:inherit; font-weight:700; font-size:13px; color:#d1566e; cursor:pointer; padding:8px 0 0; }
 .expense-hint-small{ font-size:12px; opacity:.55; margin:-2px 0 4px; }
 #expense-savings-tx-wallet-row{ margin-top:2px; }
+
+/* ============================================================
+   HIDE AMOUNTS — eye button on the Remaining card; body.money-hidden
+   blurs every money figure (tap the eye again to show them)
+   ============================================================ */
+.expense-remain-card{ position:relative; }
+.money-eye-btn{
+  position:absolute; top:16px; right:16px; width:36px; height:36px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center; padding:0; cursor:pointer;
+  border:none; background:var(--exp-cream); color:var(--exp-muted);
+}
+.money-eye-btn svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.money-eye-btn .eye-closed{ display:none; }
+body.money-hidden .money-eye-btn{ color:var(--exp-pink-deep); }
+body.money-hidden .money-eye-btn .eye-open{ display:none; }
+body.money-hidden .money-eye-btn .eye-closed{ display:block; }
+
+:is(.money, .expense-wallet-bal, .expense-history-row-amt, .expense-day-row-amt, .expense-cal-amt, .expense-stat-amt,
+    .expense-budget-cat-nums, .expense-budget-cat-remain, .expense-history-date-head span:last-child){ transition:filter .3s ease; }
+body.money-hidden :is(.money, .expense-wallet-bal, .expense-history-row-amt, .expense-day-row-amt, .expense-cal-amt, .expense-stat-amt,
+    .expense-budget-cat-nums, .expense-budget-cat-remain, .expense-history-date-head span:last-child){ filter:blur(9px); user-select:none; }
+
+/* ---- Expense insights ---- */
+.expense-insight{ display:flex; align-items:flex-start; gap:10px; padding:9px 0; font-size:14px; line-height:1.45; color:var(--exp-ink);
+  animation:levelComponentEnter var(--dur-component) var(--ease-soft) both; }
+.expense-insight + .expense-insight{ border-top:1px solid var(--exp-line, #f3ece6); }
+.expense-insight-icon{ flex:none; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:800; background:var(--exp-cream); color:var(--exp-muted); }
+.expense-insight.good .expense-insight-icon{ background:#e4f6ec; color:var(--exp-mint-deep); }
+.expense-insight.bad .expense-insight-icon{ background:#fdeaf0; color:var(--exp-pink-deep); }
+.expense-insight.warn .expense-insight-icon{ background:#fdf3d8; color:#a3791f; }
+.expense-insight b{ font-weight:800; }

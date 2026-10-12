@@ -395,6 +395,11 @@ function expenseTodayStr_() {
 function expenseCurrentPeriod_() {
   return expenseTodayStr_().slice(0, 7);
 }
+function expensePrevPeriodStart_(period) {
+  var y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7));
+  m -= 1; if (m < 1) { m = 12; y -= 1; }
+  return y + '-' + String(m).padStart(2, '0') + '-01';
+}
 function expenseNextPeriodStart_(period) {
   var y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7));
   m += 1; if (m > 12) { m = 1; y += 1; }
@@ -564,6 +569,8 @@ async function getExpenseData(env, [period]) {
   var catBudgetRows = await sb(env, 'expense_category_budget?period=eq.' + period + '&select=category_id,amount,repeat_monthly');
   var savings = await expenseGetSavings_(env, period);
   var carryIn = await expenseCarryIn_(env, period);
+  // Tháng trước (chỉ số tiền + ngày) → Insights so sánh "cùng kỳ tháng trước".
+  var prevRows = await sb(env, 'expense_entries?entry_date=gte.' + expensePrevPeriodStart_(period) + '&entry_date=lt.' + periodStart + '&select=amount,entry_date&limit=5000');
 
   var incomeEntries = incomeRows.map(function (r) {
     return { id: r.id, amount: Number(r.amount), source: r.source || '', date: r.entry_date, walletId: r.wallet_id };
@@ -587,7 +594,8 @@ async function getExpenseData(env, [period]) {
     budgetOverall: budgetRows.length ? Number(budgetRows[0].amount) : 0,
     budgetOverallRepeat: budgetRows.length ? budgetRows[0].repeat_monthly === true : false,
     categoryBudgets: catBudgetRows.map(function (r) { return { categoryId: r.category_id, amount: Number(r.amount), repeat: r.repeat_monthly === true }; }),
-    savings: savings
+    savings: savings,
+    prevEntries: prevRows.map(function (r) { return { amount: Number(r.amount), date: r.entry_date }; })
   };
 }
 

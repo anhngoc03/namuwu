@@ -115,7 +115,7 @@
 
           <div class="home-expense-widget" id="home-expense-widget">
             <div class="home-expense-widget-label">Today's spending</div>
-            <div class="home-expense-widget-value" id="home-expense-widget-value">—</div>
+            <div class="home-expense-widget-value money" id="home-expense-widget-value">—</div>
             <div class="home-expense-widget-link">Open Expenses →</div>
           </div>
         </section>
@@ -246,35 +246,44 @@
             <div class="expense-month-title">✿ <span id="expense-month-label"></span></div>
             <button class="expense-month-nav expense-month-next">›</button>
           </div>
-          <div class="expense-sub-line" id="expense-overview-subline"></div>
+          <div class="expense-sub-line money" id="expense-overview-subline"></div>
 
-          <div class="expense-card">
+          <div class="expense-card expense-remain-card">
+            <button type="button" class="money-eye-btn" aria-label="Hide / show amounts" title="Hide / show amounts">
+              <svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="eye-closed" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10c2.2 3 5.4 4.6 9 4.6s6.8-1.6 9-4.6"/><path d="M6.2 13.4 4.5 16M12 14.6V17.5M17.8 13.4l1.7 2.6"/></svg>
+            </button>
             <div class="expense-remain-label">Remaining this month</div>
-            <div class="expense-remain-value" id="expense-remaining-value">0<small>đ</small></div>
+            <div class="expense-remain-value money" id="expense-remaining-value">0<small>đ</small></div>
             <div class="expense-progress-track"><div class="expense-progress-fill" id="expense-progress-fill"></div></div>
             <div class="expense-progress-meta"><span id="expense-progress-meta-left"></span><span id="expense-progress-meta-right"></span></div>
 
             <div class="expense-chips-row">
               <div class="expense-info-chip income">
                 <div class="expense-info-chip-top"><span>Income</span><span class="expense-edit-link" id="expense-income-add-link">+ Add</span></div>
-                <div class="expense-info-chip-val" id="expense-income-value">0đ</div>
+                <div class="expense-info-chip-val money" id="expense-income-value">0đ</div>
               </div>
               <div class="expense-info-chip expense">
                 <div class="expense-info-chip-top"><span>Expenses</span><span id="expense-spent-count"></span></div>
-                <div class="expense-info-chip-val" id="expense-spent-value">0đ</div>
+                <div class="expense-info-chip-val money" id="expense-spent-value">0đ</div>
               </div>
               <div class="expense-info-chip saved">
                 <div class="expense-info-chip-top"><span>Saved</span><span>this month</span></div>
-                <div class="expense-info-chip-val" id="expense-saved-value">0đ</div>
+                <div class="expense-info-chip-val money" id="expense-saved-value">0đ</div>
               </div>
             </div>
+          </div>
+
+          <div class="expense-card expense-insights-card" id="expense-insights-card" style="display:none;">
+            <div class="expense-section-title">Insights</div>
+            <div id="expense-insights"></div>
           </div>
 
           <div class="expense-card expense-wallets-card">
             <div class="expense-wallets-head">
               <div>
                 <div class="expense-sub-line" style="margin:0;">Total balance · all sources</div>
-                <div class="expense-wallets-total" id="expense-wallets-total">0đ</div>
+                <div class="expense-wallets-total money" id="expense-wallets-total">0đ</div>
               </div>
               <button class="pill-btn secondary expense-transfer-btn" id="expense-transfer-btn">⇄ Transfer</button>
             </div>
@@ -292,7 +301,7 @@
               <span class="expense-edit-link" id="expense-savings-edit-link">Edit</span>
             </div>
             <div class="expense-progress-track"><div class="expense-progress-fill expense-savings-fill" id="expense-savings-fill"></div></div>
-            <div class="expense-progress-meta"><span id="expense-savings-meta-left"></span><span id="expense-savings-meta-right"></span></div>
+            <div class="expense-progress-meta"><span id="expense-savings-meta-left" class="money"></span><span id="expense-savings-meta-right" class="money"></span></div>
             <div class="expense-savings-actions">
               <button class="pill-btn" id="expense-savings-deposit-btn">+ Deposit</button>
               <button class="pill-btn secondary" id="expense-savings-spend-btn">− Spend</button>
@@ -320,7 +329,7 @@
             <div class="expense-card expense-cal-card">
               <div class="expense-cal-grid" id="expense-cal-grid"></div>
               <div class="expense-cal-footer">
-                <span>Total this month: <b id="expense-cal-total"></b></span>
+                <span>Total this month: <b id="expense-cal-total" class="money"></b></span>
                 <span id="expense-cal-days-count"></span>
               </div>
             </div>
@@ -329,7 +338,7 @@
                 <div><div class="expense-day-detail-label">Day details</div><div class="expense-day-title" id="expense-day-title"></div></div>
                 <button class="acc-edit-icon-btn" id="expense-day-close-btn">✕</button>
               </div>
-              <div class="expense-day-total-row">Total spent <b id="expense-day-total"></b></div>
+              <div class="expense-day-total-row">Total spent <b id="expense-day-total" class="money"></b></div>
               <div id="expense-day-list"></div>
               <button class="expense-add-btn" id="expense-day-add-btn">＋ Add expense for this day</button>
             </div>
@@ -340,11 +349,11 @@
           <div class="expense-section-title">Statistics — <span id="expense-stats-month-label"></span></div>
 
           <div class="expense-card expense-stats-overview">
-            <div class="expense-stats-tile"><div class="label">Total spent</div><div class="val" id="expense-stats-total"></div></div>
-            <div class="expense-stats-tile"><div class="label">Income</div><div class="val" id="expense-stats-income"></div></div>
-            <div class="expense-stats-tile"><div class="label">Remaining</div><div class="val" id="expense-stats-remaining"></div></div>
+            <div class="expense-stats-tile"><div class="label">Total spent</div><div class="val money" id="expense-stats-total"></div></div>
+            <div class="expense-stats-tile"><div class="label">Income</div><div class="val money" id="expense-stats-income"></div></div>
+            <div class="expense-stats-tile"><div class="label">Remaining</div><div class="val money" id="expense-stats-remaining"></div></div>
             <div class="expense-stats-tile"><div class="label">Transactions</div><div class="val" id="expense-stats-count"></div></div>
-            <div class="expense-stats-tile"><div class="label">Avg / day</div><div class="val" id="expense-stats-avg"></div></div>
+            <div class="expense-stats-tile"><div class="label">Avg / day</div><div class="val money" id="expense-stats-avg"></div></div>
           </div>
 
           <div class="expense-card">
@@ -372,12 +381,12 @@
 
           <div class="expense-card">
             <div class="expense-budget-head">
-              <div><div class="expense-sub-line" style="margin:0;">Monthly budget</div><div class="expense-remain-value" id="expense-budget-overall-value">0đ</div><div class="expense-repeat-badge" id="expense-budget-repeat-badge" style="display:none;">↻ Repeats every month</div></div>
+              <div><div class="expense-sub-line" style="margin:0;">Monthly budget</div><div class="expense-remain-value money" id="expense-budget-overall-value">0đ</div><div class="expense-repeat-badge" id="expense-budget-repeat-badge" style="display:none;">↻ Repeats every month</div></div>
               <button class="pill-btn" id="expense-budget-edit-btn">✎ Edit</button>
             </div>
             <div class="expense-progress-track"><div class="expense-progress-fill" id="expense-budget-progress-fill"></div></div>
-            <div class="expense-progress-meta"><span id="expense-budget-used-pct"></span><span>Remaining <b id="expense-budget-remaining"></b></span></div>
-            <div class="expense-hint" id="expense-budget-hint" style="display:none;"></div>
+            <div class="expense-progress-meta"><span id="expense-budget-used-pct"></span><span>Remaining <b id="expense-budget-remaining" class="money"></b></span></div>
+            <div class="expense-hint money" id="expense-budget-hint" style="display:none;"></div>
           </div>
 
           <div class="expense-section-title">By category</div>
