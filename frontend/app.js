@@ -175,13 +175,64 @@ var VIEW_OPENERS_ = {
   'minesweeper-view': openMinesweeper
 };
 
-// Remembers where the person currently is, so reloading the page lands back on the
-// same view instead of always resetting to Home.
-function saveNavState_(view, section) {
-  try {
-    localStorage.setItem('henlo_nav', JSON.stringify({ view: view, section: section }));
-  } catch (e) { /* localStorage unavailable — silently skip, not critical */ }
+/* ---- URLs: every section / tool / game has its own path (no "#") ----
+   "/" is Home. Opening a view pushes its path, so links can be shared/bookmarked,
+   reloading stays on the same page and the browser Back button works.
+   Cloudflare Pages serves index.html for any unknown path (no 404.html), which is
+   what lets "/tools/yakult" etc. load this same page. */
+var SECTION_PATHS_ = { home: '/', tools: '/tools', games: '/games', personal: '/personal' };
+var VIEW_PATHS_ = {
+  'datediff-view': '/tools/day-counter',
+  'converter-view': '/tools/pdf-converter',
+  'qr-view': '/tools/qr',
+  'symbols-view': '/tools/symbols',
+  'eating-view': '/tools/yakult',
+  'memory-view': '/games/memory-match',
+  'minesweeper-view': '/games/minesweeper',
+  'mochi-view': '/games/mochi-fly',
+  'accounts-view': '/personal/account',
+  'expense-view': '/personal/expenses'
+};
+var routing_ = false; // true while applying a URL (load / Back) — don't push it again
+
+function setPath_(path) {
+  if (routing_ || !path) return;
+  if (location.pathname.replace(/\/+$/, '') === path.replace(/\/+$/, '') ) return;
+  try { history.pushState(null, '', path); } catch (e) { /* file:// preview etc. */ }
 }
+
+// Opens whatever the current URL points at. Unknown paths fall back to Home.
+function routeFromLocation_() {
+  var path = location.pathname.replace(/\/+$/, '') || '/';
+  routing_ = true;
+  try {
+    var viewId = Object.keys(VIEW_PATHS_).find(function (k) { return VIEW_PATHS_[k] === path; });
+    if (viewId) {
+      stopRunningViews_();
+      if (viewId === 'accounts-view' || viewId === 'expense-view') {
+        // Personal: show Home underneath, then ask for the password first.
+        if (!personalUnlocked) { showView('menu-view'); showHomeSection('home'); }
+      }
+      VIEW_OPENERS_[viewId]();
+      return;
+    }
+    var section = Object.keys(SECTION_PATHS_).find(function (k) { return SECTION_PATHS_[k] === path; }) || 'home';
+    if (section === 'personal') {
+      if (!personalUnlocked) { goHome('home'); }
+      requirePersonal(function () { goHome('personal'); });
+    } else {
+      goHome(section);
+    }
+    if (path !== SECTION_PATHS_[section]) history.replaceState(null, '', SECTION_PATHS_[section]);
+  } finally {
+    routing_ = false;
+  }
+}
+window.addEventListener('popstate', function () {
+  document.querySelectorAll('.modal-overlay.active').forEach(function (m) { m.classList.remove('active'); });
+  closeMobileNavDrawer();
+  routeFromLocation_();
+});
 
 // Keeps BOTH nav surfaces in sync — the mobile drawer's links and the desktop
 // dock's links share the ".app-nav-link" class, so one pass covers both.
@@ -271,7 +322,7 @@ function showHomeSection(section) {
     expenseLoadHomeWidget();
   }
   setNavActive(section);
-  saveNavState_('menu-view', section);
+  setPath_(SECTION_PATHS_[section]);
 }
 
 function showView(id) {
@@ -281,7 +332,7 @@ function showView(id) {
     showHomeSection(currentHomeSection_);
   } else {
     setNavActive(NAV_SECTION_MAP_[id] || 'home');
-    saveNavState_(id);
+    setPath_(VIEW_PATHS_[id]);
   }
 
   // The Expense tool's own mobile tab bar lives at the body level now (see
@@ -310,14 +361,17 @@ function syncFixedHeaderOffsets() {
 // running" step (stopping timers/music/polling), regardless of which view you're
 // actually leaving. Harmless no-op for anything that wasn't running.
 function goHome(section) {
+  stopRunningViews_();
+  showView('menu-view');
+  showHomeSection(section);
+}
+function stopRunningViews_() {
   stopSymbolsPolling();
   memoryStopTimer();
   if (typeof mochiStopMusic === 'function') mochiStopMusic();
   if (typeof mochiRAF !== 'undefined' && mochiRAF) cancelAnimationFrame(mochiRAF);
   if (typeof mochiState !== 'undefined') mochiState = 'idle';
   if (typeof msStopTimer === 'function') msStopTimer();
-  showView('menu-view');
-  showHomeSection(section);
 }
 
 /* ---------------------------------------------------------------- */
@@ -3552,7 +3606,7 @@ function qrRenderCanvas(container, link, embedLogo) {
       fixVisibility();
     };
     logo.onerror = fixVisibility;
-    logo.src = 'images/favicon.png';
+    logo.src = '/images/favicon.png';
   } else {
     setTimeout(fixVisibility, 0);
   }
@@ -3639,21 +3693,9 @@ document.addEventListener('DOMContentLoaded', function () {
   scatterFlowers();
   syncFixedHeaderOffsets();
 
-  // Restore whichever view the person was on before reloading (if any, and if it's
-  // safe to restore — Accounts is skipped since it's password-gated).
-  var savedNav = null;
-  try { savedNav = JSON.parse(localStorage.getItem('henlo_nav') || 'null'); } catch (e) { savedNav = null; }
-  if (savedNav && savedNav.view && savedNav.view !== 'menu-view' && typeof VIEW_OPENERS_[savedNav.view] === 'function') {
-    if (savedNav.view === 'accounts-view' || savedNav.view === 'expense-view') {
-      // Personal views: land on Home first, then ask for the password.
-      showView('menu-view');
-      showHomeSection('home');
-    }
-    VIEW_OPENERS_[savedNav.view]();
-  } else {
-    showView('menu-view');
-    showHomeSection((savedNav && savedNav.section) || 'home');
-  }
+  // Open whatever the URL points at ("/" = Home, "/tools/yakult", "/personal/expenses"…).
+  try { localStorage.removeItem('henlo_nav'); } catch (e) {}   // old "last page" memory, replaced by URLs
+  routeFromLocation_();
 
   window.addEventListener('resize', syncFixedHeaderOffsets);
 
@@ -3743,7 +3785,11 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('symbol-add-more').onclick = addSymbolRow;
   document.getElementById('symbol-add-save').onclick = saveSymbols;
 
-  document.getElementById('acc-gate-close').onclick = function () { document.getElementById('accounts-modal').classList.remove('active'); };
+  document.getElementById('acc-gate-close').onclick = function () {
+    document.getElementById('accounts-modal').classList.remove('active');
+    personalAfterUnlock_ = null;
+    if (!personalUnlocked && /^\/personal/.test(location.pathname)) goHome('home');
+  };
 
   document.getElementById('home-add-btn').onclick = homeOpenAdd;
   document.getElementById('home-reset-btn').onclick = function () { document.getElementById('home-reset-modal').classList.add('active'); };

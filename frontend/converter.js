@@ -26,8 +26,8 @@
     });
     return scriptPromises[src];
   }
-  function needPdfLib() { return window.PDFLib ? Promise.resolve() : loadScript('lib/pdf-lib.min.js'); }
-  function needZip() { return window.JSZip ? Promise.resolve() : loadScript('lib/jszip.min.js'); }
+  function needPdfLib() { return window.PDFLib ? Promise.resolve() : loadScript('/lib/pdf-lib.min.js'); }
+  function needZip() { return window.JSZip ? Promise.resolve() : loadScript('/lib/jszip.min.js'); }
 
   /* ---------------- state ---------------- */
   var files = [];     // {id, file, kind, ext, thumb}
