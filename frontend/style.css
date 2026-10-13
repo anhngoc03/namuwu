@@ -398,7 +398,7 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
 .acc-note a{ color:var(--pink-deep); }
 
 .bottom-actions{ display:flex; gap:12px; justify-content:center; margin-top:var(--sp-5); }
-.empty-state{ text-align:center; padding:var(--sp-8) var(--sp-4); opacity:0.65; }
+.empty-state{ text-align:center; padding:var(--sp-8) var(--sp-4); color:var(--exp-muted); }
 .empty-state .empty-icon{ font-size:28px; display:block; margin-bottom:var(--sp-2); }
 
 /* ============================================================
@@ -1659,11 +1659,28 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
   100%{ opacity:0; transform:translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) + 140px)) scale(.9) rotate(var(--rot)); }
 }
 
-/* Mascot: every empty-state that had the ✿ icon gets a little jellyfish 🪼 (tentacles sway inside the SVG) */
+/* Mascot: every empty-state that had the ✿ icon gets the jellyfish 🪼 —
+   it drifts and tilts (the element) while its bell "breathes" (the ::before) */
 .empty-state .empty-icon{
-  width:64px; height:76px; margin:0 auto 10px; font-size:0; color:transparent;
-  background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 76'><defs><linearGradient id='b' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='%23bfe6ff'/><stop offset='1' stop-color='%237cc2f7'/></linearGradient></defs><g stroke='%235aa7ea' stroke-width='2.4' stroke-linecap='round' fill='none'><path d='M19 35c-3 7 3 12 0 19s2 11 0 16'><animateTransform attributeName='transform' type='rotate' values='-7 19 35;7 19 35;-7 19 35' dur='2.4s' repeatCount='indefinite'/></path><path d='M28 36c-2 7 3 11 0 18s2 10 0 14'><animateTransform attributeName='transform' type='rotate' values='6 28 36;-6 28 36;6 28 36' dur='2.1s' repeatCount='indefinite'/></path><path d='M36 36c2 7-3 11 0 18s-2 10 0 14'><animateTransform attributeName='transform' type='rotate' values='-6 36 36;6 36 36;-6 36 36' dur='2.3s' repeatCount='indefinite'/></path><path d='M45 35c3 7-3 12 0 19s-2 11 0 16'><animateTransform attributeName='transform' type='rotate' values='7 45 35;-7 45 35;7 45 35' dur='2.5s' repeatCount='indefinite'/></path></g><path d='M8 32C8 15 19 6 32 6s24 9 24 26c0 4-4 5-8 3-4 3-8 3-12 1-4 2-8 2-12 0-4 2-8 1-10-2-2 2-6 1-6-2z' fill='url(%23b)' stroke='%235aa7ea' stroke-width='2.4' stroke-linejoin='round'/><ellipse cx='21' cy='16' rx='5' ry='3' fill='%23fff' opacity='.6' transform='rotate(-25 21 16)'/><circle cx='25' cy='24' r='2.4' fill='%233d4a63'/><circle cx='39' cy='24' r='2.4' fill='%233d4a63'/><path d='M29 28q3 3 6 0' fill='none' stroke='%233d4a63' stroke-width='2' stroke-linecap='round'/><ellipse cx='20' cy='28' rx='3.2' ry='2' fill='%23ff9bb0' opacity='.6'/><ellipse cx='44' cy='28' rx='3.2' ry='2' fill='%23ff9bb0' opacity='.6'/></svg>") center/contain no-repeat;
-  animation:mascotBob 2.6s ease-in-out infinite;
+  position:relative; width:96px; height:99px; margin:0 auto 12px; font-size:0; color:transparent;
+  animation:jellyDrift 5.5s ease-in-out infinite;
+}
+.empty-state .empty-icon::before{
+  content:''; position:absolute; inset:0;
+  background:url("/images/jellyfish.webp") center/contain no-repeat;
+  transform-origin:50% 20%;
+  animation:jellyPulse 2.2s ease-in-out infinite;
+  filter:drop-shadow(0 6px 14px rgba(150,140,255,.25));
+}
+#home-todo-list .empty-state .empty-icon{ width:120px; height:124px; }
+@keyframes jellyDrift{
+  0%,100%{ transform:translate(0,0) rotate(-4deg); }
+  50%    { transform:translate(4px,-10px) rotate(4deg); }
+}
+@keyframes jellyPulse{
+  0%,100%{ transform:scale(1,1); }
+  45%    { transform:scale(1.04,.95); }
+  70%    { transform:scale(.98,1.03); }
 }
 @keyframes mascotBob{
   0%,100%{ transform:translateY(0) rotate(-3deg); }
