@@ -1,162 +1,186 @@
-/* Procedural jellyfish (canvas). Bell pulses (quick squeeze, slow relax) and
-   drifts; tentacles + frilly oral arms are verlet chains anchored on the rim,
-   so they trail, lag and ripple on their own. */
+/* ------------------------------------------------------------------
+ * jelly.js — the jellyfish on empty screens.
+ *
+ * The painting (images/jellyfish.webp) is warped live, pixel by pixel, in a
+ * WebGL fragment shader, using the way a real one swims:
+ *   - the bell squeezes quickly, then relaxes slowly (one beat ≈ 1.8s);
+ *   - each squeeze pushes the body up along its axis, then it sinks/drifts;
+ *   - the same beat travels down the tentacles a moment later (they stretch
+ *     and kink after the bell), plus slow waves running root → tip.
+ * One shared WebGL canvas renders every jellyfish, then each one is copied to
+ * its own 2D <canvas> (phones allow only a few WebGL contexts). Without WebGL
+ * the painting is just shown still.
+ * ------------------------------------------------------------------ */
 var JellySim = (function () {
+  var IMG_SRC = '/images/jellyfish.webp';
+  var IW = 465, IH = 480;          // painting size (px) — shader works in these units
+  var PAD = 40;                    // room around it for the body to move into
+  var BW = IW + PAD * 2, BH = IH + PAD * 2;
+  var BEAT = 1.8;
+
   var sims = [], raf = null, last = 0;
+  var img = new Image(), imgReady = false;
+  var gl = null, glCanvas = null, prog = null, uni = {}, glFailed = false;
   var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  function make(canvas) {
-    var s = { c: canvas, ctx: canvas.getContext('2d'), t: Math.random() * 10,
-      x: 50, y: 34, vx: 0, vy: 0, ang: 0, tent: [], arms: [] };
-    var i, k;
-    // 9 thin tentacles round the rim, 4 frilly oral arms from the centre
-    for (i = 0; i < 9; i++) s.tent.push(chain(20, 3.3, (i / 8) * 2 - 1, 0.6 + Math.random() * 0.8));
-    for (k = 0; k < 4; k++) s.arms.push(chain(12, 3.0, (k / 3) * 0.9 - 0.45, 0.4 + Math.random() * 0.5));
-    function chain(n, seg, u, ph) {
-      var pts = [];
-      for (var j = 0; j < n; j++) pts.push({ x: 50 + u * 14, y: 40 + j * seg, px: 50 + u * 14, py: 40 + j * seg });
-      return { pts: pts, seg: seg, u: u, ph: ph };
+  img.onload = function () { imgReady = true; kick(); };
+  img.src = IMG_SRC;
+
+  var VS = 'attribute vec2 p; varying vec2 v; uniform vec2 box;' +
+    'void main(){ v = (p * 0.5 + 0.5) * box; v.y = box.y - v.y; gl_Position = vec4(p, 0.0, 1.0); }';
+
+  var FS = [
+    'precision mediump float;',
+    'varying vec2 v;',
+    'uniform sampler2D img; uniform vec2 size; uniform float pad;',
+    'uniform float t; uniform float beat; uniform vec2 off; uniform float rot;',
+    // bell centre + body axis (towards the tentacles) in painting pixels
+    'const vec2 C = vec2(318.0, 78.0);',
+    'const vec2 A = vec2(-0.348, 0.937);',
+    'float squeeze(float tt){',
+    '  float ph = fract(tt / beat);',
+    '  if (ph < 0.26) return sin(ph / 0.26 * 1.5708);',
+    '  return pow(1.0 - (ph - 0.26) / 0.74, 2.2);',
+    '}',
+    'void main(){',
+    '  vec2 q = v - vec2(pad) - off;',
+    // undo the body tilt around the bell
+    '  vec2 dq = q - C; float cr = cos(rot), sr = sin(rot);',
+    '  dq = vec2(cr * dq.x + sr * dq.y, -sr * dq.x + cr * dq.y);',
+    '  vec2 N = vec2(A.y, -A.x);',
+    '  float s = dot(dq, A);',                  // along the body (− = top of bell)
+    '  float r = dot(dq, N);',                  // across the body
+    '  float c = squeeze(t);',
+    // bell: narrower + a little longer while squeezing, fading out below the rim
+    '  float wb = 1.0 - smoothstep(55.0, 120.0, s);',
+    '  float r2 = r / (1.0 - 0.15 * c * wb);',
+    '  float s2 = s < 0.0 ? s / (1.0 + 0.07 * c * wb) : s;',
+    // tentacles: the beat arrives later the further down; they stretch + kink,
+    // and slow waves run root → tip all the time
+    '  float wt = smoothstep(70.0, 170.0, s);',
+    '  float d = max(s - 80.0, 0.0);',
+    '  float cl = squeeze(t - 0.25 - d / 260.0);',
+    '  s2 -= wt * cl * 0.10 * d;',
+    '  float amp = wt * (3.0 + d * 0.045);',
+    '  r2 += amp * sin(t * 2.1 - s * 0.034) + amp * 0.45 * sin(t * 3.3 - s * 0.071 + 1.7);',
+    '  r2 += wt * cl * d * 0.035 * sin(s * 0.02 - 0.6);',
+    '  vec2 src = C + A * s2 + N * r2;',
+    '  vec2 uv = src / size;',
+    '  if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) { gl_FragColor = vec4(0.0); return; }',
+    '  gl_FragColor = texture2D(img, uv);',
+    '}'
+  ].join('\n');
+
+  function initGL() {
+    if (gl || glFailed) return !!gl;
+    try {
+      glCanvas = document.createElement('canvas');
+      gl = glCanvas.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: false });
+      if (!gl) throw new Error('no webgl');
+      var sh = function (type, src) {
+        var o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o);
+        if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o));
+        return o;
+      };
+      prog = gl.createProgram();
+      gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS));
+      gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('link');
+      gl.useProgram(prog);
+      var buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+      var loc = gl.getAttribLocation(prog, 'p');
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+      ['img', 'size', 'pad', 't', 'beat', 'off', 'rot', 'box'].forEach(function (n) { uni[n] = gl.getUniformLocation(prog, n); });
+      var tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.uniform1i(uni.img, 0);
+      gl.uniform2f(uni.size, IW, IH);
+      gl.uniform1f(uni.pad, PAD);
+      gl.uniform1f(uni.beat, BEAT);
+      gl.uniform2f(uni.box, BW, BH);
+      return true;
+    } catch (e) {
+      glFailed = true; gl = null;
+      return false;
     }
-    sims.push(s);
-    return s;
   }
 
-  // contraction 0..1: fast squeeze (first 28% of the beat), slow relax after
-  function squeeze(phase) {
-    if (phase < 0.28) { var a = phase / 0.28; return Math.sin(a * Math.PI / 2); }
-    var b = (phase - 0.28) / 0.72; return Math.pow(1 - b, 2.2);
-  }
-
+  // Body movement (in painting px): thrust along the axis while squeezing,
+  // water drag, a soft pull back home, slow sinking and a gentle sway.
   function step(s, dt) {
-    var P = 1.7;                        // seconds per beat
     s.t += dt;
-    var phase = (s.t % P) / P, c = squeeze(phase);
-    var prevPhase = ((s.t - dt) % P) / P;
-    // thrust while squeezing, along the body axis; water drag; soft pull home
-    if (phase < 0.28) {
-      var thrust = 34 * dt;
-      s.vx += Math.sin(s.ang) * thrust; s.vy -= Math.cos(s.ang) * thrust;
-    }
-    s.vy += 7 * dt;                     // gentle sinking between beats
-    s.vx += (50 - s.x) * 0.6 * dt; s.vy += (34 - s.y) * 0.9 * dt;
-    s.vx *= Math.pow(0.18, dt); s.vy *= Math.pow(0.18, dt);
+    var ph = (s.t % BEAT) / BEAT;
+    if (ph < 0.26) { s.vx += 0.348 * 120 * dt; s.vy -= 0.937 * 120 * dt; }   // −axis = swim direction
+    s.vy += 14 * dt;
+    s.vx += -s.x * 1.2 * dt; s.vy += -s.y * 1.6 * dt;
+    var drag = Math.pow(0.12, dt);
+    s.vx *= drag; s.vy *= drag;
     s.x += s.vx * dt; s.y += s.vy * dt;
-    s.ang = 0.28 * Math.sin(s.t * 0.37) + 0.08 * Math.sin(s.t * 0.9);
-    s.sq = c;
-
-    var w = 15 * (1 - 0.2 * c);         // bell half-width
-    var cos = Math.cos(s.ang), sin = Math.sin(s.ang);
-    function rim(u, depth) {            // point on the bell's rim, rotated with the body
-      var lx = u * w, ly = 4 + depth;
-      return { x: s.x + lx * cos - ly * sin, y: s.y + lx * sin + ly * cos };
-    }
-    var all = s.tent.concat(s.arms);
-    for (var i = 0; i < all.length; i++) {
-      var ch = all[i], p = ch.pts, isArm = i >= s.tent.length;
-      var a = rim(isArm ? ch.u * 0.45 : ch.u, isArm ? 1 : 0);
-      p[0].x = a.x; p[0].y = a.y; p[0].px = a.x; p[0].py = a.y;
-      for (var j = 1; j < p.length; j++) {
-        var q = p[j], vx = (q.x - q.px) * 0.96, vy = (q.y - q.py) * 0.96;
-        q.px = q.x; q.py = q.y;
-        // a ripple travelling down the tentacle + a little current
-        var wave = Math.sin(s.t * 2.4 - j * 0.45 + ch.ph * 6) * (isArm ? 0.016 : 0.034) * Math.min(j, 10) * dt * 60 * 0.12;
-        q.x += vx + wave + Math.sin(s.t * 0.5 + ch.ph) * 0.004;
-        q.y += vy + 0.06;               // trails "down" (behind the swim)
-      }
-      for (var it = 0; it < 3; it++) {   // keep segment lengths
-        for (j = 1; j < p.length; j++) {
-          var A = p[j - 1], B = p[j], dx = B.x - A.x, dy = B.y - A.y, d = Math.sqrt(dx * dx + dy * dy) || 0.001;
-          var diff = (d - ch.seg) / d;
-          if (j === 1) { B.x -= dx * diff; B.y -= dy * diff; }
-          else { A.x += dx * diff * 0.5; A.y += dy * diff * 0.5; B.x -= dx * diff * 0.5; B.y -= dy * diff * 0.5; }
-        }
-      }
-    }
+    s.rot = 0.07 * Math.sin(s.t * 0.33) + 0.03 * Math.sin(s.t * 0.81);
   }
 
-  function draw(s) {
-    var cv = s.c, ctx = s.ctx, dpr = Math.min(2, window.devicePixelRatio || 1);
-    var W = cv.clientWidth, H = cv.clientHeight;
+  function render(s) {
+    var cv = s.c, W = cv.clientWidth, H = cv.clientHeight;
     if (!W || !H) return;
-    if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
-    var k = Math.min(W / 100, H / 110) * dpr;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, cv.width, cv.height);
-    ctx.setTransform(k, 0, 0, k, (cv.width - 100 * k) / 2, (cv.height - 110 * k) / 2);
-    var dark = typeof themeIsDark === 'function' && themeIsDark();
-    var line = dark ? '210,215,255' : '120,128,235';
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.shadowColor = dark ? 'rgba(170,175,255,.9)' : 'rgba(150,150,255,.35)';
-    ctx.shadowBlur = (dark ? 6 : 3) * k / dpr;
-
-    // tentacles: thin, tapering
-    s.tent.forEach(function (ch) { strand(ctx, ch.pts, 0.9, 0.25, 'rgba(' + line + ',' + (dark ? .75 : .6) + ')'); });
-    // oral arms: wide frilly ribbons
-    s.arms.forEach(function (ch, i) {
-      strand(ctx, ch.pts, 4.2, 1.2, 'rgba(' + (dark ? '200,190,255' : '170,160,245') + ',' + (dark ? .38 : .34) + ')');
-      strand(ctx, ch.pts, 1.4, 0.4, 'rgba(' + (dark ? '235,225,255' : '150,140,240') + ',' + (dark ? .55 : .45) + ')');
-    });
-
-    // bell
-    var c = s.sq || 0, w = 15 * (1 - 0.2 * c), h = 15 * (1 + 0.14 * c);
-    ctx.save();
-    ctx.translate(s.x, s.y); ctx.rotate(s.ang);
-    var g = ctx.createRadialGradient(-w * 0.3, -h * 0.55, 1, 0, -h * 0.2, w * 1.25);
-    g.addColorStop(0, dark ? 'rgba(255,245,255,.95)' : 'rgba(250,240,255,.95)');
-    g.addColorStop(0.45, dark ? 'rgba(200,190,255,.75)' : 'rgba(205,195,255,.85)');
-    g.addColorStop(1, dark ? 'rgba(130,140,255,.45)' : 'rgba(150,160,250,.6)');
-    ctx.beginPath();
-    ctx.moveTo(-w, 4);
-    ctx.bezierCurveTo(-w * 1.05, -h * 0.9, w * 1.05, -h * 0.9, w, 4);
-    for (var i = 8; i >= 0; i--) {                       // scalloped rim
-      var xx = -w + (2 * w) * (i / 8);
-      ctx.quadraticCurveTo(xx + w / 8, 6.2 + c, xx, 4);
-    }
-    ctx.closePath();
-    ctx.fillStyle = g; ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(' + line + ',.55)'; ctx.lineWidth = 0.7; ctx.stroke();
-    // inner glow + highlight
-    ctx.beginPath(); ctx.ellipse(0, -h * 0.15, w * 0.45, h * 0.28, 0, 0, Math.PI * 2);
-    ctx.fillStyle = dark ? 'rgba(255,200,240,.35)' : 'rgba(255,190,230,.4)'; ctx.fill();
-    ctx.beginPath(); ctx.ellipse(-w * 0.45, -h * 0.5, w * 0.22, h * 0.1, -0.6, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fill();
-    ctx.restore();
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    var w = Math.round(W * dpr), h = Math.round(H * dpr);
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    if (glCanvas.width !== w || glCanvas.height !== h) { glCanvas.width = w; glCanvas.height = h; }
+    gl.viewport(0, 0, w, h);
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniform1f(uni.t, s.t);
+    gl.uniform2f(uni.off, s.x, s.y);
+    gl.uniform1f(uni.rot, s.rot);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    var ctx = s.ctx;
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(glCanvas, 0, 0);
   }
 
-  // one continuous smooth path per strand (separate segments leave dots at the joints);
-  // taper by drawing the root half again a bit thicker
-  function strand(ctx, p, w0, w1, color) {
-    ctx.strokeStyle = color;
-    trace(ctx, p, p.length); ctx.lineWidth = (w0 + w1) / 2; ctx.stroke();
-    trace(ctx, p, Math.ceil(p.length * 0.45)); ctx.lineWidth = w0 * 0.6; ctx.stroke();
-  }
-  function trace(ctx, p, n) {
-    ctx.beginPath(); ctx.moveTo(p[0].x, p[0].y);
-    for (var j = 1; j < n - 1; j++) ctx.quadraticCurveTo(p[j].x, p[j].y, (p[j].x + p[j + 1].x) / 2, (p[j].y + p[j + 1].y) / 2);
-    ctx.lineTo(p[n - 1].x, p[n - 1].y);
+  function still(s) {               // no WebGL / reduced motion: the painting, unmoved
+    var cv = s.c, W = cv.clientWidth, H = cv.clientHeight;
+    if (!W || !H || !imgReady) return;
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    var k = cv.width / BW;
+    s.ctx.drawImage(img, PAD * k, PAD * k, IW * k, IH * k);
   }
 
   function loop(now) {
     raf = null;
     var dt = Math.min(0.05, (now - (last || now)) / 1000); last = now;
     sims = sims.filter(function (s) { return s.c.isConnected; });
-    var any = false;
+    if (!sims.length) { last = 0; return; }
     sims.forEach(function (s) {
-      if (!s.c.offsetParent) return;               // hidden page / list → skip
-      any = true;
-      step(s, dt); draw(s);
+      if (!s.c.offsetParent) return;           // on a hidden page → skip
+      step(s, dt);
+      render(s);
     });
-    if (sims.length) raf = requestAnimationFrame(loop);
-    if (!any) last = 0;
+    raf = requestAnimationFrame(loop);
+  }
+
+  function kick() {
+    if (!imgReady) return;
+    var useGL = !reduce && initGL();
+    if (!useGL) { sims.forEach(still); return; }
+    if (!raf) raf = requestAnimationFrame(loop);
   }
 
   return {
+    // the canvas should keep the BW:BH (545:560) shape; CSS sizes it.
     attach: function (canvas) {
-      var s = make(canvas);
-      for (var i = 0; i < 90; i++) step(s, 1 / 60);   // settle tentacles before first paint
-      if (reduce) { draw(s); return; }
-      if (!raf) raf = requestAnimationFrame(loop);
+      sims.push({ c: canvas, ctx: canvas.getContext('2d'), t: Math.random() * BEAT, x: 0, y: 0, vx: 0, vy: 0, rot: 0 });
+      kick();
     }
   };
 })();
