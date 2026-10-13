@@ -1659,29 +1659,38 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
   100%{ opacity:0; transform:translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) + 140px)) scale(.9) rotate(var(--rot)); }
 }
 
-/* Mascot: every empty-state that had the ✿ icon gets the jellyfish 🪼 —
-   it drifts and tilts (the element) while its bell "breathes" (the ::before) */
-.empty-state .empty-icon{
-  position:relative; width:96px; height:99px; margin:0 auto 12px; font-size:0; color:transparent;
-  animation:jellyDrift 5.5s ease-in-out infinite;
+/* Mascot: every empty-state's ✿ icon becomes the jellyfish 🪼 (app.js swaps in JELLY_SVG_).
+   Two layers of the same painting: the bell squeezes, darts the body up its axis and
+   glides back; the tentacles are dragged behind a beat later and ripple through an
+   SVG turbulence filter, like they're in water. */
+.empty-state .empty-icon{ display:block; width:110px; height:119px; margin:0 auto 8px; font-size:0; color:transparent; }
+#home-todo-list .empty-state .empty-icon{ width:140px; height:151px; }
+.jf{ display:block; width:100%; height:100%; overflow:visible; }
+.jf-wander{ animation:jfWander 11s ease-in-out infinite; transform-box:view-box; transform-origin:155px 160px; }
+.jf-swim{ animation:jfSwim 3.4s infinite; transform-box:view-box; }
+.jf-bell{ animation:jfBell 3.4s infinite; transform-box:view-box; transform-origin:212px 52px; }
+.jf-tent{ animation:jfTent 3.4s infinite; animation-delay:.18s; transform-box:view-box; transform-origin:200px 95px; }
+@keyframes jfWander{ 0%,100%{ transform:translate(0,0) rotate(-2deg); } 50%{ transform:translate(-4px,6px) rotate(2deg); } }
+/* quick contraction → dart up along the body axis → long slow glide back */
+@keyframes jfSwim{
+  0%  { transform:translate(0,0); animation-timing-function:cubic-bezier(.2,.7,.3,1); }
+  16% { transform:translate(5px,-13px); animation-timing-function:cubic-bezier(.45,0,.55,1); }
+  100%{ transform:translate(0,0); }
 }
-.empty-state .empty-icon::before{
-  content:''; position:absolute; inset:0;
-  background:url("/images/jellyfish.webp") center/contain no-repeat;
-  transform-origin:50% 20%;
-  animation:jellyPulse 2.2s ease-in-out infinite;
-  filter:drop-shadow(0 6px 14px rgba(150,140,255,.25));
+@keyframes jfBell{
+  0%  { transform:rotate(20deg) scale(1,1) rotate(-20deg); animation-timing-function:cubic-bezier(.3,0,.2,1); }
+  11% { transform:rotate(20deg) scale(.91,1.05) rotate(-20deg); animation-timing-function:cubic-bezier(.3,0,.3,1); }
+  34% { transform:rotate(20deg) scale(1.03,.98) rotate(-20deg); animation-timing-function:ease-in-out; }
+  100%{ transform:rotate(20deg) scale(1,1) rotate(-20deg); }
 }
-#home-todo-list .empty-state .empty-icon{ width:120px; height:124px; }
-@keyframes jellyDrift{
-  0%,100%{ transform:translate(0,0) rotate(-4deg); }
-  50%    { transform:translate(4px,-10px) rotate(4deg); }
+/* tentacles get dragged behind the dart, then sway back */
+@keyframes jfTent{
+  0%  { transform:translate(0,0) rotate(0) scale(1,1); animation-timing-function:cubic-bezier(.2,.7,.3,1); }
+  18% { transform:translate(-2px,6px) rotate(-2.5deg) scale(.97,1.05); animation-timing-function:ease-in-out; }
+  55% { transform:translate(1px,-1px) rotate(1.8deg) scale(1.01,.99); animation-timing-function:ease-in-out; }
+  100%{ transform:translate(0,0) rotate(0) scale(1,1); }
 }
-@keyframes jellyPulse{
-  0%,100%{ transform:scale(1,1); }
-  45%    { transform:scale(1.04,.95); }
-  70%    { transform:scale(.98,1.03); }
-}
+
 @keyframes mascotBob{
   0%,100%{ transform:translateY(0) rotate(-3deg); }
   50%    { transform:translateY(-6px) rotate(3deg); }

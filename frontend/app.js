@@ -231,6 +231,19 @@ function toggleMoneyHidden() {
   applyMoneyHidden_(hidden);
 }
 
+// Jellyfish for empty screens: every <span class="empty-icon"> that shows up
+// (they're rendered all over app.js) gets this SVG; masks/filter live in index.html.
+var JELLY_SVG_ = '<svg class="jf" viewBox="-30 -40 370 400" aria-hidden="true"> <g class="jf-wander"><g class="jf-swim"> <g class="jf-tent"><g filter="url(#jf-wave)"><image href="/images/jellyfish.webp" width="310" height="320" mask="url(#jf-tmask)"/></g></g> <g class="jf-bell"><image href="/images/jellyfish.webp" width="310" height="320" mask="url(#jf-bmask)"/></g> </g></g> </svg>';
+function jellyfy_(root) {
+  (root.querySelectorAll ? root.querySelectorAll('.empty-icon:not([data-jelly])') : []).forEach(function (el) {
+    el.setAttribute('data-jelly', '1');
+    el.innerHTML = JELLY_SVG_;
+  });
+}
+new MutationObserver(function (muts) {
+  muts.forEach(function (m) { m.addedNodes.forEach(function (n) { if (n.nodeType === 1) { if (n.classList.contains('empty-icon')) jellyfy_(n.parentNode); else jellyfy_(n); } }); });
+}).observe(document.documentElement, { childList: true, subtree: true });
+
 /* ---------------------------------------------------------------- */
 /* SCREEN NAVIGATION                                                  */
 /* ---------------------------------------------------------------- */
@@ -4054,6 +4067,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (e.target.closest && e.target.closest('button, .todo-check, .eating-day-cell, .expense-cal-cell, .symbol-cell, .nav-card')) buzz(6);
   }, true);
 
+  jellyfy_(document);
   applyMoneyHidden_(moneyHidden());
   syncThemeSwitches_();
   document.querySelectorAll('.theme-switch').forEach(function (b) { b.onclick = toggleTheme; });
