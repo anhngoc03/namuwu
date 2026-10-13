@@ -16,26 +16,6 @@
 </head>
 <body>
 
-  <!-- Shared masks + "water" filter for the jellyfish on empty screens (see JELLY_SVG_ in app.js).
-       Kept here once, visible-but-zero-size, so every jellyfish can reference it. -->
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-    <defs>
-      <radialGradient id="jf-bg" gradientUnits="userSpaceOnUse" cx="212" cy="50" r="100" gradientTransform="translate(212 50) rotate(20) scale(1 .66) translate(-212 -50)">
-        <stop offset=".8" stop-color="#fff"/><stop offset="1" stop-color="#000"/>
-      </radialGradient>
-      <radialGradient id="jf-tg" gradientUnits="userSpaceOnUse" cx="212" cy="50" r="100" gradientTransform="translate(212 50) rotate(20) scale(1 .66) translate(-212 -50)">
-        <stop offset=".5" stop-color="#000"/><stop offset=".8" stop-color="#fff"/>
-      </radialGradient>
-      <mask id="jf-bmask" maskUnits="userSpaceOnUse" x="-60" y="-60" width="430" height="440"><rect x="-60" y="-60" width="430" height="440" fill="url(#jf-bg)"/></mask>
-      <mask id="jf-tmask" maskUnits="userSpaceOnUse" x="-60" y="-60" width="430" height="440"><rect x="-60" y="-60" width="430" height="440" fill="url(#jf-tg)"/></mask>
-      <filter id="jf-wave" filterUnits="userSpaceOnUse" x="-40" y="-40" width="390" height="400">
-        <feTurbulence type="fractalNoise" baseFrequency="0.006 0.022" numOctaves="2" seed="7" result="n">
-          <animate attributeName="baseFrequency" dur="7s" values="0.006 0.022;0.008 0.027;0.006 0.022" repeatCount="indefinite"/>
-        </feTurbulence>
-        <feDisplacementMap in="SourceGraphic" in2="n" scale="9" xChannelSelector="R" yChannelSelector="G"/>
-      </filter>
-    </defs>
-  </svg>
 
   <!-- ===== Mobile: bare tomato icon (top-left, slides to top-right as the
        drawer opens) + scrim + drawer. Placed as DIRECT children of <body> —
@@ -1199,6 +1179,7 @@
   <script src="/qrcode.min.js"></script>
   <script src="/gas-bridge.js"></script>
   <script src="/converter.js"></script>
+  <script src="/jelly.js"></script>
   <script src="/app.js"></script>
   <script src="/enter-confirm.js"></script>
 </body>

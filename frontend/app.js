@@ -232,12 +232,12 @@ function toggleMoneyHidden() {
 }
 
 // Jellyfish for empty screens: every <span class="empty-icon"> that shows up
-// (they're rendered all over app.js) gets this SVG; masks/filter live in index.html.
-var JELLY_SVG_ = '<svg class="jf" viewBox="-30 -40 370 400" aria-hidden="true"> <g class="jf-wander"><g class="jf-swim"> <g class="jf-tent"><g filter="url(#jf-wave)"><image href="/images/jellyfish.webp" width="310" height="320" mask="url(#jf-tmask)"/></g></g> <g class="jf-bell"><image href="/images/jellyfish.webp" width="310" height="320" mask="url(#jf-bmask)"/></g> </g></g> </svg>';
+// (they're rendered all over app.js) gets a canvas that jelly.js animates.
 function jellyfy_(root) {
   (root.querySelectorAll ? root.querySelectorAll('.empty-icon:not([data-jelly])') : []).forEach(function (el) {
     el.setAttribute('data-jelly', '1');
-    el.innerHTML = JELLY_SVG_;
+    el.innerHTML = '<canvas class="jelly-canvas" aria-hidden="true"></canvas>';
+    if (window.JellySim) JellySim.attach(el.firstChild);
   });
 }
 new MutationObserver(function (muts) {
