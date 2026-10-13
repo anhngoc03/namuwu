@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Henlo human</title>
+  <title>Henlo</title>
   <link rel="icon" type="image/png" href="/images/favicon.png">
   <link rel="apple-touch-icon" href="/images/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -105,9 +105,13 @@
       <div id="menu-view" class="app-view">
         <section class="home-section">
           <div class="home-greeting">
-            <img id="home-login-img" class="home-greeting-img" src="/images/home-avatar.jpeg" alt="">
+            <button type="button" class="home-greeting-avatar" id="home-avatar-btn" aria-label="Change photo and name">
+              <img id="home-avatar-img" class="home-greeting-img" alt="" hidden>
+              <span class="home-greeting-img jelly-avatar" id="home-avatar-default"></span>
+              <span class="home-avatar-edit">✎</span>
+            </button>
             <div>
-              <h1 class="home-greeting-title" id="home-greeting-title">Henlo human ✿</h1>
+              <h1 class="home-greeting-title" id="home-greeting-title">Henlo ✿</h1>
               <p class="home-greeting-sub" id="home-greeting-sub">My deadline isn't done, but I'm sure done ✿</p>
             </div>
           </div>
@@ -132,7 +136,10 @@
 
           <div class="home-todo-panel" id="home-todo-panel">
             <div class="home-todo-header">
-              <h2 class="home-todo-title">TO DO LIST</h2>
+              <div class="home-todo-titlewrap">
+                <h2 class="home-todo-title">TO DO LIST</h2>
+                <span class="jelly jelly-mini" id="home-todo-jelly" aria-hidden="true"></span>
+              </div>
               <div class="home-todo-toolbar">
                 <button id="home-add-btn" class="pill-btn">+ Add</button>
                 <button id="home-reset-btn" class="pill-btn secondary">Reset</button>
@@ -714,6 +721,32 @@
   </div>
 
   <!-- ================= MODAL: Home reset confirmation ================= -->
+  <!-- ================= MODAL: Home profile (photo + name, saved on this device) ================= -->
+  <div id="profile-modal" class="modal-overlay">
+    <div class="modal-box profile-box">
+      <div class="modal-header">
+        <h3>Your profile</h3>
+        <button id="profile-close" class="modal-close">✕</button>
+      </div>
+      <div class="profile-photo-row">
+        <div class="profile-photo-preview">
+          <img id="profile-photo-img" alt="" hidden>
+          <span class="jelly-avatar" id="profile-photo-default"></span>
+        </div>
+        <div class="profile-photo-actions">
+          <label class="pill-btn profile-pick-btn">Choose photo<input type="file" id="profile-photo-input" accept="image/*" hidden></label>
+          <button type="button" class="profile-remove-link" id="profile-photo-remove">Remove photo</button>
+        </div>
+      </div>
+      <div class="expense-field-caption">Name</div>
+      <input type="text" id="profile-name-input" maxlength="24" placeholder="e.g. Namu" autocomplete="off">
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="profile-cancel">Cancel</button>
+        <button class="pill-btn" id="profile-save">Save</button>
+      </div>
+    </div>
+  </div>
+
   <div id="home-reset-modal" class="modal-overlay">
     <div class="modal-box home-reset-box">
       <div class="modal-header" style="padding-top:26px;">

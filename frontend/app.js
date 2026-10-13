@@ -345,6 +345,45 @@ function closeMobileNavDrawer() {
   document.getElementById('mobile-nav-scrim').classList.remove('active');
   closeMobileNavSubmenus();
 }
+/* Swipe on phones: left → right opens the menu, right → left closes it (tapping
+   outside still closes it too). The swipe must start away from the screen's left
+   edge (that edge is Safari's own "go back" swipe), and it's off inside games,
+   popups and anything that scrolls sideways. */
+var NO_SWIPE_VIEWS_ = ['memory-view', 'mochi-view', 'minesweeper-view'];
+function swipeBlocked_(target) {
+  if (document.querySelector('.modal-overlay.active')) return true;
+  if (NO_SWIPE_VIEWS_.some(function (id) { return document.getElementById(id).style.display === 'block'; })) return true;
+  for (var el = target; el && el !== document.body; el = el.parentElement) {
+    if (/^(INPUT|TEXTAREA|SELECT|CANVAS)$/.test(el.tagName)) return true;
+    if (el.scrollWidth > el.clientWidth + 2) {
+      var ox = getComputedStyle(el).overflowX;
+      if (ox === 'auto' || ox === 'scroll') return true;
+    }
+  }
+  return false;
+}
+(function () {
+  var sx = 0, sy = 0, t0 = 0, tracking = false;
+  document.addEventListener('touchstart', function (e) {
+    tracking = false;
+    if (e.touches.length !== 1 || window.innerWidth > 760) return;
+    var t = e.touches[0];
+    var drawerOpen = document.getElementById('mobile-nav-drawer').classList.contains('open');
+    if (!drawerOpen && (t.clientX < 30 || swipeBlocked_(e.target))) return;
+    sx = t.clientX; sy = t.clientY; t0 = Date.now(); tracking = true;
+  }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (!tracking) return;
+    tracking = false;
+    var t = e.changedTouches[0];
+    var dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx) * 0.6 || Date.now() - t0 > 700) return;
+    var drawerOpen = document.getElementById('mobile-nav-drawer').classList.contains('open');
+    if (dx > 0 && !drawerOpen) openMobileNavDrawer();
+    else if (dx < 0 && drawerOpen) closeMobileNavDrawer();
+  }, { passive: true });
+})();
+
 function toggleMobileNavDrawer() {
   var isOpen = document.getElementById('mobile-nav-drawer').classList.contains('open');
   if (isOpen) closeMobileNavDrawer(); else openMobileNavDrawer();
@@ -3000,6 +3039,12 @@ function expenseWireEvents() {
   document.getElementById('open-expense').onclick = function () { requirePersonal(openExpense); };
   document.getElementById('home-expense-widget').onclick = expenseOpenFromHomeWidget;
   document.getElementById('home-yakult-tile').onclick = openEating;
+  document.getElementById('home-avatar-btn').onclick = openProfileModal;
+  document.getElementById('profile-close').onclick = function () { document.getElementById('profile-modal').classList.remove('active'); };
+  document.getElementById('profile-cancel').onclick = function () { document.getElementById('profile-modal').classList.remove('active'); };
+  document.getElementById('profile-save').onclick = saveProfile;
+  document.getElementById('profile-photo-input').onchange = function () { profilePickPhoto_(this.files && this.files[0]); };
+  document.getElementById('profile-photo-remove').onclick = function () { profileDraftPhoto_ = ''; profileShowDraft_(); };
   document.getElementById('home-todo-tile').onclick = function () {
     document.getElementById('home-todo-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -3103,11 +3148,77 @@ var homeEditingRow = null;  // null = không có dòng nào đang sửa | 'new' 
 function renderHomeGreeting() {
   var h = new Date().getHours();
   var hello = h < 5 ? 'Still up' : h < 11 ? 'Good morning' : h < 13 ? 'Hello' : h < 18 ? 'Good afternoon' : 'Good evening';
-  var days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   var d = new Date();
-  document.getElementById('home-greeting-title').textContent = hello + ', human ✿';
-  document.getElementById('home-greeting-sub').textContent =
-    days[d.getDay()] + ', ' + String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + ' · My deadline isn\'t done, but I\'m sure done';
+  var yymmdd = String(d.getFullYear()).slice(2) + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+  var name = profileGet_().name;
+  document.getElementById('home-greeting-title').textContent = hello + (name ? ', ' + name : '') + ' ✿';
+  document.getElementById('home-greeting-sub').textContent = yymmdd + ' · My deadline isn\'t done, but I\'m sure done';
+  renderProfileAvatar_();
+}
+
+/* ---- Profile: photo + name, chosen from the popup that opens when the avatar
+   is tapped. Saved on this device (localStorage); the photo is cropped to a
+   square and shrunk to 256px so it stays small. No photo → a jellyfish. ---- */
+function profileGet_() {
+  var p = { name: '', photo: '' };
+  try {
+    p.name = localStorage.getItem('henlo_profile_name') || '';
+    p.photo = localStorage.getItem('henlo_profile_photo') || '';
+  } catch (e) {}
+  return p;
+}
+function renderProfileAvatar_() {
+  var p = profileGet_();
+  var img = document.getElementById('home-avatar-img');
+  img.hidden = !p.photo;
+  if (p.photo) img.src = p.photo; else img.removeAttribute('src');
+  document.getElementById('home-avatar-default').hidden = !!p.photo;
+  document.title = 'Henlo' + (p.name ? ' ' + p.name : '');
+}
+var profileDraftPhoto_ = '';
+function profileShowDraft_() {
+  var img = document.getElementById('profile-photo-img');
+  img.hidden = !profileDraftPhoto_;
+  if (profileDraftPhoto_) img.src = profileDraftPhoto_; else img.removeAttribute('src');
+  document.getElementById('profile-photo-default').hidden = !!profileDraftPhoto_;
+  document.getElementById('profile-photo-remove').style.display = profileDraftPhoto_ ? '' : 'none';
+}
+function openProfileModal() {
+  var p = profileGet_();
+  profileDraftPhoto_ = p.photo;
+  document.getElementById('profile-name-input').value = p.name;
+  document.getElementById('profile-photo-input').value = '';
+  profileShowDraft_();
+  document.getElementById('profile-modal').classList.add('active');
+}
+function profilePickPhoto_(file) {
+  if (!file || !/^image\//.test(file.type)) return;
+  var reader = new FileReader();
+  reader.onload = function () {
+    var im = new Image();
+    im.onload = function () {
+      var size = 256, side = Math.min(im.naturalWidth, im.naturalHeight);
+      var c = document.createElement('canvas');
+      c.width = c.height = size;
+      c.getContext('2d').drawImage(im, (im.naturalWidth - side) / 2, (im.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+      profileDraftPhoto_ = c.toDataURL('image/jpeg', 0.85);
+      profileShowDraft_();
+    };
+    im.onerror = function () { toast("Couldn't read that photo"); };
+    im.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+}
+function saveProfile() {
+  var name = document.getElementById('profile-name-input').value.trim();
+  try {
+    localStorage.setItem('henlo_profile_name', name);
+    if (profileDraftPhoto_) localStorage.setItem('henlo_profile_photo', profileDraftPhoto_);
+    else localStorage.removeItem('henlo_profile_photo');
+  } catch (e) { toast("Couldn't save on this device"); return; }
+  document.getElementById('profile-modal').classList.remove('active');
+  renderHomeGreeting();
+  toast('Saved!');
 }
 
 // Days in a row with a Yakult, counting back from today (today not ticked yet
@@ -3258,6 +3369,8 @@ function renderHomeList() {
   container.innerHTML = '';
   renderHomeTodoTile_();
 
+  // Jellyfish: big in the middle when the list is empty, small next to the title otherwise.
+  document.getElementById('home-todo-jelly').style.display = homeData.length === 0 ? 'none' : '';
   if (homeData.length === 0) {
     container.innerHTML = '<div class="empty-state"><span class="empty-icon">✿</span>Chưa có việc nào cả, thêm mới thôi!</div>';
     return;
