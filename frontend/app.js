@@ -695,7 +695,7 @@ function renderAccountsList() {
       var isLink = /^https?:\/\//i.test(String(r.note).trim());
       if (isLink) {
         var a = document.createElement('a');
-        a.href = r.note; a.textContent = r.note; a.target = '_blank';
+        a.href = r.note; a.textContent = r.note; a.target = '_blank'; a.rel = 'noopener noreferrer';
         note.appendChild(a);
       } else {
         note.textContent = r.note;
@@ -3901,8 +3901,10 @@ function renderQrList() {
     var canvasWrap = card.querySelector('.qr-canvas-wrap');
     qrRenderCanvas(holder, item.link, item.embedLogo !== false);
 
-    canvasWrap.onclick = function () { window.open(item.link, '_blank'); };
-    card.querySelector('.qr-name').onclick = function () { window.open(item.link, '_blank'); };
+    // only real web links open (never "javascript:" etc.)
+    var openLink = function () { if (/^https?:\/\//i.test(String(item.link || '').trim())) window.open(item.link, '_blank', 'noopener'); };
+    canvasWrap.onclick = openLink;
+    card.querySelector('.qr-name').onclick = openLink;
     card.querySelector('.qr-download-btn').onclick = function (e) {
       e.stopPropagation();
       var canvas = holder.querySelector('canvas');

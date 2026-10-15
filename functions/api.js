@@ -39,12 +39,17 @@ async function sb(env, path, options = {}) {
 
 /* ---------------------------- AUTH (PERSONAL) ---------------------------- */
 // Personal = Account + Expense. Mật khẩu 4 số lưu ở bảng `pass` (menu = 'DS_personal',
-// tạm fallback 'DS_accounts' nếu chưa đổi tên). Đăng nhập đúng → server cấp TOKEN có
-// chữ ký HMAC (hạn 12 giờ, cần biến môi trường PERSONAL_SECRET). Mọi action của Account
+// tạm fallback 'DS_accounts' nếu chưa đổi tên) — KHÔNG lưu dạng chữ thường nữa mà lưu
+// "hmac1$<salt>$<hash>" (HMAC-SHA256 với khoá suy ra từ PERSONAL_SECRET). Mật khẩu cũ
+// dạng chữ thường vẫn đăng nhập được, và được tự đổi sang dạng hash ở lần đăng nhập đúng đầu tiên.
+// Đăng nhập đúng → server cấp TOKEN có chữ ký HMAC (hạn 2 giờ). Mọi action của Account
 // và Expense đều bị từ chối nếu không kèm token hợp lệ → gọi thẳng /api cũng không lấy được.
 // Sai 5 lần liên tiếp → khoá đăng nhập 15 phút (đếm ở bảng personal_auth).
+//
+// ⚠ PERSONAL_SECRET giờ còn là chìa khoá giải mã mật khẩu trong Account (xem SECRETS bên dưới).
+//   ĐỪNG đổi / xoá biến này trên Cloudflare — đổi là không mở được dữ liệu đã mã hoá.
 
-const PERSONAL_TOKEN_TTL_MS = 12 * 3600 * 1000;
+const PERSONAL_TOKEN_TTL_MS = 2 * 3600 * 1000;
 const PERSONAL_MAX_FAILS = 5;
 const PERSONAL_LOCK_MS = 15 * 60 * 1000;
 const ACCOUNT_ACTIONS_ = ['getAccountsData', 'addAccountRow', 'updateAccountRow', 'saveAccountType'];
@@ -63,6 +68,77 @@ async function personalSign_(env, text) {
   let bin = '';
   for (let i = 0; i < sig.length; i++) bin += String.fromCharCode(sig[i]);
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/* ---- SECRETS: keys derived from PERSONAL_SECRET (HKDF), one per purpose ---- */
+const KEY_CACHE_ = {};
+function b64u_(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function unb64u_(str) {
+  const bin = atob(String(str).replace(/-/g, '+').replace(/_/g, '/'));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+async function derivedKey_(env, purpose, algo, usages) {
+  if (!env.PERSONAL_SECRET) throw new Error('PERSONAL_SECRET is not set on the server');
+  const id = purpose + '|' + env.PERSONAL_SECRET.length;
+  if (KEY_CACHE_[id]) return KEY_CACHE_[id];
+  const enc = new TextEncoder();
+  const base = await crypto.subtle.importKey('raw', enc.encode(env.PERSONAL_SECRET), 'HKDF', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: enc.encode('namuwu.v1'), info: enc.encode(purpose) },
+    base, algo, false, usages);
+  KEY_CACHE_[id] = key;
+  return key;
+}
+
+// Account fields at rest: "enc:v1:<iv>.<ciphertext>" (AES-256-GCM). Plain values (old rows)
+// pass through untouched and get encrypted the next time Account data is read.
+const ENC_PREFIX_ = 'enc:v1:';
+async function encryptField_(env, plain) {
+  plain = plain == null ? '' : String(plain);
+  if (!plain || plain.indexOf(ENC_PREFIX_) === 0) return plain;
+  const key = await derivedKey_(env, 'accounts-aes', { name: 'AES-GCM', length: 256 }, ['encrypt', 'decrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plain)));
+  return ENC_PREFIX_ + b64u_(iv) + '.' + b64u_(ct);
+}
+async function decryptField_(env, value) {
+  value = value == null ? '' : String(value);
+  if (value.indexOf(ENC_PREFIX_) !== 0) return value;
+  const key = await derivedKey_(env, 'accounts-aes', { name: 'AES-GCM', length: 256 }, ['encrypt', 'decrypt']);
+  const parts = value.slice(ENC_PREFIX_.length).split('.');
+  try {
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64u_(parts[0]) }, key, unb64u_(parts[1]));
+    return new TextDecoder().decode(pt);
+  } catch (e) {
+    // Never hand back blanks the UI could save over the real data.
+    throw new Error("Can't decrypt Account data — was PERSONAL_SECRET changed?");
+  }
+}
+
+// Personal password (PIN) at rest: "hmac1$<salt>$<mac>". Keyed with the server secret, so
+// even a leaked database can't be brute-forced offline (a 4-digit PIN alone could be).
+async function pinHash_(env, pin, salt) {
+  const key = await derivedKey_(env, 'personal-pin', { name: 'HMAC', hash: 'SHA-256', length: 256 }, ['sign']);
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(salt + ':' + pin)));
+  return 'hmac1$' + salt + '$' + b64u_(mac);
+}
+function sameText_(a, b) {
+  a = String(a); b = String(b);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+async function pinMatches_(env, stored, pin) {
+  stored = String(stored || '').trim(); pin = String(pin || '').trim();
+  if (!stored || !pin) return false;
+  if (stored.indexOf('hmac1$') === 0) return sameText_(await pinHash_(env, pin, stored.split('$')[1]), stored);
+  return sameText_(stored, pin);   // old plain-text row
 }
 
 async function personalMakeToken_(env) {
@@ -96,12 +172,19 @@ async function personalLogin(env, [code]) {
   const lockedUntil = rows[0].locked_until ? Date.parse(rows[0].locked_until) : 0;
   if (lockedUntil > now) return { ok: false, lockedSeconds: Math.ceil((lockedUntil - now) / 1000) };
 
+  let menu = 'DS_personal';
   let pr = await sb(env, 'pass?menu=eq.DS_personal&select=pass');
-  if (!pr.length) pr = await sb(env, 'pass?menu=eq.DS_accounts&select=pass');
-  const good = pr.length && String(pr[0].pass || '').trim() === String(code || '').trim();
+  if (!pr.length) { menu = 'DS_accounts'; pr = await sb(env, 'pass?menu=eq.DS_accounts&select=pass'); }
+  const stored = pr.length ? String(pr[0].pass || '').trim() : '';
+  const good = await pinMatches_(env, stored, code);
 
   if (good) {
     await sb(env, 'personal_auth?id=eq.1', { method: 'PATCH', body: JSON.stringify({ fails: 0, locked_until: null }), prefer: 'return=minimal' });
+    if (stored.indexOf('hmac1$') !== 0) {
+      // first login since the upgrade: replace the plain-text PIN with its hash
+      const salt = b64u_(crypto.getRandomValues(new Uint8Array(16)));
+      await sb(env, 'pass?menu=eq.' + menu, { method: 'PATCH', body: JSON.stringify({ pass: await pinHash_(env, String(code).trim(), salt) }), prefer: 'return=minimal' });
+    }
     return { ok: true, token: await personalMakeToken_(env) };
   }
   const fails = (Number(rows[0].fails) || 0) + 1;
@@ -117,36 +200,51 @@ async function personalLogin(env, [code]) {
 
 /* -------------------------- ACCOUNTS --------------------------- */
 
+// account / password / note are stored encrypted (encryptField_); type + "of" stay readable
+// because they're used for grouping and sorting.
+const ACCOUNT_SECRET_FIELDS_ = ['account', 'password', 'note'];
+async function encryptAccountFields_(env, row) {
+  const out = Object.assign({}, row);
+  for (const f of ACCOUNT_SECRET_FIELDS_) out[f] = await encryptField_(env, row[f] || '');
+  return out;
+}
+
 async function getAccountsData(env) {
   const rows = await sb(env, 'accounts?select=id,type,of,account,password,note&order=id.asc');
   const result = {};
-  rows.forEach((r) => {
+  for (const r of rows) {
+    // old plain rows → encrypt them in place now
+    if (ACCOUNT_SECRET_FIELDS_.some((f) => r[f] && String(r[f]).indexOf(ENC_PREFIX_) !== 0)) {
+      const patch = {};
+      for (const f of ACCOUNT_SECRET_FIELDS_) patch[f] = await encryptField_(env, r[f] || '');
+      await sb(env, `accounts?id=eq.${Number(r.id)}`, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' });
+    }
     const type = String(r.type || '').trim();
-    if (!type) return;
+    if (!type) continue;
     if (!result[type]) result[type] = [];
     result[type].push({
       row: r.id,
       of: r.of || '',
-      account: r.account || '',
-      password: r.password || '',
-      note: r.note || ''
+      account: await decryptField_(env, r.account),
+      password: await decryptField_(env, r.password),
+      note: await decryptField_(env, r.note)
     });
-  });
+  }
   return result;
 }
 
 async function addAccountRow(env, [type, of, account, password, note]) {
   await sb(env, 'accounts', {
     method: 'POST',
-    body: JSON.stringify([{ type, of, account, password, note }])
+    body: JSON.stringify([await encryptAccountFields_(env, { type, of, account, password, note })])
   });
   return getAccountsData(env);
 }
 
 async function updateAccountRow(env, [rowNumber, type, of, account, password, note]) {
-  await sb(env, `accounts?id=eq.${rowNumber}`, {
+  await sb(env, `accounts?id=eq.${Number(rowNumber)}`, {
     method: 'PATCH',
-    body: JSON.stringify({ type, of, account, password, note })
+    body: JSON.stringify(await encryptAccountFields_(env, { type, of, account, password, note }))
   });
   return getAccountsData(env);
 }
@@ -154,13 +252,16 @@ async function updateAccountRow(env, [rowNumber, type, of, account, password, no
 async function saveAccountType(env, [oldType, newType, rows]) {
   await sb(env, `accounts?type=eq.${encodeURIComponent(oldType)}`, { method: 'DELETE' });
   if (rows && rows.length) {
-    const payload = rows.map((r) => ({
-      type: newType,
-      of: r.of || '',
-      account: r.account || '',
-      password: r.password || '',
-      note: r.note || ''
-    }));
+    const payload = [];
+    for (const r of rows) {
+      payload.push(await encryptAccountFields_(env, {
+        type: newType,
+        of: r.of || '',
+        account: r.account || '',
+        password: r.password || '',
+        note: r.note || ''
+      }));
+    }
     await sb(env, 'accounts', { method: 'POST', body: JSON.stringify(payload) });
   }
   return getAccountsData(env);
@@ -903,8 +1004,10 @@ export async function onRequestGet(context) {
   try {
     const url = new URL(context.request.url);
     const action = url.searchParams.get('action');
+    // GET is only for quick public reads; anything Personal or that writes must use POST.
+    if (!/^get/.test(action || '') || isPersonalAction_(action)) throw new Error('Use POST for this action');
     const args = url.searchParams.get('args') ? JSON.parse(url.searchParams.get('args')) : [];
-    const data = await handle(context.env, action, args, url.searchParams.get('token'));
+    const data = await handle(context.env, action, args, null);
     return new Response(JSON.stringify({ ok: true, data }), {
       headers: { 'Content-Type': 'application/json' }
     });
