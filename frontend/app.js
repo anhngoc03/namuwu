@@ -245,6 +245,59 @@ new MutationObserver(function (muts) {
 }).observe(document.documentElement, { childList: true, subtree: true });
 
 /* ---------------------------------------------------------------- */
+/* BUTTON FX — shine, mouse spotlight, ripple (styles in style.css)  */
+/* ---------------------------------------------------------------- */
+var FX_MAIN_ = '.pill-btn:not(.secondary), .expense-add-btn, .expense-mobile-tab-add';
+var FX_ALL_ = '.pill-btn, .expense-add-btn, .expense-mobile-tab-add';
+function fxShine_(btn) {
+  if (!btn || btn.classList.contains('fx-shine')) return;
+  btn.classList.add('fx-shine');
+  btn.addEventListener('animationend', function done(e) {
+    if (e.animationName !== 'fxShine') return;
+    btn.classList.remove('fx-shine');
+    btn.removeEventListener('animationend', done);
+  });
+}
+function wireButtonFx_() {
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var finePointer = matchMedia('(hover: hover) and (pointer: fine)').matches;
+  // desktop: shine on hover + spotlight follows the mouse
+  document.addEventListener('pointerover', function (e) {
+    var b = e.target.closest && e.target.closest(FX_MAIN_);
+    if (b && finePointer && !reduce && !b.contains(e.relatedTarget)) fxShine_(b);
+  });
+  document.addEventListener('pointermove', function (e) {
+    var b = e.target.closest && e.target.closest(FX_MAIN_);
+    if (!b) return;
+    var r = b.getBoundingClientRect();
+    b.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+    b.style.setProperty('--my', (e.clientY - r.top) + 'px');
+  }, { passive: true });
+  // everywhere: ripple from the press point; phones also get the shine on tap
+  document.addEventListener('pointerdown', function (e) {
+    var b = e.target.closest && e.target.closest(FX_ALL_);
+    if (!b || b.disabled || reduce) return;
+    var r = b.getBoundingClientRect();
+    var size = Math.max(r.width, r.height) * 2.2;
+    var dot = document.createElement('span');
+    dot.className = 'fx-ripple';
+    dot.style.width = dot.style.height = size + 'px';
+    dot.style.left = (e.clientX - r.left) + 'px';
+    dot.style.top = (e.clientY - r.top) + 'px';
+    b.appendChild(dot);
+    setTimeout(function () { dot.remove(); }, 650);
+    if (!finePointer && b.matches(FX_MAIN_)) fxShine_(b);
+  }, { passive: true });
+  // "+ Add Expense" (and the round + on phones) glint every ~4.5s while on screen
+  if (!reduce) setInterval(function () {
+    if (document.hidden) return;
+    document.querySelectorAll('#expense-overview-add-btn, #expense-mobile-add-btn').forEach(function (b) {
+      if (b.offsetParent) fxShine_(b);
+    });
+  }, 4500);
+}
+
+/* ---------------------------------------------------------------- */
 /* SCREEN NAVIGATION                                                  */
 /* ---------------------------------------------------------------- */
 function showScreen(id) {
@@ -4070,6 +4123,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }, true);
 
   jellyfy_(document);
+  wireButtonFx_();
   applyMoneyHidden_(moneyHidden());
   syncThemeSwitches_();
   document.querySelectorAll('.theme-switch').forEach(function (b) { b.onclick = toggleTheme; });
