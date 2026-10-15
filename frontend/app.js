@@ -258,6 +258,36 @@ function fxShine_(btn) {
     btn.removeEventListener('animationend', done);
   });
 }
+// Little stars ✮ ★ ⊹ ⟡ ₊ . burst out around a main button when it's pressed,
+// drift outward, twinkle and fade.
+var FX_STAR_GLYPHS_ = ['✮', '★', '⊹', '⟡', '₊', '.', '˚', '⊹', '✮', '.'];
+function fxStars_(btn) {
+  var r = btn.getBoundingClientRect();
+  var layer = document.createElement('div');
+  layer.className = 'fx-star-layer';
+  var n = 10 + Math.round(Math.random() * 4);
+  for (var i = 0; i < n; i++) {
+    var st = document.createElement('span');
+    st.className = 'fx-star';
+    st.textContent = FX_STAR_GLYPHS_[i % FX_STAR_GLYPHS_.length];
+    // start somewhere on the button's edge, fly outward from its centre
+    var ang = (i / n) * Math.PI * 2 + Math.random() * 0.5;
+    var sx = r.left + r.width / 2 + Math.cos(ang) * r.width * 0.45;
+    var sy = r.top + r.height / 2 + Math.sin(ang) * r.height * 0.45;
+    var dist = 18 + Math.random() * 34;
+    st.style.left = sx + 'px';
+    st.style.top = sy + 'px';
+    st.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+    st.style.setProperty('--dy', Math.sin(ang) * dist - 6 + 'px');
+    st.style.setProperty('--rot', (Math.random() * 160 - 80) + 'deg');
+    st.style.fontSize = (st.textContent === '.' || st.textContent === '˚' ? 16 : 10 + Math.random() * 9) + 'px';
+    st.style.animationDelay = Math.round(Math.random() * 90) + 'ms';
+    st.style.animationDuration = (650 + Math.random() * 350) + 'ms';
+    layer.appendChild(st);
+  }
+  document.body.appendChild(layer);
+  setTimeout(function () { layer.remove(); }, 1200);
+}
 function wireButtonFx_() {
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   var finePointer = matchMedia('(hover: hover) and (pointer: fine)').matches;
@@ -287,6 +317,7 @@ function wireButtonFx_() {
     b.appendChild(dot);
     setTimeout(function () { dot.remove(); }, 650);
     if (!finePointer && b.matches(FX_MAIN_)) fxShine_(b);
+    if (b.matches(FX_MAIN_)) fxStars_(b);
   }, { passive: true });
   // "+ Add Expense" (and the round + on phones) glint every ~4.5s while on screen
   if (!reduce) setInterval(function () {
