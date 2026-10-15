@@ -131,38 +131,41 @@ function hideLoading() {
 }
 
 /* ---------------------------------------------------------------- */
-/* CUTE TOUCHES — confetti, phone buzz                                */
+/* CUTE TOUCHES — star bursts, phone buzz                            */
 /* ---------------------------------------------------------------- */
 function buzz(pattern) {
   try { if (navigator.vibrate && matchMedia('(pointer: coarse)').matches) navigator.vibrate(pattern || 8); } catch (e) {}
 }
-// A short burst of pastel confetti from (x, y) — defaults to the top centre.
+// Celebration burst (to-do done, savings goal, game wins): the same twinkly stars
+// as the buttons (✮ ★ ⊹ ⟡ ₊ ˚ .), just more of them and flying further.
 function confetti(x, y, count) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  var colors = ['#ffc8dd', '#bfe3ff', '#d8ccff', '#bfead7', '#ffd4b8', '#fff0a8', '#e8899f'];
-  var shapes = ['✿', '●', '■', '♥', '★'];
   x = x == null ? window.innerWidth / 2 : x;
-  y = y == null ? window.innerHeight * 0.3 : y;
+  y = y == null ? window.innerHeight * 0.35 : y;
   count = count || 36;
+  var big = count > 20;
   var layer = document.createElement('div');
-  layer.className = 'confetti-layer';
+  layer.className = 'fx-star-layer';
   for (var i = 0; i < count; i++) {
-    var c = document.createElement('span');
-    c.className = 'confetti-bit';
-    c.textContent = shapes[i % shapes.length];
-    var angle = Math.random() * Math.PI * 2, dist = 80 + Math.random() * 160;
-    c.style.left = x + 'px'; c.style.top = y + 'px';
-    c.style.color = colors[i % colors.length];
-    c.style.fontSize = (10 + Math.random() * 10) + 'px';
-    c.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
-    c.style.setProperty('--dy', (Math.sin(angle) * dist * 0.6 - 60) + 'px');
-    c.style.setProperty('--rot', (Math.random() * 720 - 360) + 'deg');
-    c.style.animationDelay = (Math.random() * 80) + 'ms';
-    layer.appendChild(c);
+    var st = document.createElement('span');
+    st.className = 'fx-star';
+    st.textContent = FX_STAR_GLYPHS_[i % FX_STAR_GLYPHS_.length];
+    var ang = Math.random() * Math.PI * 2;
+    var dist = (big ? 70 : 22) + Math.random() * (big ? 170 : 40);
+    st.style.left = x + 'px';
+    st.style.top = y + 'px';
+    st.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+    st.style.setProperty('--dy', Math.sin(ang) * dist * 0.8 - (big ? 30 : 6) + 'px');
+    st.style.setProperty('--rot', (Math.random() * 220 - 110) + 'deg');
+    var tiny = st.textContent === '.' || st.textContent === '˚';
+    st.style.fontSize = (tiny ? (big ? 22 : 16) : (big ? 12 + Math.random() * 16 : 10 + Math.random() * 9)) + 'px';
+    st.style.animationDelay = Math.round(Math.random() * (big ? 220 : 90)) + 'ms';
+    st.style.animationDuration = ((big ? 1000 : 650) + Math.random() * (big ? 600 : 350)) + 'ms';
+    layer.appendChild(st);
   }
   document.body.appendChild(layer);
   buzz([10, 40, 14]);
-  setTimeout(function () { layer.remove(); }, 1700);
+  setTimeout(function () { layer.remove(); }, 2000);
 }
 
 /* ---------------------------------------------------------------- */

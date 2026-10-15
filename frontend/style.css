@@ -1645,20 +1645,9 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
 }
 
 /* ============================================================
-   CUTE TOUCHES — confetti, the mochi mascot on empty screens,
+   CUTE TOUCHES — star bursts, the jellyfish on empty screens,
    and small motion everywhere
    ============================================================ */
-.confetti-layer{ position:fixed; inset:0; pointer-events:none; z-index:500; overflow:hidden; }
-.confetti-bit{
-  position:absolute; transform:translate(-50%,-50%); line-height:1; will-change:transform, opacity;
-  animation:confettiFly 1.4s cubic-bezier(.15,.7,.35,1) both;
-}
-@keyframes confettiFly{
-  0%  { opacity:1; transform:translate(-50%,-50%) scale(.4) rotate(0); }
-  60% { opacity:1; transform:translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1) rotate(calc(var(--rot) * .7)); }
-  100%{ opacity:0; transform:translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) + 140px)) scale(.9) rotate(var(--rot)); }
-}
-
 /* Mascot: every empty-state's ✿ icon becomes the painted jellyfish, warped live by
    jelly.js (WebGL): bell pulses and swims, the beat and slow waves run down the tentacles. */
 .empty-state .empty-icon{ display:block; width:117px; height:120px; margin:0 auto 8px; font-size:0; color:transparent; }
