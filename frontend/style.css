@@ -1773,3 +1773,17 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
   100%{ opacity:0; transform:translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.6) rotate(var(--rot)); }
 }
 @media (prefers-reduced-motion: reduce){ .fx-star-layer{ display:none; } }
+/* celebration stars: slower, twinkle a few times, sink a little, then fade (~2.3–3.2s each) */
+.fx-star.long{ animation-name:fxStarLong; animation-timing-function:linear; }
+@keyframes fxStarLong{
+  0%  { opacity:0; transform:translate(-50%,-50%) scale(.3) rotate(0); }
+  8%  { opacity:1; transform:translate(calc(-50% + var(--dx) * .6), calc(-50% + var(--dy) * .6)) scale(1.15) rotate(calc(var(--rot) * .25)); }
+  18% { transform:translate(calc(-50% + var(--dx) * .85), calc(-50% + var(--dy) * .85)) scale(1) rotate(calc(var(--rot) * .4)); }
+  26% { opacity:.4; }
+  34% { opacity:1; }
+  46% { opacity:.45; }
+  56% { opacity:1; }
+  68% { opacity:.5; }
+  78% { opacity:.95; }
+  100%{ opacity:0; transform:translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) + var(--fall))) scale(.7) rotate(var(--rot)); }
+}

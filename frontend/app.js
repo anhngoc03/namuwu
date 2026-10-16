@@ -137,7 +137,9 @@ function buzz(pattern) {
   try { if (navigator.vibrate && matchMedia('(pointer: coarse)').matches) navigator.vibrate(pattern || 8); } catch (e) {}
 }
 // Celebration burst (to-do done, savings goal, game wins): the same twinkly stars
-// as the buttons (✮ ★ ⊹ ⟡ ₊ ˚ .), just more of them and flying further.
+// as the buttons (✮ ★ ⊹ ⟡ ₊ ˚ .). Big ones last ~5s: one large burst, then a few
+// smaller waves; each star drifts out slowly, twinkles several times and sinks
+// before fading. Small ones (ticking a single to-do) stay a quick pop.
 function confetti(x, y, count) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   x = x == null ? window.innerWidth / 2 : x;
@@ -146,26 +148,40 @@ function confetti(x, y, count) {
   var big = count > 20;
   var layer = document.createElement('div');
   layer.className = 'fx-star-layer';
-  for (var i = 0; i < count; i++) {
-    var st = document.createElement('span');
-    st.className = 'fx-star';
-    st.textContent = FX_STAR_GLYPHS_[i % FX_STAR_GLYPHS_.length];
-    var ang = Math.random() * Math.PI * 2;
-    var dist = (big ? 70 : 22) + Math.random() * (big ? 170 : 40);
-    st.style.left = x + 'px';
-    st.style.top = y + 'px';
-    st.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
-    st.style.setProperty('--dy', Math.sin(ang) * dist * 0.8 - (big ? 30 : 6) + 'px');
-    st.style.setProperty('--rot', (Math.random() * 220 - 110) + 'deg');
-    var tiny = st.textContent === '.' || st.textContent === '˚';
-    st.style.fontSize = (tiny ? (big ? 22 : 16) : (big ? 12 + Math.random() * 16 : 10 + Math.random() * 9)) + 'px';
-    st.style.animationDelay = Math.round(Math.random() * (big ? 220 : 90)) + 'ms';
-    st.style.animationDuration = ((big ? 1000 : 650) + Math.random() * (big ? 600 : 350)) + 'ms';
-    layer.appendChild(st);
-  }
   document.body.appendChild(layer);
+
+  function wave(cx, cy, n, spread, delay) {
+    for (var i = 0; i < n; i++) {
+      var st = document.createElement('span');
+      st.className = 'fx-star' + (big ? ' long' : '');
+      st.textContent = FX_STAR_GLYPHS_[(i + Math.floor(Math.random() * 4)) % FX_STAR_GLYPHS_.length];
+      var ang = Math.random() * Math.PI * 2;
+      var dist = (big ? spread * 0.35 : 22) + Math.random() * (big ? spread : 40);
+      st.style.left = cx + 'px';
+      st.style.top = cy + 'px';
+      st.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+      st.style.setProperty('--dy', Math.sin(ang) * dist * 0.8 - (big ? 20 : 6) + 'px');
+      st.style.setProperty('--fall', (40 + Math.random() * 70) + 'px');
+      st.style.setProperty('--rot', (Math.random() * 260 - 130) + 'deg');
+      var tiny = st.textContent === '.' || st.textContent === '˚';
+      st.style.fontSize = (tiny ? (big ? 22 : 16) : (big ? 12 + Math.random() * 16 : 10 + Math.random() * 9)) + 'px';
+      st.style.animationDelay = (delay + Math.round(Math.random() * (big ? 260 : 90))) + 'ms';
+      st.style.animationDuration = (big ? 2300 + Math.random() * 900 : 650 + Math.random() * 350) + 'ms';
+      layer.appendChild(st);
+    }
+  }
+  if (big) {
+    wave(x, y, count, 190, 0);                                   // the big one
+    for (var k = 1; k <= 3; k++) {                               // + 3 smaller waves nearby
+      wave(x + (Math.random() - 0.5) * window.innerWidth * 0.5,
+           y + (Math.random() - 0.5) * window.innerHeight * 0.25,
+           Math.round(count * 0.4), 120, k * 650);
+    }
+  } else {
+    wave(x, y, count, 40, 0);
+  }
   buzz([10, 40, 14]);
-  setTimeout(function () { layer.remove(); }, 2000);
+  setTimeout(function () { layer.remove(); }, big ? 5600 : 1300);
 }
 
 /* ---------------------------------------------------------------- */
