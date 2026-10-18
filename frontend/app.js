@@ -136,52 +136,38 @@ function hideLoading() {
 function buzz(pattern) {
   try { if (navigator.vibrate && matchMedia('(pointer: coarse)').matches) navigator.vibrate(pattern || 8); } catch (e) {}
 }
-// Celebration burst (to-do done, savings goal, game wins): the same twinkly stars
-// as the buttons (✮ ★ ⊹ ⟡ ₊ ˚ .). Big ones last ~5s: one large burst, then a few
-// smaller waves; each star drifts out slowly, twinkles several times and sinks
-// before fading. Small ones (ticking a single to-do) stay a quick pop.
+// Star burst for ticking a to-do (from the ticked box) and for celebrations — to-dos
+// all done, savings goal, game wins (from mid-screen). The stars fly out over the
+// whole screen, twinkle and sink, and everything is gone in ~3s.
 function confetti(x, y, count) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  x = x == null ? window.innerWidth / 2 : x;
-  y = y == null ? window.innerHeight * 0.35 : y;
-  count = count || 36;
-  var big = count > 20;
+  var W = window.innerWidth, H = window.innerHeight;
+  x = x == null ? W / 2 : x;
+  y = y == null ? H * 0.4 : y;
+  count = count || 40;
   var layer = document.createElement('div');
   layer.className = 'fx-star-layer';
+  for (var i = 0; i < count; i++) {
+    var st = document.createElement('span');
+    st.className = 'fx-star long';
+    st.textContent = FX_STAR_GLYPHS_[(i + Math.floor(Math.random() * 4)) % FX_STAR_GLYPHS_.length];
+    // aim at a random point anywhere on screen so the burst fills it
+    var tx = Math.random() * W, ty = Math.random() * H;
+    st.style.left = x + 'px';
+    st.style.top = y + 'px';
+    st.style.setProperty('--dx', (tx - x) + 'px');
+    st.style.setProperty('--dy', (ty - y) + 'px');
+    st.style.setProperty('--fall', (30 + Math.random() * 60) + 'px');
+    st.style.setProperty('--rot', (Math.random() * 260 - 130) + 'deg');
+    var tiny = st.textContent === '.' || st.textContent === '˚';
+    st.style.fontSize = (tiny ? 22 : 12 + Math.random() * 16) + 'px';
+    st.style.animationDelay = Math.round(Math.random() * 350) + 'ms';
+    st.style.animationDuration = (2200 + Math.random() * 400) + 'ms';
+    layer.appendChild(st);
+  }
   document.body.appendChild(layer);
-
-  function wave(cx, cy, n, spread, delay) {
-    for (var i = 0; i < n; i++) {
-      var st = document.createElement('span');
-      st.className = 'fx-star' + (big ? ' long' : '');
-      st.textContent = FX_STAR_GLYPHS_[(i + Math.floor(Math.random() * 4)) % FX_STAR_GLYPHS_.length];
-      var ang = Math.random() * Math.PI * 2;
-      var dist = (big ? spread * 0.35 : 22) + Math.random() * (big ? spread : 40);
-      st.style.left = cx + 'px';
-      st.style.top = cy + 'px';
-      st.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
-      st.style.setProperty('--dy', Math.sin(ang) * dist * 0.8 - (big ? 20 : 6) + 'px');
-      st.style.setProperty('--fall', (40 + Math.random() * 70) + 'px');
-      st.style.setProperty('--rot', (Math.random() * 260 - 130) + 'deg');
-      var tiny = st.textContent === '.' || st.textContent === '˚';
-      st.style.fontSize = (tiny ? (big ? 22 : 16) : (big ? 12 + Math.random() * 16 : 10 + Math.random() * 9)) + 'px';
-      st.style.animationDelay = (delay + Math.round(Math.random() * (big ? 260 : 90))) + 'ms';
-      st.style.animationDuration = (big ? 2300 + Math.random() * 900 : 650 + Math.random() * 350) + 'ms';
-      layer.appendChild(st);
-    }
-  }
-  if (big) {
-    wave(x, y, count, 190, 0);                                   // the big one
-    for (var k = 1; k <= 3; k++) {                               // + 3 smaller waves nearby
-      wave(x + (Math.random() - 0.5) * window.innerWidth * 0.5,
-           y + (Math.random() - 0.5) * window.innerHeight * 0.25,
-           Math.round(count * 0.4), 120, k * 650);
-    }
-  } else {
-    wave(x, y, count, 40, 0);
-  }
   buzz([10, 40, 14]);
-  setTimeout(function () { layer.remove(); }, big ? 5600 : 1300);
+  setTimeout(function () { layer.remove(); }, 3100);
 }
 
 /* ---------------------------------------------------------------- */
@@ -3413,20 +3399,30 @@ function homeCancelEdit() {
   renderHomeList();
 }
 
+var homeTogglesPending_ = 0;
 function homeToggleCheck(item) {
   var next = !item.checked;
   item.checked = next; // optimistic — animation gạch ngang chạy ngay, không cần chờ server
   renderHomeList();
   if (next) {
     var allDone = homeData.every(function (t) { return t.checked || t.row === null; });
-    var box = document.querySelector('.todo-item.checked .todo-check');
+    // the stars start from the box that was just ticked (not the first ticked one)
+    var box = document.querySelector('.todo-item[data-row="' + item.row + '"] .todo-check');
     var r = box ? box.getBoundingClientRect() : null;
-    if (allDone) confetti(null, null, 60);
-    else { buzz(10); if (r) confetti(r.left + r.width / 2, r.top + r.height / 2, 14); }
+    if (allDone) confetti(null, null, 70);
+    else { buzz(10); confetti(r ? r.left + r.width / 2 : null, r ? r.top + r.height / 2 : null, 34); }
   }
+  homeTogglesPending_++;
   google.script.run
-    .withSuccessHandler(function (list) { homeData = list; })
+    .withSuccessHandler(function (list) {
+      homeTogglesPending_--;
+      // Re-render from the server's list so every row's tap handler points at the
+      // current data (before, the old handlers kept editing stale objects → 2 taps).
+      // Wait while other ticks are still in flight so a late reply can't undo them.
+      if (homeTogglesPending_ === 0 && homeEditingRow === null) { homeData = list; renderHomeList(); }
+    })
     .withFailureHandler(function (err) {
+      homeTogglesPending_--;
       item.checked = !next;
       renderHomeList();
       toast('Error: ' + err.message);
@@ -3498,6 +3494,7 @@ function renderHomeList() {
 
     var el = document.createElement('div');
     el.className = 'todo-item' + (item.checked ? ' checked' : '') + (isEditing ? ' editing' : '');
+    if (item.row !== null) el.dataset.row = item.row;
 
     if (isEditing) {
       el.innerHTML =

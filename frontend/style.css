@@ -1788,3 +1788,15 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
   78% { opacity:.95; }
   100%{ opacity:0; transform:translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) + var(--fall))) scale(.7) rotate(var(--rot)); }
 }
+
+/* ============================================================
+   POPUP FIELDS ON PHONES — nothing may poke out of the box.
+   iOS Safari gives date inputs their own minimum width (ignores width:100%),
+   which is what pushed the Transfer "Date" field past the edge.
+   ============================================================ */
+.modal-box input, .modal-box select, .modal-box textarea{ max-width:100%; min-width:0; box-sizing:border-box; }
+.modal-box input[type="date"], .modal-box input[type="text"], .modal-box select, .modal-box textarea{ width:100%; display:block; }
+@supports (-webkit-touch-callout: none){
+  input[type="date"]{ -webkit-appearance:none; appearance:none; min-width:0; max-width:100%; min-height:44px; }
+  input[type="date"]::-webkit-date-and-time-value{ text-align:left; }
+}
