@@ -1800,3 +1800,7 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
   input[type="date"]{ -webkit-appearance:none; appearance:none; min-width:0; max-width:100%; min-height:44px; }
   input[type="date"]::-webkit-date-and-time-value{ text-align:left; }
 }
+/* Home "Spent today" turns red once today's allowance is used up */
+.home-tile-value.over{ color:#d1566e; }
+/* Monthly budget card (no Edit button any more — it's the sum of the categories) */
+.expense-budget-head .expense-sub-line{ text-align:left; }

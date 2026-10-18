@@ -510,21 +510,55 @@ function expenseNextPeriodStart_(period) {
 // Budget đánh dấu "Repeat every month": khi mở ĐÚNG tháng hiện tại mà tháng này
 // chưa có budget, tự copy từ tháng gần nhất trước đó — NHƯNG chỉ khi bản ghi
 // gần nhất đó đang bật repeat (tắt repeat ở tháng nào thì dừng từ đó).
+/* ---- Budget chuyển tháng (rollover) ----
+   Budget category bật "Repeat every month": tháng này dư bao nhiêu thì cộng, lố bao
+   nhiêu thì trừ vào budget tháng sau; cộng dồn qua các tháng, có thể ÂM. Tính từ
+   BUDGET_CARRY_START_ trở đi. Tháng nào tắt repeat / không có budget → đứt chuỗi (về 0).
+   Tháng bị bỏ qua (không mở app nên chưa có dòng) được coi như đã lặp lại budget gần nhất.
+   Budget tổng (Monthly) = tổng budget hiệu lực các category; chi tiêu ở category KHÔNG
+   có budget thì không tính vào. */
+const BUDGET_CARRY_START_ = '2026-10';
+function expensePeriodAdd_(period, n) {
+  var y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7)) - 1 + n;
+  y += Math.floor(m / 12); m = ((m % 12) + 12) % 12;
+  return y + '-' + String(m + 1).padStart(2, '0');
+}
+async function expenseBudgetsFor_(env, period) {
+  var rows = await sb(env, 'expense_category_budget?period=lte.' + period + '&select=period,category_id,amount,repeat_monthly&order=period.asc');
+  var own = rows.filter(function (r) { return r.period === period; });
+  var spent = {};                                   // spent[period][categoryId]
+  if (period > BUDGET_CARRY_START_) {
+    var ent = await sb(env, 'expense_entries?entry_date=gte.' + BUDGET_CARRY_START_ + '-01&entry_date=lt.' + period + '-01&select=amount,category_id,entry_date&limit=20000');
+    ent.forEach(function (e) {
+      var k = String(e.entry_date).slice(0, 7);
+      (spent[k] = spent[k] || {})[e.category_id] = (spent[k][e.category_id] || 0) + Number(e.amount);
+    });
+  }
+  var cats = own.map(function (r) {
+    var cid = r.category_id, carry = 0, last = null;
+    if (r.repeat_monthly === true && period > BUDGET_CARRY_START_) {
+      var mine = rows.filter(function (x) { return x.category_id === cid; });
+      mine.forEach(function (x) { if (x.period < BUDGET_CARRY_START_) last = x; });   // seed for "repeated" months
+      for (var m = BUDGET_CARRY_START_; m < period; m = expensePeriodAdd_(m, 1)) {
+        var row = mine.find(function (x) { return x.period === m; }) || (last && last.repeat_monthly === true ? { amount: last.amount, repeat_monthly: true } : null);
+        if (!row || row.repeat_monthly !== true) { carry = 0; last = row; continue; }
+        carry = Number(row.amount) + carry - ((spent[m] && spent[m][cid]) || 0);
+        last = row;
+      }
+      // only carry in if last month's budget was a repeating one
+      if (!last || last.repeat_monthly !== true) carry = 0;
+    }
+    var amount = Number(r.amount);
+    return { categoryId: cid, amount: amount, repeat: r.repeat_monthly === true, carry: carry, effective: amount + carry };
+  });
+  var overall = cats.reduce(function (sum, c) { return sum + c.effective; }, 0);
+  return { cats: cats, overall: overall };
+}
+
 async function expenseMaterializeBudgets_(env, period) {
   if (period !== expenseCurrentPeriod_()) return;
 
-  // Budget tổng
-  var cur = await sb(env, 'expense_budget?period=eq.' + period + '&select=period');
-  if (!cur.length) {
-    var prev = await sb(env, 'expense_budget?period=lt.' + period + '&select=period,amount,repeat_monthly&order=period.desc&limit=1');
-    if (prev.length && prev[0].repeat_monthly === true) {
-      await sb(env, 'expense_budget', {
-        method: 'POST',
-        body: JSON.stringify([{ period: period, amount: prev[0].amount, repeat_monthly: true }]),
-        headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }
-      });
-    }
-  }
+  // (Budget tổng không còn lưu riêng — nó là tổng budget các category, xem expenseBudgetsFor_.)
 
   // Budget từng category
   var curCat = await sb(env, 'expense_category_budget?period=eq.' + period + '&select=category_id');
@@ -666,8 +700,7 @@ async function getExpenseData(env, [period]) {
   var incomeRows = await sb(env, 'expense_income_entries?entry_date=gte.' + periodStart + '&entry_date=lt.' + nextPeriod + '&select=id,amount,source,entry_date,wallet_id&order=entry_date.desc,id.desc');
   var transferRows = await sb(env, 'expense_transfers?entry_date=gte.' + periodStart + '&entry_date=lt.' + nextPeriod + '&select=id,from_wallet,to_wallet,amount,note,entry_date&order=entry_date.desc,id.desc');
   var walletInfo = await expenseWallets_(env);
-  var budgetRows = await sb(env, 'expense_budget?period=eq.' + period + '&select=amount,repeat_monthly');
-  var catBudgetRows = await sb(env, 'expense_category_budget?period=eq.' + period + '&select=category_id,amount,repeat_monthly');
+  var budgets = await expenseBudgetsFor_(env, period);
   var savings = await expenseGetSavings_(env, period);
   var carryIn = await expenseCarryIn_(env, period);
   // Tháng trước (chỉ số tiền + ngày) → Insights so sánh "cùng kỳ tháng trước".
@@ -692,9 +725,8 @@ async function getExpenseData(env, [period]) {
     incomeEntries: incomeEntries,
     income: incomeEntries.reduce(function (s, r) { return s + r.amount; }, 0),
     carryIn: carryIn,
-    budgetOverall: budgetRows.length ? Number(budgetRows[0].amount) : 0,
-    budgetOverallRepeat: budgetRows.length ? budgetRows[0].repeat_monthly === true : false,
-    categoryBudgets: catBudgetRows.map(function (r) { return { categoryId: r.category_id, amount: Number(r.amount), repeat: r.repeat_monthly === true }; }),
+    budgetOverall: budgets.overall,                 // = tổng budget hiệu lực các category
+    categoryBudgets: budgets.cats,                  // { categoryId, amount (đặt), carry, effective, repeat }
     savings: savings,
     prevEntries: prevRows.map(function (r) { return { amount: Number(r.amount), date: r.entry_date }; })
   };
@@ -753,15 +785,6 @@ async function deleteExpenseIncomeEntry(env, [id, period]) {
 }
 
 /* ---- Budget (có cờ repeat) ---- */
-
-async function setExpenseBudgetOverall(env, [period, amount, repeat]) {
-  await sb(env, 'expense_budget', {
-    method: 'POST',
-    body: JSON.stringify([{ period: period, amount: amount, repeat_monthly: !!repeat }]),
-    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }
-  });
-  return getExpenseData(env, [period]);
-}
 
 async function setExpenseCategoryBudget(env, [period, categoryId, amount, repeat]) {
   await sb(env, 'expense_category_budget', {
@@ -905,11 +928,31 @@ async function deleteExpenseCategory(env, [id]) {
 }
 
 // Dùng cho ô tóm tắt nhỏ ở Home — chỉ cần tổng đã chi HÔM NAY, khỏi tải cả tháng.
+// Ô "Spent today" ở Home: đã tiêu hôm nay / được tiêu hôm nay.
+// Được tiêu mỗi ngày = budget tháng ÷ số ngày trong tháng; dư hay lố đều dồn sang các
+// ngày sau → được tiêu hôm nay = phần mỗi ngày × số ngày đã qua (kể cả hôm nay) − đã tiêu
+// từ đầu tháng tới hết hôm qua. Chỉ tính các category có budget (như budget tháng).
+// Không có budget nào → allowance = null (chỉ hiện số đã tiêu).
 async function getExpenseTodayTotal(env) {
   var today = expenseTodayStr_();
-  var rows = await sb(env, 'expense_entries?entry_date=eq.' + today + '&select=amount');
-  var sum = rows.reduce(function (s, r) { return s + Number(r.amount); }, 0);
-  return { date: today, total: sum };
+  var period = today.slice(0, 7);
+  await expenseMaterializeBudgets_(env, period);
+  var b = await expenseBudgetsFor_(env, period);
+  var rows = await sb(env, 'expense_entries?entry_date=gte.' + period + '-01&entry_date=lte.' + today + '&select=amount,category_id,entry_date&limit=5000');
+  var budgeted = {};
+  b.cats.forEach(function (c) { budgeted[c.categoryId] = true; });
+  var total = 0, todayB = 0, beforeB = 0;
+  rows.forEach(function (r) {
+    var a = Number(r.amount);
+    if (r.entry_date === today) total += a;
+    if (!budgeted[r.category_id]) return;
+    if (r.entry_date === today) todayB += a; else beforeB += a;
+  });
+  if (!b.cats.length) return { date: today, total: total, spent: total, allowance: null };
+  var y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7));
+  var days = new Date(y, m, 0).getDate(), day = Number(today.slice(8, 10));
+  var allowance = b.overall / days * day - beforeB;
+  return { date: today, total: total, spent: todayB, allowance: allowance };
 }
 
 /* ============================================================
@@ -954,7 +997,6 @@ const ACTIONS = {
   addExpenseSavingsLog,
   updateExpenseSavingsLog,
   deleteExpenseSavingsLog,
-  setExpenseBudgetOverall,
   setExpenseCategoryBudget,
   deleteExpenseCategoryBudget,
   addExpenseWallet,

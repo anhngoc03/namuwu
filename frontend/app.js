@@ -2139,6 +2139,15 @@ function expenseRenderOverview() {
   expenseRenderIncomeList();
 }
 
+// Spending that counts toward the monthly budget: only categories that have a budget.
+function expenseBudgetedSpent(entries) {
+  var ids = {};
+  (expenseData.categoryBudgets || []).forEach(function (b) { ids[b.categoryId] = true; });
+  return (entries || []).reduce(function (sum, e) { return ids[e.categoryId] ? sum + e.amount : sum; }, 0);
+}
+// Money as written in Budget: may be negative (overspend carried from last month).
+function expenseFmtSigned(n) { return (n < 0 ? '−' : '') + expenseFmt(Math.abs(n)); }
+
 /* ---- Insights: vs last month (same point in the month), month-end forecast,
    and a heads-up for any budget that is 80%+ used ---- */
 function expenseRenderInsights() {
@@ -2168,25 +2177,28 @@ function expenseRenderInsights() {
   }
 
   // 2) Forecast for the month (current month only, after the first day).
+  var bSpent = expenseBudgetedSpent(expenseData.entries);
   if (isCurrentMonth && dayNow >= 2 && spent > 0) {
     var forecast = spent / dayNow * lastDay;
-    var budget = expenseData.budgetOverall || 0;
+    var bForecast = bSpent / dayNow * lastDay;
+    var budget = expenseData.categoryBudgets.length ? expenseData.budgetOverall : 0;
     var tail = '';
-    if (budget > 0) tail = forecast > budget ? ' — <b>over budget</b> by ' + money(forecast - budget) : ' — within budget';
-    lines.push({ icon: '≈', kind: budget > 0 && forecast > budget ? 'bad' : 'neutral',
+    if (expenseData.categoryBudgets.length) tail = bForecast > budget ? ' — <b>over budget</b> by ' + money(bForecast - budget) : ' — within budget';
+    lines.push({ icon: '≈', kind: expenseData.categoryBudgets.length && bForecast > budget ? 'bad' : 'neutral',
       html: 'At this pace you\'ll spend about ' + money(forecast) + ' by ' + lastDay + '/' + expensePeriod.slice(5, 7) + tail });
   }
 
   // 3) Budgets that are 80% or more used.
-  if (expenseData.budgetOverall > 0) {
-    var p = Math.round(spent / expenseData.budgetOverall * 100);
+  if (expenseData.categoryBudgets.length) {
+    var p = expenseData.budgetOverall > 0 ? Math.round(bSpent / expenseData.budgetOverall * 100) : (bSpent > 0 ? 100 : 0);
     if (p >= 80) lines.push({ icon: '!', kind: 'warn', html: 'You\'ve used <b>' + p + '%</b> of your monthly budget' });
   }
   var byCat = {};
   expenseData.entries.forEach(function (e) { byCat[e.categoryId] = (byCat[e.categoryId] || 0) + e.amount; });
   (expenseData.categoryBudgets || []).forEach(function (b) {
-    if (!(b.amount > 0)) return;
-    var cp = Math.round((byCat[b.categoryId] || 0) / b.amount * 100);
+    var used = byCat[b.categoryId] || 0;
+    if (!(b.effective > 0) && !used) return;
+    var cp = b.effective > 0 ? Math.round(used / b.effective * 100) : 100;
     if (cp >= 80) lines.push({ icon: '!', kind: 'warn', html: icdEscape(expenseNameFor(b.categoryId)) + ': <b>' + cp + '%</b> of its budget used' });
   });
 
@@ -2690,19 +2702,21 @@ function expenseDrawTrendChart() {
 /* ---- Budget tab ---- */
 function expenseRenderBudget() {
   document.getElementById('expense-budget-month-label').textContent = expensePeriodLabel(expensePeriod);
-  var totalSpent = expenseEntriesTotal(expenseData.entries);
-  var pct = expenseData.budgetOverall > 0 ? Math.min(100, (totalSpent / expenseData.budgetOverall) * 100) : 0;
+  // Monthly budget = sum of the category budgets (after last month's carry-over);
+  // only spending in budgeted categories counts against it.
+  var hasBudget = expenseData.categoryBudgets.length > 0;
+  var totalSpent = expenseBudgetedSpent(expenseData.entries);
+  var pct = expenseData.budgetOverall > 0 ? Math.min(100, (totalSpent / expenseData.budgetOverall) * 100) : (hasBudget && totalSpent > 0 ? 100 : 0);
   var remaining = expenseData.budgetOverall - totalSpent;
 
-  document.getElementById('expense-budget-overall-value').textContent = expenseFmt(expenseData.budgetOverall);
-  document.getElementById('expense-budget-repeat-badge').style.display = (expenseData.budgetOverall > 0 && expenseData.budgetOverallRepeat) ? '' : 'none';
+  document.getElementById('expense-budget-overall-value').textContent = expenseFmtSigned(expenseData.budgetOverall);
   document.getElementById('expense-budget-progress-fill').style.width = pct + '%';
   document.getElementById('expense-budget-used-pct').textContent = 'Used · ' + Math.round(pct) + '%';
-  document.getElementById('expense-budget-remaining').textContent = expenseFmt(Math.max(0, remaining));
+  document.getElementById('expense-budget-remaining').textContent = expenseFmtSigned(remaining);
 
   var hintEl = document.getElementById('expense-budget-hint');
   var isCurrentMonth = expensePeriod === expenseCurrentPeriod();
-  if (expenseData.budgetOverall > 0 && isCurrentMonth) {
+  if (hasBudget && isCurrentMonth) {
     var daysLeft = Math.max(1, expenseLastDay(expensePeriod) - new Date().getDate() + 1);
     if (pct >= 100) { hintEl.textContent = "You've gone over budget this month."; hintEl.className = 'expense-hint money over'; }
     else if (pct >= 90) { hintEl.textContent = "Almost at your limit — maybe slow down a little."; hintEl.className = 'expense-hint money warn'; }
@@ -2719,18 +2733,19 @@ function expenseRenderBudget() {
     return expenseNameFor(x.categoryId).localeCompare(expenseNameFor(y.categoryId), 'vi', { sensitivity: 'base' });
   }).forEach(function (b) {
     var spent = byCat[b.categoryId] || 0;
-    var p = b.amount > 0 ? Math.min(100, (spent / b.amount) * 100) : 0;
+    var lim = b.effective;                      // this month's budget incl. last month's carry-over
+    var p = lim > 0 ? Math.min(100, (spent / lim) * 100) : 100;
     var row = document.createElement('div');
     row.className = 'expense-budget-cat-card';
     row.innerHTML =
       '<div class="expense-budget-cat-top">' +
         '<div class="expense-budget-cat-name"><span class="expense-dot" style="background:' + expenseColorFor(b.categoryId) + '"></span>' + icdEscape(expenseNameFor(b.categoryId)) + (b.repeat ? ' <span class="expense-repeat-badge" title="Repeats every month">↻</span>' : '') + '</div>' +
-        '<div class="expense-budget-cat-nums">' + formatThousands(spent) + ' / ' + formatThousands(b.amount) + 'đ</div>' +
+        '<div class="expense-budget-cat-nums">' + formatThousands(spent) + ' / ' + (lim < 0 ? '−' : '') + formatThousands(Math.abs(Math.round(lim))) + 'đ</div>' +
         '<button class="acc-edit-icon-btn expense-edit-cat-budget" title="Edit">✎</button>' +
         '<button class="acc-edit-icon-btn expense-del-cat-budget" title="Remove limit">🗑</button>' +
       '</div>' +
       '<div class="expense-progress-track"><div class="expense-progress-fill-sm" style="width:' + p + '%;background:' + (p >= 100 ? '#e8899f' : expenseColorFor(b.categoryId)) + '"></div></div>' +
-      '<div class="expense-budget-cat-remain">' + (p >= 100 ? 'Over budget' : expenseFmt(b.amount - spent) + ' left') + '</div>';
+      '<div class="expense-budget-cat-remain">' + (spent > lim || lim <= 0 ? 'Over budget' : expenseFmt(lim - spent) + ' left') + '</div>';
     row.querySelector('.expense-edit-cat-budget').onclick = function () { expenseOpenCategoryBudgetModal(b.categoryId, b.amount, b.repeat); };
     row.querySelector('.expense-del-cat-budget').onclick = function () { expenseConfirm('Remove the budget limit for "' + expenseNameFor(b.categoryId) + '"?', function () {
       google.script.run.withSuccessHandler(expenseApplyData).withFailureHandler(expenseFail).deleteExpenseCategoryBudget(expensePeriod, b.categoryId);
@@ -2751,13 +2766,6 @@ function expenseRenderBudget() {
   }
 }
 
-// Sum of category budgets this month, optionally leaving one category out (the one being edited).
-function expenseCategoryBudgetsTotal(exceptCategoryId) {
-  return expenseData.categoryBudgets.reduce(function (sum, b) {
-    return b.categoryId === exceptCategoryId ? sum : sum + b.amount;
-  }, 0);
-}
-
 function expenseOpenCategoryBudgetModal(categoryId, amount, repeat) {
   expenseEditingCategoryBudgetId = categoryId;
   document.getElementById('expense-cat-budget-repeat-checkbox').checked = !!repeat;
@@ -2775,10 +2783,6 @@ function expenseOpenCategoryBudgetModal(categoryId, amount, repeat) {
   document.getElementById('expense-cat-budget-label').textContent = categoryId ? expenseNameFor(categoryId) : '';
   document.getElementById('expense-cat-budget-label').style.display = categoryId ? '' : 'none';
   expenseSetAmountInputValue(document.getElementById('expense-cat-budget-amount'), amount);
-  var room = expenseData.budgetOverall - expenseCategoryBudgetsTotal(categoryId);
-  document.getElementById('expense-cat-budget-room').textContent = expenseData.budgetOverall > 0
-    ? 'Up to ' + expenseFmt(Math.max(0, room)) + ' left in your monthly budget (' + expenseFmt(expenseData.budgetOverall) + ')'
-    : 'Set a monthly budget first';
   document.getElementById('expense-category-budget-modal').classList.add('active');
 }
 
@@ -2791,30 +2795,11 @@ function expenseSaveCategoryBudget() {
   }
   var amount = expenseAmountInputValue(document.getElementById('expense-cat-budget-amount'));
   if (!amount || amount <= 0) { toast('Enter a budget amount'); return; }
-  if (!(expenseData.budgetOverall > 0)) { toast('Set a monthly budget first'); return; }
-  var room = expenseData.budgetOverall - expenseCategoryBudgetsTotal(categoryId);
-  if (amount > room) { toast('Too much — only ' + expenseFmt(Math.max(0, room)) + ' left in your monthly budget'); return; }
   showLoading();
   google.script.run
     .withSuccessHandler(function (data) { hideLoading(); document.getElementById('expense-category-budget-modal').classList.remove('active'); expenseApplyData(data); })
     .withFailureHandler(expenseFail)
     .setExpenseCategoryBudget(expensePeriod, categoryId, amount, document.getElementById('expense-cat-budget-repeat-checkbox').checked);
-}
-
-function expenseOpenOverallBudgetModal() {
-  expenseSetAmountInputValue(document.getElementById('expense-budget-amount-input'), expenseData.budgetOverall);
-  document.getElementById('expense-budget-repeat-checkbox').checked = !!expenseData.budgetOverallRepeat;
-  document.getElementById('expense-budget-modal').classList.add('active');
-}
-function expenseSaveOverallBudget() {
-  var amount = expenseAmountInputValue(document.getElementById('expense-budget-amount-input'));
-  var catTotal = expenseCategoryBudgetsTotal(null);
-  if (amount < catTotal) { toast('Category budgets add up to ' + expenseFmt(catTotal) + ' — monthly budget must be at least that'); return; }
-  showLoading();
-  google.script.run
-    .withSuccessHandler(function (data) { hideLoading(); document.getElementById('expense-budget-modal').classList.remove('active'); expenseApplyData(data); })
-    .withFailureHandler(expenseFail)
-    .setExpenseBudgetOverall(expensePeriod, amount, document.getElementById('expense-budget-repeat-checkbox').checked);
 }
 
 /* ---- Income (one row per payment: amount + source + date) ---- */
@@ -3111,11 +3096,26 @@ function expenseConfirm(message, onYes) {
 }
 
 /* ---- Home widget ---- */
+// Amount in thousands with at most one decimal (Vietnamese style): 30000 → "30",
+// 30500 → "30,5", 1250000 → "1.250", -50000 → "-50".
+function expenseK(n) {
+  var v = Math.round(n / 100) / 10;              // thousands, 1 decimal
+  var neg = v < 0; v = Math.abs(v);
+  var whole = Math.floor(v), dec = Math.round((v - whole) * 10);
+  return (neg ? '-' : '') + formatThousands(whole) + (dec ? ',' + dec : '');
+}
 function expenseLoadHomeWidget() {
   var el = document.getElementById('home-expense-widget-value');
   if (!el) return;
   google.script.run
-    .withSuccessHandler(function (r) { el.textContent = formatThousands(Math.round(r.total)) + 'đ'; })
+    .withSuccessHandler(function (r) {
+      // "spent/allowed today" in thousands, no "đ": 30/100, 30,5/100, 20/-50.
+      // Red once today's spending is past what today allows.
+      var hasAllowance = r.allowance !== null && r.allowance !== undefined;
+      var spent = hasAllowance ? r.spent : r.total;
+      el.textContent = hasAllowance ? expenseK(spent) + '/' + expenseK(r.allowance) : expenseK(spent);
+      el.classList.toggle('over', hasAllowance && spent > r.allowance);
+    })
     .withFailureHandler(function () { el.textContent = '—'; })
     .getExpenseTodayTotal();
 }
@@ -3165,7 +3165,6 @@ function expenseWireEvents() {
   document.getElementById('expense-overview-add-btn').onclick = function () { expenseOpenEntryModal(null); };
   document.getElementById('expense-view-stats-link').onclick = function () { expenseSwitchTab('stats'); };
   document.getElementById('expense-day-close-btn').onclick = function () { expenseOpenDay(expenseSelectedDay); };
-  document.getElementById('expense-budget-edit-btn').onclick = expenseOpenOverallBudgetModal;
   document.getElementById('expense-new-category-btn').onclick = function () { expenseOpenCategoryModal(null); };
   document.getElementById('expense-mobile-add-btn').onclick = function () { expenseOpenEntryModal(null); };
 
@@ -3181,9 +3180,6 @@ function expenseWireEvents() {
   document.getElementById('expense-income-cancel-btn').onclick = function () { document.getElementById('expense-income-modal').classList.remove('active'); };
   document.getElementById('expense-income-save-btn').onclick = expenseSaveIncome;
 
-  document.getElementById('expense-budget-modal-close').onclick = function () { document.getElementById('expense-budget-modal').classList.remove('active'); };
-  document.getElementById('expense-budget-cancel-btn').onclick = function () { document.getElementById('expense-budget-modal').classList.remove('active'); };
-  document.getElementById('expense-budget-save-btn').onclick = expenseSaveOverallBudget;
 
   document.getElementById('expense-catbudget-modal-close').onclick = function () { document.getElementById('expense-category-budget-modal').classList.remove('active'); };
   document.getElementById('expense-catbudget-cancel-btn').onclick = function () { document.getElementById('expense-category-budget-modal').classList.remove('active'); };
