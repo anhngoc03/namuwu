@@ -2742,12 +2742,13 @@ function expenseRenderBudget() {
         '<div class="expense-budget-cat-name"><span class="expense-dot" style="background:' + expenseColorFor(b.categoryId) + '"></span>' + icdEscape(expenseNameFor(b.categoryId)) + (b.repeat ? ' <span class="expense-repeat-badge" title="Repeats every month">↻</span>' : '') + '</div>' +
         '<div class="expense-budget-cat-nums">' + formatThousands(spent) + ' / ' + (lim < 0 ? '−' : '') + formatThousands(Math.abs(Math.round(lim))) + 'đ</div>' +
         '<button class="acc-edit-icon-btn expense-edit-cat-budget" title="Edit">✎</button>' +
-        '<button class="acc-edit-icon-btn expense-del-cat-budget" title="Remove limit">🗑</button>' +
+        (b.hasRow === false ? '' : '<button class="acc-edit-icon-btn expense-del-cat-budget" title="Remove limit">🗑</button>') +
       '</div>' +
       '<div class="expense-progress-track"><div class="expense-progress-fill-sm" style="width:' + p + '%;background:' + (p >= 100 ? '#e8899f' : expenseColorFor(b.categoryId)) + '"></div></div>' +
       '<div class="expense-budget-cat-remain">' + (spent > lim || lim <= 0 ? 'Over budget' : expenseFmt(lim - spent) + ' left') + '</div>';
     row.querySelector('.expense-edit-cat-budget').onclick = function () { expenseOpenCategoryBudgetModal(b.categoryId, b.amount, b.repeat); };
-    row.querySelector('.expense-del-cat-budget').onclick = function () { expenseConfirm('Remove the budget limit for "' + expenseNameFor(b.categoryId) + '"?', function () {
+    // a category that only shows last month's leftover/overspend has nothing to delete
+    if (row.querySelector('.expense-del-cat-budget')) row.querySelector('.expense-del-cat-budget').onclick = function () { expenseConfirm('Remove the budget limit for "' + expenseNameFor(b.categoryId) + '"?', function () {
       google.script.run.withSuccessHandler(expenseApplyData).withFailureHandler(expenseFail).deleteExpenseCategoryBudget(expensePeriod, b.categoryId);
     }); };
     wrap.appendChild(row);

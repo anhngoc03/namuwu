@@ -511,12 +511,15 @@ function expenseNextPeriodStart_(period) {
 // chưa có budget, tự copy từ tháng gần nhất trước đó — NHƯNG chỉ khi bản ghi
 // gần nhất đó đang bật repeat (tắt repeat ở tháng nào thì dừng từ đó).
 /* ---- Budget chuyển tháng (rollover) ----
-   Budget category bật "Repeat every month": tháng này dư bao nhiêu thì cộng, lố bao
-   nhiêu thì trừ vào budget tháng sau; cộng dồn qua các tháng, có thể ÂM. Tính từ
-   BUDGET_CARRY_START_ trở đi. Tháng nào tắt repeat / không có budget → đứt chuỗi (về 0).
-   Tháng bị bỏ qua (không mở app nên chưa có dòng) được coi như đã lặp lại budget gần nhất.
-   Budget tổng (Monthly) = tổng budget hiệu lực các category; chi tiêu ở category KHÔNG
-   có budget thì không tính vào. */
+   Từ BUDGET_CARRY_START_ trở đi, MỌI budget category đều mang phần dư (+) / lố (−) của
+   tháng trước sang tháng sau, cộng dồn mãi (có thể ÂM).
+   - Bật "Repeat every month": budget đặt (amount) tự theo sang các tháng sau.
+   - Không bật: sang tháng sau budget đặt về 0 — chỉ còn phần dư/lố mang sang
+     (category vẫn hiện nếu phần đó khác 0), cho tới khi đặt budget mới.
+   Tháng không mở app (chưa có dòng) được coi như đã lặp lại budget Repeat gần nhất.
+   Budget tổng (Monthly) = tổng budget hiệu lực các category.
+   unbudgetedDebt: tổng tiền tiêu ở category KHÔNG có budget trong các tháng trước
+   (số âm) — dùng cho "được tiêu hôm nay" ở Home để phần đó cũng được mang sang. */
 const BUDGET_CARRY_START_ = '2026-10';
 function expensePeriodAdd_(period, n) {
   var y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7)) - 1 + n;
@@ -525,8 +528,14 @@ function expensePeriodAdd_(period, n) {
 }
 async function expenseBudgetsFor_(env, period) {
   var rows = await sb(env, 'expense_category_budget?period=lte.' + period + '&select=period,category_id,amount,repeat_monthly&order=period.asc');
-  var own = rows.filter(function (r) { return r.period === period; });
-  var spent = {};                                   // spent[period][categoryId]
+  if (period < BUDGET_CARRY_START_) {          // before rollover existed: just what was set
+    var plain = rows.filter(function (r) { return r.period === period; }).map(function (r) {
+      var a = Number(r.amount);
+      return { categoryId: r.category_id, amount: a, repeat: r.repeat_monthly === true, carry: 0, effective: a, hasRow: true };
+    });
+    return { cats: plain, overall: plain.reduce(function (t, c) { return t + c.effective; }, 0), unbudgetedDebt: 0 };
+  }
+  var spent = {};                              // spent[month][categoryId], months START..period-1
   if (period > BUDGET_CARRY_START_) {
     var ent = await sb(env, 'expense_entries?entry_date=gte.' + BUDGET_CARRY_START_ + '-01&entry_date=lt.' + period + '-01&select=amount,category_id,entry_date&limit=20000');
     ent.forEach(function (e) {
@@ -534,25 +543,39 @@ async function expenseBudgetsFor_(env, period) {
       (spent[k] = spent[k] || {})[e.category_id] = (spent[k][e.category_id] || 0) + Number(e.amount);
     });
   }
-  var cats = own.map(function (r) {
-    var cid = r.category_id, carry = 0, last = null;
-    if (r.repeat_monthly === true && period > BUDGET_CARRY_START_) {
-      var mine = rows.filter(function (x) { return x.category_id === cid; });
-      mine.forEach(function (x) { if (x.period < BUDGET_CARRY_START_) last = x; });   // seed for "repeated" months
-      for (var m = BUDGET_CARRY_START_; m < period; m = expensePeriodAdd_(m, 1)) {
-        var row = mine.find(function (x) { return x.period === m; }) || (last && last.repeat_monthly === true ? { amount: last.amount, repeat_monthly: true } : null);
-        if (!row || row.repeat_monthly !== true) { carry = 0; last = row; continue; }
-        carry = Number(row.amount) + carry - ((spent[m] && spent[m][cid]) || 0);
-        last = row;
-      }
-      // only carry in if last month's budget was a repeating one
-      if (!last || last.repeat_monthly !== true) carry = 0;
-    }
-    var amount = Number(r.amount);
-    return { categoryId: cid, amount: amount, repeat: r.repeat_monthly === true, carry: carry, effective: amount + carry };
+  var byCat = {};
+  rows.forEach(function (r) { (byCat[r.category_id] = byCat[r.category_id] || []).push(r); });
+  var state = {};                              // per category: { last, carry }
+  Object.keys(byCat).forEach(function (cid) {
+    var last = null;
+    byCat[cid].forEach(function (r) { if (r.period < BUDGET_CARRY_START_) last = r; });
+    state[cid] = { last: last, carry: 0 };
   });
-  var overall = cats.reduce(function (sum, c) { return sum + c.effective; }, 0);
-  return { cats: cats, overall: overall };
+  var unbudgetedDebt = 0, cats = [];
+  for (var m = BUDGET_CARRY_START_; m <= period; m = expensePeriodAdd_(m, 1)) {
+    var inMonth = {};
+    Object.keys(byCat).forEach(function (cid) {
+      var st = state[cid];
+      var actual = byCat[cid].find(function (x) { return x.period === m; });
+      var row = actual || (st.last && st.last.repeat_monthly === true ? { amount: st.last.amount, repeat_monthly: true } : null);
+      var amount = row ? Number(row.amount) : 0;
+      var effective = amount + st.carry;
+      if (!actual && !row && st.carry === 0) { st.last = null; return; }   // nothing set, nothing owed
+      inMonth[cid] = true;
+      if (m === period) {
+        cats.push({ categoryId: Number(cid), amount: amount, repeat: !!(row && row.repeat_monthly === true),
+                    carry: st.carry, effective: effective, hasRow: !!actual });
+      } else {
+        st.carry = effective - ((spent[m] && spent[m][cid]) || 0);
+      }
+      st.last = row ? (actual || row) : null;
+    });
+    if (m < period) {
+      Object.keys(spent[m] || {}).forEach(function (cid) { if (!inMonth[cid]) unbudgetedDebt -= spent[m][cid]; });
+    }
+  }
+  var overall = cats.reduce(function (t, c) { return t + c.effective; }, 0);
+  return { cats: cats, overall: overall, unbudgetedDebt: unbudgetedDebt };
 }
 
 async function expenseMaterializeBudgets_(env, period) {
@@ -929,9 +952,11 @@ async function deleteExpenseCategory(env, [id]) {
 
 // Dùng cho ô tóm tắt nhỏ ở Home — chỉ cần tổng đã chi HÔM NAY, khỏi tải cả tháng.
 // Ô "Spent today" ở Home: đã tiêu hôm nay / được tiêu hôm nay.
-// Được tiêu mỗi ngày = budget tháng ÷ số ngày trong tháng; dư hay lố đều dồn sang các
-// ngày sau → được tiêu hôm nay = phần mỗi ngày × số ngày đã qua (kể cả hôm nay) − đã tiêu
-// từ đầu tháng tới hết hôm qua. Chỉ tính các category có budget (như budget tháng).
+// Quỹ tiêu hằng ngày của tháng = tổng budget hiệu lực các category KHÔNG Repeat
+// (+ phần tiền tiêu ở category không có budget các tháng trước, số âm — xem unbudgetedDebt).
+// Mỗi ngày được quỹ ÷ số ngày; dư hay lố dồn sang các ngày sau → được tiêu hôm nay =
+// quỹ ÷ số ngày × số ngày đã qua (kể cả hôm nay) − đã tiêu từ đầu tháng tới hết hôm qua.
+// "Đã tiêu" = tiêu ở category không Repeat + category chưa có budget (Repeat là khoản cố định).
 // Không có budget nào → allowance = null (chỉ hiện số đã tiêu).
 async function getExpenseTodayTotal(env) {
   var today = expenseTodayStr_();
@@ -939,20 +964,21 @@ async function getExpenseTodayTotal(env) {
   await expenseMaterializeBudgets_(env, period);
   var b = await expenseBudgetsFor_(env, period);
   var rows = await sb(env, 'expense_entries?entry_date=gte.' + period + '-01&entry_date=lte.' + today + '&select=amount,category_id,entry_date&limit=5000');
-  var budgeted = {};
-  b.cats.forEach(function (c) { budgeted[c.categoryId] = true; });
-  var total = 0, todayB = 0, beforeB = 0;
+  var repeatIds = {};
+  b.cats.forEach(function (c) { if (c.repeat) repeatIds[c.categoryId] = true; });
+  var total = 0, todayD = 0, beforeD = 0;
   rows.forEach(function (r) {
     var a = Number(r.amount);
     if (r.entry_date === today) total += a;
-    if (!budgeted[r.category_id]) return;
-    if (r.entry_date === today) todayB += a; else beforeB += a;
+    if (repeatIds[r.category_id]) return;
+    if (r.entry_date === today) todayD += a; else beforeD += a;
   });
   if (!b.cats.length) return { date: today, total: total, spent: total, allowance: null };
+  var pool = b.cats.reduce(function (t, c) { return c.repeat ? t : t + c.effective; }, 0) + b.unbudgetedDebt;
   var y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7));
   var days = new Date(y, m, 0).getDate(), day = Number(today.slice(8, 10));
-  var allowance = b.overall / days * day - beforeB;
-  return { date: today, total: total, spent: todayB, allowance: allowance };
+  var allowance = pool / days * day - beforeD;
+  return { date: today, total: total, spent: todayD, allowance: allowance };
 }
 
 /* ============================================================
