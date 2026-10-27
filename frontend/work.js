@@ -15,6 +15,10 @@ var workDraftSubs_ = [];
 var workDraftPriority_ = 'medium';
 var workEditingGroupId = null;
 var workTicker_ = null;
+// Selected job (a work group): '' = all. Everything below the job chips — Do first,
+// List, Board, Stats, Posts — shows only that job. Remembered on this device.
+var workJob = '';
+try { workJob = localStorage.getItem('henlo_work_job') || ''; } catch (e) {}
 
 var WORK_STATUS_LABEL = { todo: 'To do', doing: 'Doing', paused: 'Paused', done: 'Done' };
 var WORK_STATUS_ORDER = ['todo', 'doing', 'paused', 'done'];
@@ -48,8 +52,44 @@ function workRun_(fn) {     // google.script.run with the standard handlers
 function workApply(d) {
   workData = d || workData;
   if (workData.now) workClockSkew_ = Date.parse(workData.now) - Date.now();
-  workFillGroupSelects_();
+  if (workJob && !workJobGroup()) workSetJob_('');
+  workRenderJobs_();
   workRenderAll();
+  if (document.getElementById('work-groups-modal').classList.contains('active')) workRenderGroups();
+}
+function workJobGroup() { return workData.groups.find(function (g) { return String(g.id) === String(workJob); }) || null; }
+function workSetJob_(id) {
+  workJob = id ? String(id) : '';
+  try { localStorage.setItem('henlo_work_job', workJob); } catch (e) {}
+}
+function workJobTasks() {
+  return workJob ? workData.tasks.filter(function (t) { return String(t.groupId) === workJob; }) : workData.tasks;
+}
+// chips: All · each job · ⚙ (manage jobs)
+function workRenderJobs_() {
+  var box = document.getElementById('work-jobs');
+  box.innerHTML = '';
+  var chip = function (label, id) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'work-job' + (String(id) === workJob ? ' active' : '');
+    b.textContent = label;
+    b.onclick = function () { workSetJob_(id); workRenderJobs_(); workRenderAll(); };
+    box.appendChild(b);
+  };
+  chip('All', '');
+  workData.groups.forEach(function (g) { chip(g.name, g.id); });
+  var gear = document.createElement('button');
+  gear.type = 'button';
+  gear.className = 'work-job work-job-gear';
+  gear.title = 'Jobs';
+  gear.textContent = '⚙';
+  gear.onclick = function () { workRenderGroups(); document.getElementById('work-groups-modal').classList.add('active'); };
+  box.appendChild(gear);
+  var g = workJobGroup();
+  var hasPosts = !!(g && g.hasPosts);
+  document.getElementById('work-tab-posts').style.display = hasPosts ? '' : 'none';
+  if (!hasPosts && workTab === 'posts') workSetTab('list');
 }
 
 /* ---------- small helpers ---------- */
@@ -92,7 +132,6 @@ function workFilters_() {
   return {
     q: document.getElementById('work-f-search').value.trim().toLowerCase(),
     status: document.getElementById('work-f-status').value,
-    group: document.getElementById('work-f-group').value,
     priority: document.getElementById('work-f-priority').value,
     period: document.getElementById('work-f-period').value,
     from: document.getElementById('work-f-from').value,
@@ -115,12 +154,11 @@ function workPeriodRange_(f) {
 }
 function workFiltered(ignoreStatus) {
   var f = workFilters_(), range = workPeriodRange_(f);
-  return workData.tasks.filter(function (t) {
+  return workJobTasks().filter(function (t) {
     if (f.q && t.title.toLowerCase().indexOf(f.q) === -1 && (t.note || '').toLowerCase().indexOf(f.q) === -1) return false;
     if (!ignoreStatus && f.status) {
       if (f.status === 'open' ? t.status === 'done' : t.status !== f.status) return false;
     }
-    if (f.group === 'none' ? t.groupId : (f.group && String(t.groupId) !== f.group)) return false;
     if (f.priority && t.priority !== f.priority) return false;
     if (range) { var d = workDateOf_(t); if (d < range[0] || d > range[1]) return false; }
     return true;
@@ -129,13 +167,14 @@ function workFiltered(ignoreStatus) {
 
 /* ---------- render ---------- */
 function workRenderAll() {
-  workRenderFirst();
-  var showFilters = workTab !== 'groups';
-  document.getElementById('work-filters').style.display = showFilters ? '' : 'none';
+  var onPosts = workTab === 'posts';
+  document.getElementById('work-first').style.display = onPosts ? 'none' : '';
+  if (!onPosts) workRenderFirst();
+  document.getElementById('work-filters').style.display = onPosts ? 'none' : '';
   if (workTab === 'list') workRenderList();
   else if (workTab === 'board') workRenderBoard();
   else if (workTab === 'stats') workRenderStats();
-  else workRenderGroups();
+  else if (onPosts && typeof postsShow === 'function') postsShow();
   workEnsureTicker_();
 }
 function workSetTab(tab) {
@@ -150,7 +189,7 @@ function workSetTab(tab) {
 function workRenderFirst() {
   var box = document.getElementById('work-first');
   var list = document.getElementById('work-first-list');
-  var picks = workDoFirst(workData.tasks, 3);
+  var picks = workDoFirst(workJobTasks(), 3);
   box.style.display = picks.length ? '' : 'none';
   list.innerHTML = '';
   picks.forEach(function (t, i) {
@@ -287,30 +326,23 @@ function workRenderStats() {
 function workRenderGroups() {
   var box = document.getElementById('work-groups');
   box.innerHTML = '';
-  if (!workData.groups.length) { box.innerHTML = '<div class="empty-state"><span class="empty-icon">✿</span>No groups</div>'; return; }
+  if (!workData.groups.length) { box.innerHTML = '<div class="empty-state">No jobs yet</div>'; return; }
   workData.groups.forEach(function (g) {
     var count = workData.tasks.filter(function (t) { return t.groupId === g.id && t.status !== 'done'; }).length;
     var row = document.createElement('div');
     row.className = 'expense-category-row';
-    row.innerHTML = '<span class="expense-category-row-name">' + icdEscape(g.name) + '</span>' +
+    row.innerHTML = '<span class="expense-category-row-name">' + icdEscape(g.name) + (g.hasPosts ? ' <span class="work-chip">Posts</span>' : '') + '</span>' +
       '<span class="expense-category-row-usage">' + count + '</span>' +
       '<button class="acc-edit-icon-btn" title="Rename">✎</button><button class="acc-edit-icon-btn" title="Delete">🗑</button>';
     var bs = row.querySelectorAll('button');
     bs[0].onclick = function () { workOpenGroup(g); };
     bs[1].onclick = function () {
-      expenseConfirm('Delete group "' + g.name + '"? Its tasks stay, without a group.', function () { workRun_('deleteWorkGroup')(g.id); });
+      expenseConfirm('Delete "' + g.name + '"? Its tasks stay, without a job.', function () { workRun_('deleteWorkGroup')(g.id); });
     };
     box.appendChild(row);
   });
 }
 
-function workFillGroupSelects_() {
-  var f = document.getElementById('work-f-group'), keep = f.value;
-  f.innerHTML = '<option value="">All groups</option>' + workData.groups.map(function (g) {
-    return '<option value="' + g.id + '">' + icdEscape(g.name) + '</option>';
-  }).join('') + '<option value="none">No group</option>';
-  f.value = keep; if (f.value !== keep) f.value = '';
-}
 
 /* live timer text (only while a timer runs and Work is on screen) */
 function workEnsureTicker_() {
@@ -340,8 +372,8 @@ function workOpenTask(t) {
   var gs = document.getElementById('work-t-group');
   gs.innerHTML = '<option value="">—</option>' + workData.groups.map(function (g) {
     return '<option value="' + g.id + '">' + icdEscape(g.name) + '</option>';
-  }).join('') + '<option value="__new__">+ New group</option>';
-  gs.value = t && t.groupId ? String(t.groupId) : (document.getElementById('work-f-group').value.replace('none', '') || '');
+  }).join('') + '<option value="__new__">+ New job</option>';
+  gs.value = t && t.groupId ? String(t.groupId) : workJob;
   gs.dataset.prev = gs.value;
   document.getElementById('work-t-due').value = t ? t.due : '';
   document.getElementById('work-t-repeat').value = t ? t.repeat : '';
@@ -433,8 +465,9 @@ function workSaveTask() {
 /* ---------- group popup ---------- */
 function workOpenGroup(g) {
   workEditingGroupId = g ? g.id : null;
-  document.getElementById('work-group-modal-title').textContent = g ? 'Rename group' : 'New group';
+  document.getElementById('work-group-modal-title').textContent = g ? 'Edit job' : 'New job';
   document.getElementById('work-group-name').value = g ? g.name : '';
+  document.getElementById('work-group-posts').checked = !!(g && g.hasPosts);
   document.getElementById('work-group-modal').classList.add('active');
   setTimeout(function () { document.getElementById('work-group-name').focus(); }, 60);
 }
@@ -455,12 +488,12 @@ function workSaveGroup() {
         var keep = created ? String(created.id) : gs.dataset.prev;
         gs.innerHTML = '<option value="">—</option>' + workData.groups.map(function (x) {
           return '<option value="' + x.id + '">' + icdEscape(x.name) + '</option>';
-        }).join('') + '<option value="__new__">+ New group</option>';
+        }).join('') + '<option value="__new__">+ New job</option>';
         gs.value = keep || ''; gs.dataset.prev = gs.value;
       }
     })
     .withFailureHandler(workFail_)
-    .saveWorkGroup(workEditingGroupId, name);
+    .saveWorkGroup(workEditingGroupId, name, document.getElementById('work-group-posts').checked);
 }
 
 /* ---------- Home block ----------
@@ -508,7 +541,7 @@ function workLoadHomeBlock() {
 document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('work-add-btn').onclick = function () { workOpenTask(null); };
   document.querySelectorAll('.work-tab').forEach(function (b) { b.onclick = function () { workSetTab(b.dataset.wtab); }; });
-  ['work-f-search', 'work-f-status', 'work-f-group', 'work-f-priority', 'work-f-from', 'work-f-to'].forEach(function (id) {
+  ['work-f-search', 'work-f-status', 'work-f-priority', 'work-f-from', 'work-f-to'].forEach(function (id) {
     var el = document.getElementById(id);
     el.oninput = el.onchange = function () { workRenderAll(); };
   });
@@ -517,6 +550,7 @@ document.addEventListener('DOMContentLoaded', function () {
     workRenderAll();
   };
   document.getElementById('work-group-add-btn').onclick = function () { workOpenGroup(null); };
+  document.getElementById('work-groups-close').onclick = function () { document.getElementById('work-groups-modal').classList.remove('active'); };
 
   document.getElementById('work-task-close').onclick = workCloseTask_;
   document.getElementById('work-task-cancel').onclick = workCloseTask_;

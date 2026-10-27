@@ -55,6 +55,7 @@
       <button class="app-nav-sublink" data-open="accounts">Account</button>
       <button class="app-nav-sublink" data-open="expense">Expenses</button>
       <button class="app-nav-sublink" data-open="work">Work</button>
+      <button class="app-nav-sublink" data-open="calendar">Calendar</button>
     </div>
 
     <div class="theme-switch-row"><span>Theme</span><button type="button" class="theme-switch" aria-label="Light / dark mode"><span class="ts-knob"></span><span class="ts-sun">☼</span><span class="ts-moon">☾</span></button></div>
@@ -265,6 +266,14 @@
               </div>
               <div class="nav-card-arrow">→</div>
             </button>
+            <button id="open-calendar" class="nav-card" data-accent="blue">
+              <span class="nav-card-emoji">⋆˙⟡</span>
+              <div class="nav-card-body">
+                <div class="nav-card-title">Calendar</div>
+                <div class="nav-card-desc">Notes and marked days</div>
+              </div>
+              <div class="nav-card-arrow">→</div>
+            </button>
           </div>
         </section>
       </div>
@@ -276,6 +285,8 @@
           <button class="pill-btn" id="work-add-btn">+ Task</button>
         </div>
 
+        <div class="work-jobs" id="work-jobs"></div>
+
         <div class="work-card work-first" id="work-first">
           <div class="work-first-title">Do first</div>
           <div id="work-first-list"></div>
@@ -285,7 +296,7 @@
           <button class="work-tab active" data-wtab="list">List</button>
           <button class="work-tab" data-wtab="board">Board</button>
           <button class="work-tab" data-wtab="stats">Stats</button>
-          <button class="work-tab" data-wtab="groups">Groups</button>
+          <button class="work-tab" data-wtab="posts" id="work-tab-posts" style="display:none;">Posts</button>
         </div>
 
         <div class="work-filters" id="work-filters">
@@ -296,7 +307,6 @@
             <option value="todo">To do</option><option value="doing">Doing</option>
             <option value="paused">Paused</option><option value="done">Done</option>
           </select>
-          <select id="work-f-group"></select>
           <select id="work-f-priority">
             <option value="">All priorities</option>
             <option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
@@ -315,9 +325,39 @@
         <div class="work-panel" data-wpanel="list"><div id="work-list"></div></div>
         <div class="work-panel" data-wpanel="board" style="display:none;"><div class="work-board" id="work-board"></div></div>
         <div class="work-panel" data-wpanel="stats" style="display:none;"><div class="work-card" id="work-stats"></div></div>
-        <div class="work-panel" data-wpanel="groups" style="display:none;">
-          <div class="work-card" id="work-groups"></div>
-          <button class="pill-btn" id="work-group-add-btn">+ Group</button>
+        <div class="work-panel" data-wpanel="posts" style="display:none;">
+          <div class="posts-bar">
+            <div class="posts-sub">
+              <button class="posts-subtab active" data-ptab="plan">Calendar</button>
+              <button class="posts-subtab" data-ptab="drafts">Drafts</button>
+              <button class="posts-subtab" data-ptab="posted">Posted</button>
+            </div>
+            <button class="posts-icon-btn" id="posts-slots-btn" title="Posting times">⏰</button>
+          </div>
+          <div class="posts-summary" id="posts-summary"></div>
+          <div class="posts-actions">
+            <button class="pill-btn" id="posts-add-btn">+ Post</button>
+            <button class="pill-btn secondary" id="posts-auto-btn">Auto-schedule</button>
+          </div>
+          <div id="posts-body"></div>
+        </div>
+      </div>
+
+      <!-- -------- CALENDAR VIEW (Personal) — logic in calendar.js -------- -->
+      <div id="calendar-view" class="app-view" style="display:none;">
+        <h2 class="page-title">Calendar</h2>
+        <div class="work-card cal-list-card">
+          <div class="cal-list-title"><span id="cal-list-title">Notes</span><span class="cal-list-count" id="cal-list-count"></span></div>
+          <div id="cal-list"></div>
+        </div>
+        <div class="work-card cal-month-card">
+          <div class="cal-month-head">
+            <button class="expense-month-nav" id="cal-prev">‹</button>
+            <div class="cal-month-label" id="cal-month-label"></div>
+            <button class="expense-month-nav" id="cal-next">›</button>
+          </div>
+          <div class="cal-grid cal-dow"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+          <div class="cal-grid" id="cal-grid"></div>
         </div>
       </div>
 
@@ -862,7 +902,7 @@
       <div class="expense-field-caption">Fee</div>
       <div class="expense-amount-row"><input type="text" id="work-t-fee" class="expense-amount-field" placeholder="0" inputmode="numeric"><span>đ</span></div>
       <div class="expense-field-caption">Note</div>
-      <textarea id="work-t-note" rows="3"></textarea>
+      <textarea id="work-t-note" rows="3" data-own-enter></textarea>
       <div class="work-time-line" id="work-t-time"></div>
       <div class="modal-actions">
         <button class="pill-btn secondary" id="work-task-delete" style="display:none;">Delete</button>
@@ -872,13 +912,103 @@
     </div>
   </div>
 
+  <div id="work-groups-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Jobs</h3>
+        <button id="work-groups-close" class="modal-close">✕</button>
+      </div>
+      <div id="work-groups"></div>
+      <div class="modal-actions"><button class="pill-btn" id="work-group-add-btn">+ Job</button></div>
+    </div>
+  </div>
+
+  <div id="post-modal" class="modal-overlay">
+    <div class="modal-box post-box">
+      <div class="modal-header">
+        <h3 id="post-modal-title">New post</h3>
+        <button id="post-close" class="modal-close">✕</button>
+      </div>
+      <div class="expense-field-caption">Product</div>
+      <input type="text" id="post-product" maxlength="200" autocomplete="off">
+      <div class="expense-field-caption">Tag</div>
+      <div class="work-title-wrap">
+        <input type="text" id="post-tag" maxlength="60" autocomplete="off">
+        <div class="work-suggest" id="post-tag-suggest"></div>
+      </div>
+      <div class="expense-field-caption">Caption</div>
+      <textarea id="post-caption" rows="6" data-own-enter></textarea>
+      <div class="expense-field-caption">Shopee links (one per line)</div>
+      <textarea id="post-links" rows="3" placeholder="https://s.shopee.vn/..." data-own-enter></textarea>
+      <div class="expense-field-caption">Photos / note</div>
+      <input type="text" id="post-note" maxlength="2000" autocomplete="off">
+      <div class="work-two">
+        <div>
+          <div class="expense-field-caption">Date</div>
+          <input type="date" id="post-date">
+        </div>
+        <div>
+          <div class="expense-field-caption">Time</div>
+          <input type="time" id="post-time" class="post-time-input">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="post-delete" style="display:none;">Delete</button>
+        <button class="pill-btn secondary" id="post-cancel">Cancel</button>
+        <button class="pill-btn" id="post-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="post-slots-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Posting times</h3>
+        <button id="post-slots-close" class="modal-close">✕</button>
+      </div>
+      <div class="expense-field-caption">Mon – Fri</div>
+      <input type="text" id="post-slots-weekday" placeholder="12:00, 20:30" autocomplete="off">
+      <div class="expense-field-caption">Sat – Sun</div>
+      <input type="text" id="post-slots-weekend" placeholder="09:00, 12:00, 20:30" autocomplete="off">
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="post-slots-cancel">Cancel</button>
+        <button class="pill-btn" id="post-slots-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="cal-day-modal" class="modal-overlay cal-sheet">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="cal-day-title"></h3>
+        <button id="cal-day-close" class="modal-close">✕</button>
+      </div>
+      <div id="cal-day-notes"></div>
+      <div class="expense-field-caption" id="cal-form-caption">Mark</div>
+      <div class="cal-kinds" id="cal-kinds">
+        <button type="button" data-k="important"><i></i>Important</button>
+        <button type="button" data-k="work"><i></i>Work</button>
+        <button type="button" data-k="off"><i></i>Day off</button>
+        <button type="button" data-k="remind"><i></i>Reminder</button>
+        <button type="button" data-k="other"><i></i>Other</button>
+      </div>
+      <div class="expense-field-caption">Note</div>
+      <textarea id="cal-note" rows="3" data-own-enter></textarea>
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="cal-cancel">Cancel</button>
+        <button class="pill-btn" id="cal-save">Save</button>
+      </div>
+    </div>
+  </div>
+
   <div id="work-group-modal" class="modal-overlay">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 id="work-group-modal-title">New group</h3>
+        <h3 id="work-group-modal-title">New job</h3>
         <button id="work-group-close" class="modal-close">✕</button>
       </div>
-      <input type="text" id="work-group-name" maxlength="60" placeholder="e.g. Freelance" autocomplete="off">
+      <input type="text" id="work-group-name" maxlength="60" placeholder="e.g. KOC" autocomplete="off">
+      <label class="expense-checkbox-row"><input type="checkbox" id="work-group-posts"> Has Posts</label>
       <div class="modal-actions">
         <button class="pill-btn secondary" id="work-group-cancel">Cancel</button>
         <button class="pill-btn" id="work-group-save">Save</button>
@@ -1302,6 +1432,8 @@
   <script src="/jelly.js"></script>
   <script src="/app.js"></script>
   <script src="/work.js"></script>
+  <script src="/posts.js"></script>
+  <script src="/calendar.js"></script>
   <script src="/enter-confirm.js"></script>
 </body>
 </html>

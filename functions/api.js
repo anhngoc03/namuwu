@@ -58,6 +58,7 @@ function isPersonalAction_(action) {
   if (ACCOUNT_ACTIONS_.indexOf(action) !== -1) return true;
   // Mọi action Expense đều cần token, trừ ô tóm tắt "Today's spending" ở Home (giữ công khai theo yêu cầu).
   if (/Work/.test(action)) return action !== 'getWorkHomeSummary';   // Home chỉ được xem con số
+  if (/Post|Calendar/.test(action)) return true;
   return /Expense/.test(action) && action !== 'getExpenseTodayTotal';
 }
 
@@ -1003,7 +1004,10 @@ function workTaskOut_(r) {
   };
 }
 async function getWorkData(env) {
-  const groups = await sb(env, 'work_groups?select=id,name&order=name.asc');
+  let groups;
+  try { groups = await sb(env, 'work_groups?select=id,name,has_posts&order=name.asc'); }
+  catch (e) { groups = await sb(env, 'work_groups?select=id,name&order=name.asc'); }   // posts_calendar.sql not run yet
+  groups = groups.map(function (g) { return { id: g.id, name: g.name, hasPosts: g.has_posts === true }; });
   const tasks = await sb(env, 'work_tasks?select=*&order=id.desc&limit=5000');
   return { groups: groups, tasks: tasks.map(workTaskOut_), today: expenseTodayStr_(), now: new Date().toISOString() };
 }
@@ -1114,11 +1118,13 @@ async function stopWorkTimer(env, [id]) {
   }
   return getWorkData(env);
 }
-async function saveWorkGroup(env, [id, name]) {
+async function saveWorkGroup(env, [id, name, hasPosts]) {
   name = String(name || '').trim().slice(0, 60);
   if (!name) throw new Error('Group needs a name');
-  if (id) await sb(env, 'work_groups?id=eq.' + Number(id), { method: 'PATCH', body: JSON.stringify({ name: name }), prefer: 'return=minimal' });
-  else await sb(env, 'work_groups', { method: 'POST', body: JSON.stringify([{ name: name }]), prefer: 'return=minimal' });
+  const row = { name: name };
+  if (hasPosts !== undefined && hasPosts !== null) row.has_posts = !!hasPosts;
+  if (id) await sb(env, 'work_groups?id=eq.' + Number(id), { method: 'PATCH', body: JSON.stringify(row), prefer: 'return=minimal' });
+  else await sb(env, 'work_groups', { method: 'POST', body: JSON.stringify([row]), prefer: 'return=minimal' });
   return getWorkData(env);
 }
 async function deleteWorkGroup(env, [id]) {
@@ -1139,8 +1145,156 @@ async function getWorkHomeSummary(env) {
   };
 }
 
+/* ============================================================
+ *  POSTS (bài đăng KOC — thuộc 1 công việc của Work) — supabase/posts_calendar.sql
+ *  Giờ đăng (scheduled_date + scheduled_time 'HH:MM') tính theo giờ Việt Nam.
+ * ============================================================ */
+const POST_SLOTS_DEFAULT_ = { weekday: ['12:00', '20:30'], weekend: ['09:00', '12:00', '20:30'] };
+function vnNow_() {                         // { date:'YYYY-MM-DD', time:'HH:MM' } in Vietnam
+  const d = new Date(Date.now() + 7 * 3600 * 1000);
+  return { date: d.toISOString().slice(0, 10), time: d.toISOString().slice(11, 16) };
+}
+function postOut_(r) {
+  return {
+    id: r.id, groupId: r.group_id, product: r.product || '', tag: r.tag || '', caption: r.caption || '',
+    links: Array.isArray(r.links) ? r.links : [], note: r.note || '', status: r.status,
+    date: r.scheduled_date || '', time: r.scheduled_time || '', postedAt: r.posted_at || null, createdAt: r.created_at
+  };
+}
+async function postSlots_(env) {
+  const rows = await sb(env, 'app_settings?key=eq.post_slots&select=value');
+  const v = rows.length ? rows[0].value : null;
+  const clean = function (a) { return (Array.isArray(a) ? a : []).filter(function (t) { return /^\d{2}:\d{2}$/.test(t); }).sort(); };
+  return v ? { weekday: clean(v.weekday), weekend: clean(v.weekend) } : POST_SLOTS_DEFAULT_;
+}
+async function getPostsData(env) {
+  const posts = await sb(env, 'posts?select=*&order=id.desc&limit=5000');
+  return { posts: posts.map(postOut_), slots: await postSlots_(env), now: vnNow_() };
+}
+function postIn_(p) {
+  p = p || {};
+  const links = (Array.isArray(p.links) ? p.links : String(p.links || '').split(/\s+/))
+    .map(function (x) { return String(x).trim(); }).filter(function (x) { return /^https?:\/\//i.test(x); }).slice(0, 20);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(p.date || '') ? p.date : null;
+  const time = /^\d{2}:\d{2}$/.test(p.time || '') ? p.time : null;
+  let status = ['draft', 'scheduled', 'posted'].indexOf(p.status) !== -1 ? p.status : 'draft';
+  if (status === 'scheduled' && !date) status = 'draft';
+  return {
+    group_id: p.groupId ? Number(p.groupId) : null,
+    product: String(p.product || '').trim().slice(0, 200),
+    tag: String(p.tag || '').trim().slice(0, 60),
+    caption: String(p.caption || '').slice(0, 8000),
+    links: links, note: String(p.note || '').slice(0, 2000),
+    status: status, scheduled_date: status === 'draft' ? null : date, scheduled_time: status === 'draft' ? null : time
+  };
+}
+async function savePost(env, [post]) {
+  const data = postIn_(post);
+  if (!data.caption.trim() && !data.product && !data.links.length) throw new Error('Post is empty');
+  if (post && post.id) {
+    if (data.status !== 'posted') data.posted_at = null;
+    await sb(env, 'posts?id=eq.' + Number(post.id), { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' });
+  } else {
+    if (data.status === 'posted') data.posted_at = new Date().toISOString();
+    await sb(env, 'posts', { method: 'POST', body: JSON.stringify([data]), prefer: 'return=minimal' });
+  }
+  return getPostsData(env);
+}
+async function deletePost(env, [id]) {
+  await sb(env, 'posts?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' });
+  return getPostsData(env);
+}
+async function markPostPosted(env, [id]) {
+  const cur = await sb(env, 'posts?id=eq.' + Number(id) + '&select=scheduled_date,scheduled_time');
+  if (!cur.length) throw new Error('Post not found');
+  const now = vnNow_();
+  await sb(env, 'posts?id=eq.' + Number(id), { method: 'PATCH', prefer: 'return=minimal', body: JSON.stringify({
+    status: 'posted', posted_at: new Date().toISOString(),
+    scheduled_date: cur[0].scheduled_date || now.date, scheduled_time: cur[0].scheduled_time || now.time
+  }) });
+  return getPostsData(env);
+}
+async function repostPost(env, [id]) {      // "post again": copy as a new draft
+  const cur = await sb(env, 'posts?id=eq.' + Number(id) + '&select=*');
+  if (!cur.length) throw new Error('Post not found');
+  const r = cur[0];
+  await sb(env, 'posts', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify([{
+    group_id: r.group_id, product: r.product, tag: r.tag, caption: r.caption, links: r.links, note: r.note, status: 'draft'
+  }]) });
+  return getPostsData(env);
+}
+async function savePostSlots(env, [slots]) {
+  const clean = function (a) {
+    return Array.from(new Set((Array.isArray(a) ? a : []).filter(function (t) { return /^\d{2}:\d{2}$/.test(t); }))).sort().slice(0, 8);
+  };
+  const value = { weekday: clean(slots && slots.weekday), weekend: clean(slots && slots.weekend) };
+  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'post_slots', value: value }]),
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' } });
+  return getPostsData(env);
+}
+// Drafts (oldest first) go into the next free time slots from now on (Vietnam time).
+async function autoSchedulePosts(env, [groupId]) {
+  const slots = await postSlots_(env);
+  const all = await sb(env, 'posts?select=id,group_id,status,scheduled_date,scheduled_time,created_at&order=id.asc&limit=5000');
+  const mine = all.filter(function (r) { return !groupId || r.group_id === Number(groupId); });
+  const drafts = mine.filter(function (r) { return r.status === 'draft'; });
+  const taken = {};
+  mine.forEach(function (r) { if (r.status !== 'draft' && r.scheduled_date) taken[r.scheduled_date + ' ' + r.scheduled_time] = true; });
+  const now = vnNow_();
+  let day = new Date(now.date + 'T00:00:00Z');
+  let i = 0, guard = 0;
+  while (i < drafts.length && guard++ < 400) {
+    const ds = day.toISOString().slice(0, 10);
+    const wd = day.getUTCDay();
+    const list = (wd === 0 || wd === 6) ? slots.weekend : slots.weekday;
+    for (const t of list) {
+      if (i >= drafts.length) break;
+      if (ds === now.date && t <= now.time) continue;
+      if (taken[ds + ' ' + t]) continue;
+      await sb(env, 'posts?id=eq.' + drafts[i].id, { method: 'PATCH', prefer: 'return=minimal',
+        body: JSON.stringify({ status: 'scheduled', scheduled_date: ds, scheduled_time: t }) });
+      taken[ds + ' ' + t] = true; i++;
+    }
+    day.setUTCDate(day.getUTCDate() + 1);
+  }
+  return getPostsData(env);
+}
+
+/* ============================================================
+ *  CALENDAR (Personal) — ghi chú / đánh dấu theo ngày, nhiều ghi chú mỗi ngày
+ * ============================================================ */
+const CAL_KINDS_ = ['important', 'work', 'off', 'remind', 'other'];
+async function getCalendarNotes(env, [year]) {
+  year = /^\d{4}$/.test(String(year)) ? String(year) : vnNow_().date.slice(0, 4);
+  const rows = await sb(env, 'calendar_notes?day=gte.' + year + '-01-01&day=lte.' + year + '-12-31&select=id,day,kind,note&order=day.asc');
+  return { year: Number(year), today: vnNow_().date, notes: rows.map(function (r) { return { id: r.id, day: r.day, kind: r.kind, note: r.note || '' }; }) };
+}
+async function saveCalendarNote(env, [n]) {
+  n = n || {};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(n.day || '')) throw new Error('Bad date');
+  const row = { day: n.day, kind: CAL_KINDS_.indexOf(n.kind) !== -1 ? n.kind : 'other', note: String(n.note || '').trim().slice(0, 2000) };
+  if (!row.note) throw new Error('Write a note');
+  if (n.id) await sb(env, 'calendar_notes?id=eq.' + Number(n.id), { method: 'PATCH', body: JSON.stringify(row), prefer: 'return=minimal' });
+  else await sb(env, 'calendar_notes', { method: 'POST', body: JSON.stringify([row]), prefer: 'return=minimal' });
+  return getCalendarNotes(env, [n.day.slice(0, 4)]);
+}
+async function deleteCalendarNote(env, [id, year]) {
+  await sb(env, 'calendar_notes?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' });
+  return getCalendarNotes(env, [year]);
+}
+
 const ACTIONS = {
   personalLogin,
+  getPostsData,
+  savePost,
+  deletePost,
+  markPostPosted,
+  repostPost,
+  savePostSlots,
+  autoSchedulePosts,
+  getCalendarNotes,
+  saveCalendarNote,
+  deleteCalendarNote,
   getWorkData,
   saveWorkTask,
   setWorkTaskStatus,
