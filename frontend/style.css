@@ -1662,7 +1662,7 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
 .empty-state .empty-icon{ display:block; width:140px; margin:0 auto 8px; font-size:0; color:transparent; }
 #home-todo-list .empty-state .empty-icon{ width:180px; }
 .empty-cat{ display:block; width:100%; height:auto; image-rendering:pixelated; }
-.empty-cat.dark-only{ display:none; }
+.empty-cat.dark-only{ display:none; width:50%; margin:0 auto; }   /* butterflies: smaller than the cat */
 :root[data-theme="dark"] .empty-cat.light-only{ display:none; }
 :root[data-theme="dark"] .empty-cat.dark-only{ display:block; }
 @media (prefers-color-scheme: dark){
