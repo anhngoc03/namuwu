@@ -344,7 +344,7 @@ function showScreen(id) {
 // Maps each app-view to the navbar section it belongs to, purely for highlighting the active nav link.
 var NAV_SECTION_MAP_ = {
   'menu-view': 'home',
-  'accounts-view': 'personal', 'expense-view': 'personal',
+  'accounts-view': 'personal', 'expense-view': 'personal', 'work-view': 'personal',
   'symbols-view': 'tools', 'datediff-view': 'tools', 'eating-view': 'tools',
   'qr-view': 'tools', 'converter-view': 'tools',
   'memory-view': 'games', 'mochi-view': 'games', 'minesweeper-view': 'games'
@@ -361,6 +361,7 @@ var VIEW_OPENERS_ = {
   'eating-view': openEating,
   'qr-view': openQrCollection,
   'expense-view': function () { requirePersonal(openExpense); },
+  'work-view': function () { requirePersonal(openWork); },
   'memory-view': openMemory,
   'mochi-view': openMochi,
   'minesweeper-view': openMinesweeper
@@ -382,7 +383,8 @@ var VIEW_PATHS_ = {
   'minesweeper-view': '/games/minesweeper',
   'mochi-view': '/games/mochi-fly',
   'accounts-view': '/personal/account',
-  'expense-view': '/personal/expenses'
+  'expense-view': '/personal/expenses',
+  'work-view': '/personal/work'
 };
 var routing_ = false; // true while applying a URL (load / Back) — don't push it again
 
@@ -400,7 +402,7 @@ function routeFromLocation_() {
     var viewId = Object.keys(VIEW_PATHS_).find(function (k) { return VIEW_PATHS_[k] === path; });
     if (viewId) {
       stopRunningViews_();
-      if (viewId === 'accounts-view' || viewId === 'expense-view') {
+      if (viewId === 'accounts-view' || viewId === 'expense-view' || viewId === 'work-view') {
         // Personal: show Home underneath, then ask for the password first.
         if (!personalUnlocked) { showView('menu-view'); showHomeSection('home'); }
       }
@@ -526,6 +528,7 @@ var MOBILE_NAV_OPENERS_ = {
   eating: openEating,
   qr: openQrCollection,
   expense: function () { requirePersonal(openExpense); },
+  work: function () { requirePersonal(openWork); },
   memory: openMemory,
   mochi: openMochi,
   minesweeper: openMinesweeper
@@ -552,6 +555,7 @@ function showHomeSection(section) {
     loadHomeData();
     expenseLoadHomeWidget();
     loadHomeYakultTile();
+    if (typeof workLoadHomeBlock === 'function') workLoadHomeBlock();
   }
   setNavActive(section);
   setPath_(SECTION_PATHS_[section]);
@@ -4218,6 +4222,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('mobile-nav-scrim').onclick = closeMobileNavDrawer;
 
   document.getElementById('open-accounts').onclick = openAccountsGate;
+  document.getElementById('open-work').onclick = function () { requirePersonal(openWork); };
   document.getElementById('open-converter').onclick = function () { openConverter(); };
   document.getElementById('open-symbols').onclick = loadSymbols;
   document.getElementById('open-datediff').onclick = openDateDiff;

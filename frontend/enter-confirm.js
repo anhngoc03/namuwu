@@ -111,6 +111,8 @@
 
     var target = e.target;
     if (!isEditableField(target)) return;
+    // Ô nào tự xử lý Enter (vd ô thêm mục Checklist trong Work) thì đánh dấu data-own-enter.
+    if (target.closest && target.closest('[data-own-enter]')) return;
 
     // 1) Có popup đang mở? -> bấm nút xác nhận trong popup đó.
     var modal = findOpenModal();

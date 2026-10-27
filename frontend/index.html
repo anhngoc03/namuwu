@@ -54,6 +54,7 @@
     <div class="app-nav-submenu" data-submenu="personal">
       <button class="app-nav-sublink" data-open="accounts">Account</button>
       <button class="app-nav-sublink" data-open="expense">Expenses</button>
+      <button class="app-nav-sublink" data-open="work">Work</button>
     </div>
 
     <div class="theme-switch-row"><span>Theme</span><button type="button" class="theme-switch" aria-label="Light / dark mode"><span class="ts-knob"></span><span class="ts-sun">☼</span><span class="ts-moon">☾</span></button></div>
@@ -131,6 +132,11 @@
               <span class="home-tile-link" id="home-todo-sub">left</span>
             </button>
           </div>
+
+          <button type="button" class="home-work" id="home-work" style="display:none;">
+            <div class="home-work-head"><span class="home-work-title">Work</span><span class="home-work-nums" id="home-work-nums"></span></div>
+            <div class="home-work-list" id="home-work-list"></div>
+          </button>
 
           <div class="home-todo-panel" id="home-todo-panel">
             <div class="home-todo-header">
@@ -251,8 +257,68 @@
               </div>
               <div class="nav-card-arrow">→</div>
             </button>
+            <button id="open-work" class="nav-card" data-accent="lavender">
+              <span class="nav-card-emoji">✎ᝰ</span>
+              <div class="nav-card-body">
+                <div class="nav-card-title">Work</div>
+                <div class="nav-card-desc">Tasks, timers and stats</div>
+              </div>
+              <div class="nav-card-arrow">→</div>
+            </button>
           </div>
         </section>
+      </div>
+
+      <!-- -------- WORK VIEW (Personal) — logic in work.js -------- -->
+      <div id="work-view" class="app-view" style="display:none;">
+        <div class="work-head">
+          <h2 class="page-title">Work</h2>
+          <button class="pill-btn" id="work-add-btn">+ Task</button>
+        </div>
+
+        <div class="work-card work-first" id="work-first">
+          <div class="work-first-title">Do first</div>
+          <div id="work-first-list"></div>
+        </div>
+
+        <div class="work-tabs">
+          <button class="work-tab active" data-wtab="list">List</button>
+          <button class="work-tab" data-wtab="board">Board</button>
+          <button class="work-tab" data-wtab="stats">Stats</button>
+          <button class="work-tab" data-wtab="groups">Groups</button>
+        </div>
+
+        <div class="work-filters" id="work-filters">
+          <input type="text" id="work-f-search" placeholder="Search" autocomplete="off">
+          <select id="work-f-status">
+            <option value="">All statuses</option>
+            <option value="open">Not done</option>
+            <option value="todo">To do</option><option value="doing">Doing</option>
+            <option value="paused">Paused</option><option value="done">Done</option>
+          </select>
+          <select id="work-f-group"></select>
+          <select id="work-f-priority">
+            <option value="">All priorities</option>
+            <option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+          </select>
+          <select id="work-f-period">
+            <option value="">Any time</option>
+            <option value="week">This week</option>
+            <option value="month">This month</option>
+            <option value="custom">Custom…</option>
+          </select>
+          <span class="work-f-range" id="work-f-range" style="display:none;">
+            <input type="date" id="work-f-from"><span>–</span><input type="date" id="work-f-to">
+          </span>
+        </div>
+
+        <div class="work-panel" data-wpanel="list"><div id="work-list"></div></div>
+        <div class="work-panel" data-wpanel="board" style="display:none;"><div class="work-board" id="work-board"></div></div>
+        <div class="work-panel" data-wpanel="stats" style="display:none;"><div class="work-card" id="work-stats"></div></div>
+        <div class="work-panel" data-wpanel="groups" style="display:none;">
+          <div class="work-card" id="work-groups"></div>
+          <button class="pill-btn" id="work-group-add-btn">+ Group</button>
+        </div>
       </div>
 
       <!-- -------- EXPENSE TRACKER VIEW -------- -->
@@ -744,6 +810,82 @@
     </div>
   </div>
 
+  <!-- ================= WORK MODALS ================= -->
+  <div id="work-task-modal" class="modal-overlay">
+    <div class="modal-box work-task-box">
+      <div class="modal-header">
+        <h3 id="work-task-modal-title">New task</h3>
+        <button id="work-task-close" class="modal-close">✕</button>
+      </div>
+      <div class="expense-field-caption">Task</div>
+      <div class="work-title-wrap">
+        <input type="text" id="work-t-title" maxlength="200" autocomplete="off">
+        <div class="work-suggest" id="work-t-suggest"></div>
+      </div>
+      <div class="expense-field-caption">Priority</div>
+      <div class="work-prio-pick" id="work-t-priority">
+        <button type="button" data-p="high">High</button>
+        <button type="button" data-p="medium">Medium</button>
+        <button type="button" data-p="low">Low</button>
+      </div>
+      <div class="work-two">
+        <div>
+          <div class="expense-field-caption">Status</div>
+          <select id="work-t-status" class="expense-modal-select">
+            <option value="todo">To do</option><option value="doing">Doing</option>
+            <option value="paused">Paused</option><option value="done">Done</option>
+          </select>
+        </div>
+        <div>
+          <div class="expense-field-caption">Group</div>
+          <select id="work-t-group" class="expense-modal-select"></select>
+        </div>
+      </div>
+      <div class="work-two">
+        <div>
+          <div class="expense-field-caption">Due</div>
+          <input type="date" id="work-t-due">
+        </div>
+        <div>
+          <div class="expense-field-caption">Repeat</div>
+          <select id="work-t-repeat" class="expense-modal-select">
+            <option value="">No</option><option value="daily">Daily</option>
+            <option value="weekly">Weekly</option><option value="monthly">Monthly</option>
+          </select>
+        </div>
+      </div>
+      <div class="expense-field-caption">Checklist</div>
+      <div id="work-t-subs"></div>
+      <div class="work-sub-add">
+        <input type="text" id="work-t-sub-input" maxlength="200" placeholder="+ Item" autocomplete="off" data-own-enter>
+      </div>
+      <div class="expense-field-caption">Fee</div>
+      <div class="expense-amount-row"><input type="text" id="work-t-fee" class="expense-amount-field" placeholder="0" inputmode="numeric"><span>đ</span></div>
+      <div class="expense-field-caption">Note</div>
+      <textarea id="work-t-note" rows="3"></textarea>
+      <div class="work-time-line" id="work-t-time"></div>
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="work-task-delete" style="display:none;">Delete</button>
+        <button class="pill-btn secondary" id="work-task-cancel">Cancel</button>
+        <button class="pill-btn" id="work-task-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="work-group-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="work-group-modal-title">New group</h3>
+        <button id="work-group-close" class="modal-close">✕</button>
+      </div>
+      <input type="text" id="work-group-name" maxlength="60" placeholder="e.g. Freelance" autocomplete="off">
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="work-group-cancel">Cancel</button>
+        <button class="pill-btn" id="work-group-save">Save</button>
+      </div>
+    </div>
+  </div>
+
   <div id="home-reset-modal" class="modal-overlay">
     <div class="modal-box home-reset-box">
       <div class="modal-header" style="padding-top:26px;">
@@ -1159,6 +1301,7 @@
   <script src="/converter.js"></script>
   <script src="/jelly.js"></script>
   <script src="/app.js"></script>
+  <script src="/work.js"></script>
   <script src="/enter-confirm.js"></script>
 </body>
 </html>

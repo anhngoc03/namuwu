@@ -57,6 +57,7 @@ const ACCOUNT_ACTIONS_ = ['getAccountsData', 'addAccountRow', 'updateAccountRow'
 function isPersonalAction_(action) {
   if (ACCOUNT_ACTIONS_.indexOf(action) !== -1) return true;
   // Mọi action Expense đều cần token, trừ ô tóm tắt "Today's spending" ở Home (giữ công khai theo yêu cầu).
+  if (/Work/.test(action)) return action !== 'getWorkHomeSummary';   // Home chỉ được xem con số
   return /Expense/.test(action) && action !== 'getExpenseTodayTotal';
 }
 
@@ -985,8 +986,170 @@ async function getExpenseTodayTotal(env) {
  *  API ROUTER
  * ============================================================ */
 
+/* ============================================================
+ *  WORK (Personal) — bảng work_groups + work_tasks (xem supabase/work.sql)
+ * ============================================================ */
+const WORK_STATUSES_ = ['todo', 'doing', 'paused', 'done'];
+const WORK_PRIORITIES_ = ['low', 'medium', 'high'];
+const WORK_REPEATS_ = ['daily', 'weekly', 'monthly'];
+
+function workTaskOut_(r) {
+  return {
+    id: r.id, title: r.title || '', groupId: r.group_id, status: r.status, priority: r.priority,
+    due: r.due_date || '', note: r.note || '', fee: r.fee === null || r.fee === undefined ? null : Number(r.fee),
+    repeat: r.repeat_every || '', subtasks: Array.isArray(r.subtasks) ? r.subtasks : [],
+    timeSpent: Number(r.time_spent) || 0, timerStartedAt: r.timer_started_at || null,
+    doneAt: r.done_at || null, createdAt: r.created_at
+  };
+}
+async function getWorkData(env) {
+  const groups = await sb(env, 'work_groups?select=id,name&order=name.asc');
+  const tasks = await sb(env, 'work_tasks?select=*&order=id.desc&limit=5000');
+  return { groups: groups, tasks: tasks.map(workTaskOut_), today: expenseTodayStr_(), now: new Date().toISOString() };
+}
+// Only the fields a person can edit, cleaned up.
+function workTaskIn_(t) {
+  t = t || {};
+  const title = String(t.title || '').trim().slice(0, 200);
+  if (!title) throw new Error('Task needs a title');
+  const subs = Array.isArray(t.subtasks) ? t.subtasks.slice(0, 50).map(function (x) {
+    return { text: String((x && x.text) || '').trim().slice(0, 200), done: !!(x && x.done) };
+  }).filter(function (x) { return x.text; }) : [];
+  const fee = t.fee === '' || t.fee === null || t.fee === undefined ? null : Number(t.fee);
+  return {
+    title: title,
+    group_id: t.groupId ? Number(t.groupId) : null,
+    status: WORK_STATUSES_.indexOf(t.status) !== -1 ? t.status : 'todo',
+    priority: WORK_PRIORITIES_.indexOf(t.priority) !== -1 ? t.priority : 'medium',
+    due_date: /^\d{4}-\d{2}-\d{2}$/.test(t.due || '') ? t.due : null,
+    note: String(t.note || '').slice(0, 4000),
+    fee: isFinite(fee) ? fee : null,
+    repeat_every: WORK_REPEATS_.indexOf(t.repeat) !== -1 ? t.repeat : null,
+    subtasks: subs
+  };
+}
+function workNextDue_(due, every) {
+  const d = new Date((due || expenseTodayStr_()) + 'T00:00:00Z');
+  if (every === 'daily') d.setUTCDate(d.getUTCDate() + 1);
+  else if (every === 'weekly') d.setUTCDate(d.getUTCDate() + 7);
+  else d.setUTCMonth(d.getUTCMonth() + 1);
+  return d.toISOString().slice(0, 10);
+}
+// Moving a task into / out of "done": stamp done_at, stop a running timer, and for a
+// repeating task create the next one (same details, next due date, fresh checklist).
+async function workApplyStatus_(env, row, status) {
+  const patch = { status: status };
+  if (status === 'done' && row.status !== 'done') {
+    patch.done_at = new Date().toISOString();
+    if (row.timer_started_at) {
+      patch.time_spent = (Number(row.time_spent) || 0) + Math.max(0, Math.round((Date.now() - Date.parse(row.timer_started_at)) / 1000));
+      patch.timer_started_at = null;
+    }
+    if (row.repeat_every) {
+      await sb(env, 'work_tasks', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify([{
+        title: row.title, group_id: row.group_id, status: 'todo', priority: row.priority,
+        due_date: workNextDue_(row.due_date, row.repeat_every), note: row.note || '', fee: row.fee,
+        repeat_every: row.repeat_every,
+        subtasks: (row.subtasks || []).map(function (x) { return { text: x.text, done: false }; })
+      }]) });
+    }
+  } else if (status !== 'done' && row.status === 'done') {
+    patch.done_at = null;
+  }
+  return patch;
+}
+async function saveWorkTask(env, [task]) {
+  const data = workTaskIn_(task);
+  if (task && task.id) {
+    const cur = await sb(env, 'work_tasks?id=eq.' + Number(task.id) + '&select=*');
+    if (!cur.length) throw new Error('Task not found');
+    Object.assign(data, await workApplyStatus_(env, cur[0], data.status));
+    await sb(env, 'work_tasks?id=eq.' + Number(task.id), { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' });
+  } else {
+    if (data.status === 'done') data.done_at = new Date().toISOString();
+    await sb(env, 'work_tasks', { method: 'POST', body: JSON.stringify([data]), prefer: 'return=minimal' });
+  }
+  return getWorkData(env);
+}
+async function setWorkTaskStatus(env, [id, status]) {
+  if (WORK_STATUSES_.indexOf(status) === -1) throw new Error('Bad status');
+  const cur = await sb(env, 'work_tasks?id=eq.' + Number(id) + '&select=*');
+  if (!cur.length) throw new Error('Task not found');
+  const patch = await workApplyStatus_(env, cur[0], status);
+  await sb(env, 'work_tasks?id=eq.' + Number(id), { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' });
+  return getWorkData(env);
+}
+async function deleteWorkTask(env, [id]) {
+  await sb(env, 'work_tasks?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' });
+  return getWorkData(env);
+}
+// Timer: one running at a time — starting one stops (and banks) any other.
+async function workBankTimers_(env, exceptId) {
+  const running = await sb(env, 'work_tasks?timer_started_at=not.is.null&select=id,time_spent,timer_started_at');
+  for (const r of running) {
+    if (r.id === exceptId) continue;
+    const add = Math.max(0, Math.round((Date.now() - Date.parse(r.timer_started_at)) / 1000));
+    await sb(env, 'work_tasks?id=eq.' + r.id, { method: 'PATCH', prefer: 'return=minimal',
+      body: JSON.stringify({ time_spent: (Number(r.time_spent) || 0) + add, timer_started_at: null }) });
+  }
+}
+async function startWorkTimer(env, [id]) {
+  id = Number(id);
+  await workBankTimers_(env, id);
+  const cur = await sb(env, 'work_tasks?id=eq.' + id + '&select=status,timer_started_at');
+  if (!cur.length) throw new Error('Task not found');
+  const patch = {};
+  if (!cur[0].timer_started_at) patch.timer_started_at = new Date().toISOString();
+  if (cur[0].status === 'todo' || cur[0].status === 'paused') patch.status = 'doing';
+  if (Object.keys(patch).length) await sb(env, 'work_tasks?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' });
+  return getWorkData(env);
+}
+async function stopWorkTimer(env, [id]) {
+  id = Number(id);
+  const cur = await sb(env, 'work_tasks?id=eq.' + id + '&select=time_spent,timer_started_at');
+  if (cur.length && cur[0].timer_started_at) {
+    const add = Math.max(0, Math.round((Date.now() - Date.parse(cur[0].timer_started_at)) / 1000));
+    await sb(env, 'work_tasks?id=eq.' + id, { method: 'PATCH', prefer: 'return=minimal',
+      body: JSON.stringify({ time_spent: (Number(cur[0].time_spent) || 0) + add, timer_started_at: null }) });
+  }
+  return getWorkData(env);
+}
+async function saveWorkGroup(env, [id, name]) {
+  name = String(name || '').trim().slice(0, 60);
+  if (!name) throw new Error('Group needs a name');
+  if (id) await sb(env, 'work_groups?id=eq.' + Number(id), { method: 'PATCH', body: JSON.stringify({ name: name }), prefer: 'return=minimal' });
+  else await sb(env, 'work_groups', { method: 'POST', body: JSON.stringify([{ name: name }]), prefer: 'return=minimal' });
+  return getWorkData(env);
+}
+async function deleteWorkGroup(env, [id]) {
+  await sb(env, 'work_groups?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' });   // tasks keep, group → none
+  return getWorkData(env);
+}
+// Public (Home, before the password): only numbers, never task names.
+async function getWorkHomeSummary(env) {
+  let rows;
+  try { rows = await sb(env, 'work_tasks?status=in.(todo,doing)&select=status,due_date'); }
+  catch (e) { return { ready: false }; }          // tables not created yet
+  const today = expenseTodayStr_();
+  return {
+    ready: true,
+    overdue: rows.filter(function (r) { return r.due_date && r.due_date < today; }).length,
+    doing: rows.filter(function (r) { return r.status === 'doing'; }).length,
+    todo: rows.filter(function (r) { return r.status === 'todo'; }).length
+  };
+}
+
 const ACTIONS = {
   personalLogin,
+  getWorkData,
+  saveWorkTask,
+  setWorkTaskStatus,
+  deleteWorkTask,
+  startWorkTimer,
+  stopWorkTimer,
+  saveWorkGroup,
+  deleteWorkGroup,
+  getWorkHomeSummary,
   getAccountsData,
   addAccountRow,
   updateAccountRow,
