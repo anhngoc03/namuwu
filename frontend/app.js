@@ -236,6 +236,20 @@ function toggleMoneyHidden() {
   applyMoneyHidden_(hidden);
 }
 
+// Replays an entrance animation on `el` (class `cls`, default .anim-in) — for content
+// that swaps in place: tabs, a new month, a saved avatar.
+function animIn(el, cls) {
+  if (!el) return;
+  cls = cls || 'anim-in';
+  el.classList.remove('anim-in', 'anim-from-left', 'anim-from-right', 'anim-pop');
+  void el.offsetWidth;
+  el.classList.add(cls);
+}
+// Rows of a freshly rendered list come in one after another.
+function staggerIn(rows) {
+  Array.prototype.forEach.call(rows, function (r, i) { r.style.setProperty('--i', Math.min(i, 12)); });
+}
+
 // Empty screens: every <span class="empty-icon"> that shows up (they're rendered
 // all over app.js) gets the little jumping cat (images/cat.gif) — butterflies in dark mode.
 function jellyfy_(root) {
@@ -3356,6 +3370,10 @@ function saveProfile() {
       profileCache_(p.name, p.photo);
       document.getElementById('profile-modal').classList.remove('active');
       renderHomeGreeting();
+      var av = document.getElementById('home-avatar-btn');
+      animIn(av, 'anim-pop');
+      var r = av.getBoundingClientRect();
+      confetti(r.left + r.width / 2, r.top + r.height / 2, 24);
       toast('Saved!');
     })
     .withFailureHandler(function (err) { hideLoading(); toast('Error: ' + err.message); })

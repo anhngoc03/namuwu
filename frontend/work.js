@@ -180,7 +180,10 @@ function workRenderAll() {
 function workSetTab(tab) {
   workTab = tab;
   document.querySelectorAll('.work-tab').forEach(function (b) { b.classList.toggle('active', b.dataset.wtab === tab); });
-  document.querySelectorAll('.work-panel').forEach(function (p) { p.style.display = p.dataset.wpanel === tab ? '' : 'none'; });
+  document.querySelectorAll('.work-panel').forEach(function (p) {
+    p.style.display = p.dataset.wpanel === tab ? '' : 'none';
+    if (p.dataset.wpanel === tab) animIn(p);
+  });
   // Board shows every status as a column → its status filter would only hide columns.
   document.getElementById('work-f-status').style.display = tab === 'board' ? 'none' : '';
   workRenderAll();
@@ -254,6 +257,7 @@ function workRenderList() {
   wrap.innerHTML = '';
   if (!tasks.length) { wrap.innerHTML = '<div class="empty-state"><span class="empty-icon">✿</span>No tasks</div>'; return; }
   ordered.concat(done).forEach(function (t) { wrap.appendChild(workTaskRow_(t, false)); });
+  staggerIn(wrap.children);
 }
 
 function workRenderBoard() {
@@ -287,6 +291,7 @@ function workRenderBoard() {
       card.appendChild(nav);
       body.appendChild(card);
     });
+    staggerIn(body.children);
     col.ondragover = function (e) { e.preventDefault(); col.classList.add('drop'); };
     col.ondragleave = function () { col.classList.remove('drop'); };
     col.ondrop = function (e) {
@@ -317,10 +322,14 @@ function workRenderStats() {
     '</div>';
   WORK_STATUS_ORDER.forEach(function (st) {
     html += '<div class="work-stat-row"><span class="work-stat-name">' + WORK_STATUS_LABEL[st] + '</span>' +
-      '<div class="work-stat-bar"><div class="work-stat-fill st-' + st + '" style="width:' + pct(by[st], n) + '%"></div></div>' +
+      '<div class="work-stat-bar"><div class="work-stat-fill st-' + st + '" style="width:0" data-w="' + pct(by[st], n) + '"></div></div>' +
       '<span class="work-stat-num">' + by[st] + '</span></div>';
   });
   box.innerHTML = html;
+  // bars grow from 0 to their value
+  requestAnimationFrame(function () { requestAnimationFrame(function () {
+    box.querySelectorAll('.work-stat-fill').forEach(function (f) { f.style.width = f.dataset.w + '%'; });
+  }); });
 }
 
 function workRenderGroups() {
@@ -404,8 +413,12 @@ function workRenderSubs_() {
     var row = document.createElement('div');
     row.className = 'work-sub' + (x.done ? ' done' : '');
     row.innerHTML = '<span class="work-sub-check"></span><span class="work-sub-text">' + icdEscape(x.text) + '</span><button type="button" class="work-sub-del">✕</button>';
-    row.querySelector('.work-sub-check').onclick = function () { x.done = !x.done; workRenderSubs_(); };
-    row.querySelector('.work-sub-text').onclick = function () { x.done = !x.done; workRenderSubs_(); };
+    var tick = function () {
+      x.done = !x.done; workRenderSubs_();
+      if (x.done) animIn(document.querySelectorAll('#work-t-subs .work-sub-check')[i], 'anim-pop');
+    };
+    row.querySelector('.work-sub-check').onclick = tick;
+    row.querySelector('.work-sub-text').onclick = tick;
     row.querySelector('.work-sub-del').onclick = function () { workDraftSubs_.splice(i, 1); workRenderSubs_(); };
     box.appendChild(row);
   });

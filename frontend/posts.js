@@ -84,6 +84,7 @@ function postsRender() {
   else if (postsTab === 'drafts') postsRenderList_(body, mine.filter(function (p) { return p.status === 'draft'; }).sort(function (a, b) { return a.id - b.id; }), 'No drafts');
   else postsRenderList_(body, mine.filter(function (p) { return p.status === 'posted'; })
     .sort(function (a, b) { return String(b.postedAt || '').localeCompare(String(a.postedAt || '')); }).slice(0, 100), 'Nothing posted yet');
+  staggerIn(body.children);
 }
 
 function postsRow_(p, timeLabel) {
@@ -254,7 +255,7 @@ function postsSaveSlots() {
 /* ---------- wiring ---------- */
 document.addEventListener('DOMContentLoaded', function () {
   document.querySelectorAll('.posts-subtab').forEach(function (b) {
-    b.onclick = function () { postsTab = b.dataset.ptab; postsRender(); };
+    b.onclick = function () { postsTab = b.dataset.ptab; postsRender(); animIn(document.getElementById('posts-body')); };
   });
   document.getElementById('posts-add-btn').onclick = function () { postsOpen(null); };
   document.getElementById('posts-auto-btn').onclick = function () {

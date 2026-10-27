@@ -11,6 +11,7 @@ var calYear = 0, calMonth = 0;              // month being shown (0–11)
 var calSheetDay = '';
 var calEditingId = null, calEditingNote = null;
 var calKind = 'important', calRepeat = '';
+var calListOpen = false;                     // the notes list on top starts folded
 var CAL_KIND_LABEL = { important: 'Important', him: 'Him', work: 'Work', off: 'Day off', remind: 'Reminder', other: 'Other' };
 var CAL_REPEAT_LABEL = { monthly: 'every month', yearly: 'every year' };
 var CAL_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -36,9 +37,17 @@ function calFail_(err) {
   else if (/repeat|kind_check|23514|PGRST204/.test(msg)) toast('Run supabase/calendar_more.sql in Supabase first (Him + repeat)');
   else toast('Error: ' + msg);
 }
-function calApply(d) {
+function calApply(d, popDay) {
   calData = d;
   calRender();
+  if (popDay) {                              // the day just written on: its cell pops + a few stars
+    var cell = document.querySelector('.cal-cell[data-day="' + popDay + '"]');
+    if (cell) {
+      animIn(cell, 'anim-pop');
+      var r = cell.getBoundingClientRect();
+      confetti(r.left + r.width / 2, r.top + r.height / 2, 24);
+    }
+  }
   if (calSheetDay && document.getElementById('cal-day-modal').classList.contains('active')) calRenderSheetNotes_();
 }
 
@@ -78,6 +87,7 @@ function calRender() {
     row.onclick = function () { calOpenDay(n.day, n); };
     list.appendChild(row);
   });
+  staggerIn(list.children);
 
   // month grid (Monday first)
   document.getElementById('cal-month-label').textContent = CAL_MONTHS[calMonth] + ' ' + calYear;
@@ -93,6 +103,7 @@ function calRender() {
     var cell = document.createElement('button');
     cell.type = 'button';
     cell.className = 'cal-cell' + (ds === calData.today ? ' today' : '') + (notes.length ? ' has' : '');
+    cell.dataset.day = ds;
     var kinds = [];
     notes.forEach(function (n) { if (kinds.indexOf(n.kind) === -1) kinds.push(n.kind); });
     cell.innerHTML = '<span class="cal-num">' + d + '</span><span class="cal-dots">' +
@@ -106,6 +117,15 @@ function calShiftMonth(n) {
   if (m < 0) { m = 11; y--; } else if (m > 11) { m = 0; y++; }
   calMonth = m;
   if (y !== calYear) { calYear = y; calLoad(y); } else calRender();
+  animIn(document.getElementById('cal-grid'), n > 0 ? 'anim-from-right' : 'anim-from-left');
+  animIn(document.getElementById('cal-month-label'));
+}
+function calToggleList_() {
+  calListOpen = !calListOpen;
+  document.getElementById('cal-list-wrap').classList.toggle('open', calListOpen);
+  var t = document.getElementById('cal-list-toggle');
+  t.classList.toggle('open', calListOpen);
+  t.setAttribute('aria-expanded', calListOpen ? 'true' : 'false');
 }
 
 /* ---------- day sheet ---------- */
@@ -129,6 +149,7 @@ function calRenderSheetNotes_() {
     bs[0].onclick = function () { calEditNote_(n); calRenderSheetNotes_(); };
     bs[1].onclick = function () {
       expenseConfirm(n.repeat ? 'Delete this note (' + CAL_REPEAT_LABEL[n.repeat] + ', all dates)?' : 'Delete this note?', function () {
+        row.classList.add('leaving');
         showLoading();
         if (calEditingId === n.id) calEditNote_(null);
         google.script.run.withSuccessHandler(function (d) { hideLoading(); calApply(d); }).withFailureHandler(calFail_)
@@ -137,6 +158,7 @@ function calRenderSheetNotes_() {
     };
     box.appendChild(row);
   });
+  staggerIn(box.children);
 }
 function calEditNote_(n) {
   calEditingId = n ? n.id : null;
@@ -160,10 +182,11 @@ function calSave() {
   // editing a repeating note keeps its first day; the year being viewed comes back
   var payload = { id: calEditingId, day: was ? was.start : calSheetDay, kind: calKind, note: note,
     repeat: calRepeat, wasRepeat: !!(was && was.repeat), year: calData.year };
+  var popDay = calSheetDay;
   calCloseSheet_();
   showLoading();
   google.script.run
-    .withSuccessHandler(function (d) { hideLoading(); calApply(d); })
+    .withSuccessHandler(function (d) { hideLoading(); calApply(d, popDay); })
     .withFailureHandler(calFail_)
     .saveCalendarNote(payload);
 }
@@ -172,11 +195,12 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('cal-prev').onclick = function () { calShiftMonth(-1); };
   document.getElementById('cal-next').onclick = function () { calShiftMonth(1); };
   document.querySelectorAll('#cal-kinds button').forEach(function (b) {
-    b.onclick = function () { calKind = b.dataset.k; calRenderKinds_(); };
+    b.onclick = function () { calKind = b.dataset.k; calRenderKinds_(); animIn(b, 'anim-pop'); };
   });
   document.querySelectorAll('#cal-repeat button').forEach(function (b) {
-    b.onclick = function () { calRepeat = b.dataset.r; calRenderKinds_(); };
+    b.onclick = function () { calRepeat = b.dataset.r; calRenderKinds_(); animIn(b, 'anim-pop'); };
   });
+  document.getElementById('cal-list-head').onclick = calToggleList_;
   document.getElementById('cal-day-close').onclick = calCloseSheet_;
   document.getElementById('cal-cancel').onclick = calCloseSheet_;
   document.getElementById('cal-save').onclick = calSave;

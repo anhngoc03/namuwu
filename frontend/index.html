@@ -347,8 +347,11 @@
       <div id="calendar-view" class="app-view" style="display:none;">
         <h2 class="page-title">Calendar</h2>
         <div class="work-card cal-list-card">
-          <div class="cal-list-title"><span id="cal-list-title">Notes</span><span class="cal-list-count" id="cal-list-count"></span></div>
-          <div id="cal-list"></div>
+          <div class="cal-list-title" id="cal-list-head">
+            <span id="cal-list-title">Notes</span><span class="cal-list-count" id="cal-list-count"></span>
+            <button type="button" class="expense-collapse-toggle" id="cal-list-toggle" aria-expanded="false" aria-label="Show / hide notes"></button>
+          </div>
+          <div class="expense-collapse" id="cal-list-wrap"><div class="expense-collapse-inner"><div id="cal-list"></div></div></div>
         </div>
         <div class="work-card cal-month-card">
           <div class="cal-month-head">
