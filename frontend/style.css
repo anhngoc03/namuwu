@@ -1646,19 +1646,13 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
 }
 
 /* ============================================================
-   CUTE TOUCHES — star bursts, the jellyfish on empty screens,
+   CUTE TOUCHES — star bursts, the cat on empty screens,
    and small motion everywhere
    ============================================================ */
-/* Mascot: every empty-state's ✿ icon becomes the painted jellyfish, warped live by
-   jelly.js (WebGL): bell pulses and swims, the beat and slow waves run down the tentacles. */
-.empty-state .empty-icon{ display:block; width:117px; height:120px; margin:0 auto 8px; font-size:0; color:transparent; }
-#home-todo-list .empty-state .empty-icon{ width:156px; height:160px; }
-.jelly-canvas{ display:block; width:100%; height:100%; }
-
-@keyframes mascotBob{
-  0%,100%{ transform:translateY(0) rotate(-3deg); }
-  50%    { transform:translateY(-6px) rotate(3deg); }
-}
+/* Mascot: every empty-state's ✿ icon becomes the pixel cat GIF (app.js). */
+.empty-state .empty-icon{ display:block; width:140px; margin:0 auto 8px; font-size:0; color:transparent; }
+#home-todo-list .empty-state .empty-icon{ width:180px; }
+.empty-cat{ display:block; width:100%; height:auto; image-rendering:pixelated; }
 
 /* small motion: rows/tiles ease in, tiles lift, toasts pop */
 .expense-history-row, .expense-day-row, .expense-category-row, .expense-wallet-row, .expense-budget-cat-card{
@@ -1674,10 +1668,9 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
   transition:width .7s cubic-bezier(.22,.9,.3,1);
 }
 
-/* jellyfish next to "TO DO LIST" while the list has items (the big one shows when it's empty) */
+/* little tomato next to "TO DO LIST" while the list has items (the cat shows when it's empty) */
 .home-todo-titlewrap{ display:flex; align-items:center; gap:8px; }
-.jelly{ display:inline-block; background:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 76'><defs><linearGradient id='b' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='%23bfe6ff'/><stop offset='1' stop-color='%237cc2f7'/></linearGradient></defs><g stroke='%235aa7ea' stroke-width='2.4' stroke-linecap='round' fill='none'><path d='M19 35c-3 7 3 12 0 19s2 11 0 16'><animateTransform attributeName='transform' type='rotate' values='-7 19 35;7 19 35;-7 19 35' dur='2.4s' repeatCount='indefinite'/></path><path d='M28 36c-2 7 3 11 0 18s2 10 0 14'><animateTransform attributeName='transform' type='rotate' values='6 28 36;-6 28 36;6 28 36' dur='2.1s' repeatCount='indefinite'/></path><path d='M36 36c2 7-3 11 0 18s-2 10 0 14'><animateTransform attributeName='transform' type='rotate' values='-6 36 36;6 36 36;-6 36 36' dur='2.3s' repeatCount='indefinite'/></path><path d='M45 35c3 7-3 12 0 19s-2 11 0 16'><animateTransform attributeName='transform' type='rotate' values='7 45 35;-7 45 35;7 45 35' dur='2.5s' repeatCount='indefinite'/></path></g><path d='M8 32C8 15 19 6 32 6s24 9 24 26c0 4-4 5-8 3-4 3-8 3-12 1-4 2-8 2-12 0-4 2-8 1-10-2-2 2-6 1-6-2z' fill='url(%23b)' stroke='%235aa7ea' stroke-width='2.4' stroke-linejoin='round'/><ellipse cx='21' cy='16' rx='5' ry='3' fill='%23fff' opacity='.6' transform='rotate(-25 21 16)'/><circle cx='25' cy='24' r='2.4' fill='%233d4a63'/><circle cx='39' cy='24' r='2.4' fill='%233d4a63'/><path d='M29 28q3 3 6 0' fill='none' stroke='%233d4a63' stroke-width='2' stroke-linecap='round'/><ellipse cx='20' cy='28' rx='3.2' ry='2' fill='%23ff9bb0' opacity='.6'/><ellipse cx='44' cy='28' rx='3.2' ry='2' fill='%23ff9bb0' opacity='.6'/></svg>") center/contain no-repeat; }
-.jelly-mini{ width:26px; height:31px; animation:mascotBob 2.6s ease-in-out infinite; }
+.tomato-mini{ width:30px; height:auto; flex:none; image-rendering:pixelated; }
 
 /* Home avatar: tap to change photo + name */
 .home-greeting-avatar{ position:relative; flex:none; padding:0; border:none; background:none; cursor:pointer; border-radius:50%; }
@@ -1687,25 +1680,23 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
   display:flex; align-items:center; justify-content:center; font-size:11px;
   background:var(--pink-deep); color:#fff; box-shadow:var(--shadow-sm);
 }
-.jelly-avatar{
-  display:block; background:var(--tint-mint) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 76'><defs><linearGradient id='b' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='%23bfe6ff'/><stop offset='1' stop-color='%237cc2f7'/></linearGradient></defs><g stroke='%235aa7ea' stroke-width='2.4' stroke-linecap='round' fill='none'><path d='M19 35c-3 7 3 12 0 19s2 11 0 16'><animateTransform attributeName='transform' type='rotate' values='-7 19 35;7 19 35;-7 19 35' dur='2.4s' repeatCount='indefinite'/></path><path d='M28 36c-2 7 3 11 0 18s2 10 0 14'><animateTransform attributeName='transform' type='rotate' values='6 28 36;-6 28 36;6 28 36' dur='2.1s' repeatCount='indefinite'/></path><path d='M36 36c2 7-3 11 0 18s-2 10 0 14'><animateTransform attributeName='transform' type='rotate' values='-6 36 36;6 36 36;-6 36 36' dur='2.3s' repeatCount='indefinite'/></path><path d='M45 35c3 7-3 12 0 19s-2 11 0 16'><animateTransform attributeName='transform' type='rotate' values='7 45 35;-7 45 35;7 45 35' dur='2.5s' repeatCount='indefinite'/></path></g><path d='M8 32C8 15 19 6 32 6s24 9 24 26c0 4-4 5-8 3-4 3-8 3-12 1-4 2-8 2-12 0-4 2-8 1-10-2-2 2-6 1-6-2z' fill='url(%23b)' stroke='%235aa7ea' stroke-width='2.4' stroke-linejoin='round'/><ellipse cx='21' cy='16' rx='5' ry='3' fill='%23fff' opacity='.6' transform='rotate(-25 21 16)'/><circle cx='25' cy='24' r='2.4' fill='%233d4a63'/><circle cx='39' cy='24' r='2.4' fill='%233d4a63'/><path d='M29 28q3 3 6 0' fill='none' stroke='%233d4a63' stroke-width='2' stroke-linecap='round'/><ellipse cx='20' cy='28' rx='3.2' ry='2' fill='%23ff9bb0' opacity='.6'/><ellipse cx='44' cy='28' rx='3.2' ry='2' fill='%23ff9bb0' opacity='.6'/></svg>") center 60%/62% no-repeat;
-}
+.tomato-avatar{ display:block; background:var(--tint-pink) url("/images/tomato.gif") center 65%/72% auto no-repeat; image-rendering:pixelated; }
 .home-greeting-img[hidden], .profile-photo-preview img[hidden]{ display:none; }
 .profile-photo-row{ display:flex; align-items:center; gap:16px; margin:6px 0 4px; }
 .profile-photo-preview{ width:84px; height:84px; flex:none; border-radius:50%; overflow:hidden; box-shadow:var(--shadow-card); border:3px solid var(--surface); }
-.profile-photo-preview img, .profile-photo-preview .jelly-avatar{ width:100%; height:100%; object-fit:cover; }
+.profile-photo-preview img, .profile-photo-preview .tomato-avatar{ width:100%; height:100%; object-fit:cover; }
 .profile-photo-actions{ display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
 .profile-pick-btn{ display:inline-block; padding:10px 18px; font-size:14px; }
 .profile-remove-link{ background:none; border:none; box-shadow:none; padding:2px 0; font-family:inherit; font-size:13px; font-weight:700; color:var(--exp-muted); cursor:pointer; }
 .profile-remove-link:hover{ transform:none; color:#d1566e; }
-.jelly-avatar[hidden]{ display:none; }
+.tomato-avatar[hidden]{ display:none; }
 .home-todo-header{ flex-wrap:nowrap; }
 .home-todo-titlewrap{ min-width:0; }
 @media (max-width:430px){
   .home-todo-title{ font-size:17px; letter-spacing:1px; white-space:nowrap; }
   .home-todo-toolbar{ gap:8px; }
   .home-todo-toolbar .pill-btn{ padding:9px 14px; font-size:14px; }
-  .jelly-mini{ width:22px; height:26px; }
+  .tomato-mini{ width:26px; }
 }
 
 /* ============================================================

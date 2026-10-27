@@ -59,6 +59,7 @@ function isPersonalAction_(action) {
   // Mọi action Expense đều cần token, trừ ô tóm tắt "Today's spending" ở Home (giữ công khai theo yêu cầu).
   if (/Work/.test(action)) return action !== 'getWorkHomeSummary';   // Home chỉ được xem con số
   if (/Post|Calendar/.test(action)) return true;
+  if (action === 'saveHomeProfile') return true;        // anyone sees the Home photo/name, only you change it
   return /Expense/.test(action) && action !== 'getExpenseTodayTotal';
 }
 
@@ -1283,8 +1284,28 @@ async function deleteCalendarNote(env, [id, year]) {
   return getCalendarNotes(env, [year]);
 }
 
+/* ---- Home profile (photo + name) — one copy for every device, in app_settings ---- */
+async function getHomeProfile(env) {
+  let rows;
+  try { rows = await sb(env, 'app_settings?key=eq.profile&select=value'); }
+  catch (e) { return { set: false, name: '', photo: '' }; }          // table not created yet
+  if (!rows.length) return { set: false, name: '', photo: '' };
+  const v = rows[0].value || {};
+  return { set: true, name: v.name || '', photo: v.photo || '' };
+}
+async function saveHomeProfile(env, [name, photo]) {
+  name = String(name || '').trim().slice(0, 24);
+  photo = String(photo || '');
+  if (photo && (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(photo) || photo.length > 300000)) throw new Error('Bad photo');
+  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'profile', value: { name: name, photo: photo } }]),
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' } });
+  return getHomeProfile(env);
+}
+
 const ACTIONS = {
   personalLogin,
+  getHomeProfile,
+  saveHomeProfile,
   getPostsData,
   savePost,
   deletePost,

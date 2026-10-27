@@ -236,13 +236,12 @@ function toggleMoneyHidden() {
   applyMoneyHidden_(hidden);
 }
 
-// Jellyfish for empty screens: every <span class="empty-icon"> that shows up
-// (they're rendered all over app.js) gets a canvas that jelly.js animates.
+// Empty screens: every <span class="empty-icon"> that shows up (they're rendered
+// all over app.js) gets the little jumping cat (images/cat.gif).
 function jellyfy_(root) {
   (root.querySelectorAll ? root.querySelectorAll('.empty-icon:not([data-jelly])') : []).forEach(function (el) {
     el.setAttribute('data-jelly', '1');
-    el.innerHTML = '<canvas class="jelly-canvas" aria-hidden="true"></canvas>';
-    if (window.JellySim) JellySim.attach(el.firstChild);
+    el.innerHTML = '<img src="/images/cat.gif" alt="" class="empty-cat" draggable="false">';
   });
 }
 new MutationObserver(function (muts) {
@@ -647,6 +646,7 @@ function openPersonalGate(afterFn) {
           personalUnlocked = true;
           window.__personalToken = r.token;
           personalLastActive_ = Date.now();
+          profileUploadIfNeeded_();
           accPad.showSuccess('Login successful (๑ᵔ⌔ᵔ๑)');
           setTimeout(function () {
             document.getElementById('accounts-modal').classList.remove('active');
@@ -3149,7 +3149,7 @@ function expenseWireEvents() {
   document.getElementById('open-expense').onclick = function () { requirePersonal(openExpense); };
   document.getElementById('home-expense-widget').onclick = expenseOpenFromHomeWidget;
   document.getElementById('home-yakult-tile').onclick = openEating;
-  document.getElementById('home-avatar-btn').onclick = openProfileModal;
+  document.getElementById('home-avatar-btn').onclick = function () { requirePersonal(openProfileModal); };
   document.getElementById('profile-close').onclick = function () { document.getElementById('profile-modal').classList.remove('active'); };
   document.getElementById('profile-cancel').onclick = function () { document.getElementById('profile-modal').classList.remove('active'); };
   document.getElementById('profile-save').onclick = saveProfile;
@@ -3260,11 +3260,40 @@ function renderHomeGreeting() {
   document.getElementById('home-greeting-title').textContent = hello + (name ? ', ' + name : '') + ' ✿';
   document.getElementById('home-greeting-sub').textContent = yymmdd + ' · My deadline isn\'t done, but I\'m sure done';
   renderProfileAvatar_();
+  profileLoad_();
 }
 
 /* ---- Profile: photo + name, chosen from the popup that opens when the avatar
-   is tapped. Saved on this device (localStorage); the photo is cropped to a
-   square and shrunk to 256px so it stays small. No photo → a jellyfish. ---- */
+   is tapped (Personal password first). Saved on the server, so every device
+   shows the same; this device keeps a copy for a fast first paint. The photo is
+   cropped to a square and shrunk to 256px. No photo → the tomato. ---- */
+var profileLoaded_ = false;
+function profileLoad_() {
+  if (profileLoaded_) return;
+  profileLoaded_ = true;
+  google.script.run
+    .withSuccessHandler(function (p) {
+      if (p && p.set) { profileCache_(p.name, p.photo); renderHomeGreeting(); }
+      // never saved on the server yet but set on this device → upload it once unlocked
+      else if (p && !p.set && (profileGet_().name || profileGet_().photo)) profileNeedsUpload_ = true;
+    })
+    .withFailureHandler(function () { profileLoaded_ = false; })
+    .getHomeProfile();
+}
+var profileNeedsUpload_ = false;
+function profileUploadIfNeeded_() {
+  if (!profileNeedsUpload_ || !personalUnlocked) return;
+  profileNeedsUpload_ = false;
+  var p = profileGet_();
+  google.script.run.withSuccessHandler(function () {}).withFailureHandler(function () { profileNeedsUpload_ = true; })
+    .saveHomeProfile(p.name, p.photo);
+}
+function profileCache_(name, photo) {
+  try {
+    localStorage.setItem('henlo_profile_name', name || '');
+    if (photo) localStorage.setItem('henlo_profile_photo', photo); else localStorage.removeItem('henlo_profile_photo');
+  } catch (e) {}
+}
 function profileGet_() {
   var p = { name: '', photo: '' };
   try {
@@ -3317,14 +3346,19 @@ function profilePickPhoto_(file) {
 }
 function saveProfile() {
   var name = document.getElementById('profile-name-input').value.trim();
-  try {
-    localStorage.setItem('henlo_profile_name', name);
-    if (profileDraftPhoto_) localStorage.setItem('henlo_profile_photo', profileDraftPhoto_);
-    else localStorage.removeItem('henlo_profile_photo');
-  } catch (e) { toast("Couldn't save on this device"); return; }
-  document.getElementById('profile-modal').classList.remove('active');
-  renderHomeGreeting();
-  toast('Saved!');
+  var photo = profileDraftPhoto_;
+  showLoading();
+  google.script.run
+    .withSuccessHandler(function (p) {
+      hideLoading();
+      profileNeedsUpload_ = false;
+      profileCache_(p.name, p.photo);
+      document.getElementById('profile-modal').classList.remove('active');
+      renderHomeGreeting();
+      toast('Saved!');
+    })
+    .withFailureHandler(function (err) { hideLoading(); toast('Error: ' + err.message); })
+    .saveHomeProfile(name, photo);
 }
 
 // Days in a row with a Yakult, counting back from today (today not ticked yet
@@ -3500,7 +3534,7 @@ function renderHomeList() {
   container.innerHTML = '';
   renderHomeTodoTile_();
 
-  // Jellyfish: big in the middle when the list is empty, small next to the title otherwise.
+  // Empty list → the cat in the middle; otherwise a little tomato next to the title.
   document.getElementById('home-todo-jelly').style.display = homeData.length === 0 ? 'none' : '';
   if (homeData.length === 0) {
     container.innerHTML = '<div class="empty-state"><span class="empty-icon">✿</span>Chưa có việc nào cả, thêm mới thôi!</div>';
