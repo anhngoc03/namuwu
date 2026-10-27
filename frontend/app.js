@@ -237,11 +237,12 @@ function toggleMoneyHidden() {
 }
 
 // Empty screens: every <span class="empty-icon"> that shows up (they're rendered
-// all over app.js) gets the little jumping cat (images/cat.gif).
+// all over app.js) gets the little jumping cat (images/cat.gif) — butterflies in dark mode.
 function jellyfy_(root) {
   (root.querySelectorAll ? root.querySelectorAll('.empty-icon:not([data-jelly])') : []).forEach(function (el) {
     el.setAttribute('data-jelly', '1');
-    el.innerHTML = '<img src="/images/cat.gif" alt="" class="empty-cat" draggable="false">';
+    el.innerHTML = '<img src="/images/cat.gif" alt="" class="empty-cat light-only" draggable="false">' +
+      '<img src="/images/butterfly.gif" alt="" class="empty-cat dark-only" draggable="false">';
   });
 }
 new MutationObserver(function (muts) {

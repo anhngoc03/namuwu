@@ -1264,20 +1264,47 @@ async function autoSchedulePosts(env, [groupId]) {
 /* ============================================================
  *  CALENDAR (Personal) — ghi chú / đánh dấu theo ngày, nhiều ghi chú mỗi ngày
  * ============================================================ */
-const CAL_KINDS_ = ['important', 'work', 'off', 'remind', 'other'];
+const CAL_KINDS_ = ['important', 'him', 'work', 'off', 'remind', 'other'];
+const CAL_REPEATS_ = ['', 'monthly', 'yearly'];
+// Repeating notes are stored once (on their first day); here they're expanded into
+// every occurrence inside the year (day 31 / 29-Feb fall back to the month's last day).
 async function getCalendarNotes(env, [year]) {
   year = /^\d{4}$/.test(String(year)) ? String(year) : vnNow_().date.slice(0, 4);
-  const rows = await sb(env, 'calendar_notes?day=gte.' + year + '-01-01&day=lte.' + year + '-12-31&select=id,day,kind,note&order=day.asc');
-  return { year: Number(year), today: vnNow_().date, notes: rows.map(function (r) { return { id: r.id, day: r.day, kind: r.kind, note: r.note || '' }; }) };
+  const y = Number(year), end = year + '-12-31';
+  let rows;
+  try {
+    rows = await sb(env, 'calendar_notes?select=id,day,kind,note,repeat&order=day.asc,id.asc&day=lte.' + end +
+      '&or=(day.gte.' + year + '-01-01,repeat.in.(monthly,yearly))');
+  } catch (e) {
+    if (!/repeat/.test(String(e && e.message))) throw e;   // calendar_more.sql not run yet
+    rows = await sb(env, 'calendar_notes?day=gte.' + year + '-01-01&day=lte.' + end + '&select=id,day,kind,note&order=day.asc');
+  }
+  const pad = function (n) { return String(n).padStart(2, '0'); };
+  const lastDay = function (m) { return new Date(Date.UTC(y, m, 0)).getUTCDate(); };
+  const notes = [];
+  rows.forEach(function (r) {
+    const base = { id: r.id, start: r.day, kind: r.kind, note: r.note || '', repeat: r.repeat || '' };
+    const d = Number(r.day.slice(8, 10)), mon = Number(r.day.slice(5, 7));
+    let days = [];
+    if (base.repeat === 'yearly') days = [year + '-' + pad(mon) + '-' + pad(Math.min(d, lastDay(mon)))];
+    else if (base.repeat === 'monthly') for (let m = 1; m <= 12; m++) days.push(year + '-' + pad(m) + '-' + pad(Math.min(d, lastDay(m))));
+    else days = [r.day];
+    days.forEach(function (day) { if (day >= r.day) notes.push(Object.assign({ day: day }, base)); });
+  });
+  notes.sort(function (a, b) { return a.day < b.day ? -1 : a.day > b.day ? 1 : a.id - b.id; });
+  return { year: y, today: vnNow_().date, notes: notes };
 }
 async function saveCalendarNote(env, [n]) {
   n = n || {};
   if (!/^\d{4}-\d{2}-\d{2}$/.test(n.day || '')) throw new Error('Bad date');
   const row = { day: n.day, kind: CAL_KINDS_.indexOf(n.kind) !== -1 ? n.kind : 'other', note: String(n.note || '').trim().slice(0, 2000) };
   if (!row.note) throw new Error('Write a note');
+  // only send "repeat" when it's (or was) used, so plain notes still save before calendar_more.sql is run
+  const repeat = CAL_REPEATS_.indexOf(n.repeat) !== -1 ? n.repeat : '';
+  if (repeat || n.wasRepeat) row.repeat = repeat;
   if (n.id) await sb(env, 'calendar_notes?id=eq.' + Number(n.id), { method: 'PATCH', body: JSON.stringify(row), prefer: 'return=minimal' });
   else await sb(env, 'calendar_notes', { method: 'POST', body: JSON.stringify([row]), prefer: 'return=minimal' });
-  return getCalendarNotes(env, [n.day.slice(0, 4)]);
+  return getCalendarNotes(env, [n.year || n.day.slice(0, 4)]);
 }
 async function deleteCalendarNote(env, [id, year]) {
   await sb(env, 'calendar_notes?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' });

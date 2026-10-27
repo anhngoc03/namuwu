@@ -1653,6 +1653,13 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
 .empty-state .empty-icon{ display:block; width:140px; margin:0 auto 8px; font-size:0; color:transparent; }
 #home-todo-list .empty-state .empty-icon{ width:180px; }
 .empty-cat{ display:block; width:100%; height:auto; image-rendering:pixelated; }
+.empty-cat.dark-only{ display:none; }
+:root[data-theme="dark"] .empty-cat.light-only{ display:none; }
+:root[data-theme="dark"] .empty-cat.dark-only{ display:block; }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .empty-cat.light-only{ display:none; }
+  :root:not([data-theme="light"]) .empty-cat.dark-only{ display:block; }
+}
 
 /* small motion: rows/tiles ease in, tiles lift, toasts pop */
 .expense-history-row, .expense-day-row, .expense-category-row, .expense-wallet-row, .expense-budget-cat-card{
@@ -1985,6 +1992,9 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
 .cal-dot{ flex:none; display:inline-block; width:12px; height:12px; border-radius:50%; background:#8f7fe0; }
 .cal-dot.k-important{ background:#e06b86; } .cal-dot.k-work{ background:#5d9fe6; } .cal-dot.k-off{ background:#4fb08a; }
 .cal-dot.k-remind{ background:#dcae3f; } .cal-dot.k-other{ background:#8f7fe0; }
+/* "Him": important's pink, but the dot is the little blue heart */
+.cal-dot.k-him{ background:url("/images/heart.gif") center/contain no-repeat; border-radius:0; width:14px; height:14px; image-rendering:pixelated; }
+.cal-repeat-tag{ margin-left:6px; font-size:11px; font-weight:800; color:var(--exp-muted); white-space:nowrap; }
 .cal-month-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
 .cal-month-label{ font-weight:800; font-size:17px; color:var(--ink); }
 .cal-grid{ display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; }
@@ -1997,6 +2007,7 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
 .cal-num{ width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; }
 .cal-dots{ display:flex; gap:3px; min-height:6px; }
 .cal-dots .cal-dot{ width:6px; height:6px; }
+.cal-dots .cal-dot.k-him{ width:9px; height:9px; margin-top:-1px; }
 .cal-kinds{ display:flex; flex-wrap:wrap; gap:8px; }
 .cal-kinds button{ display:flex; align-items:center; gap:7px; border:2px solid transparent; border-radius:14px; padding:8px 12px; font-family:inherit; font-weight:800; font-size:14px; cursor:pointer; color:var(--ink); }
 .cal-kinds button i{ width:11px; height:11px; border-radius:50%; }
@@ -2005,6 +2016,10 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
 .cal-kinds button[data-k="off"]{ background:var(--tint-mint); } .cal-kinds button[data-k="off"] i{ background:#4fb08a; }
 .cal-kinds button[data-k="remind"]{ background:var(--tint-warn); } .cal-kinds button[data-k="remind"] i{ background:#dcae3f; }
 .cal-kinds button[data-k="other"]{ background:var(--tint-lilac); } .cal-kinds button[data-k="other"] i{ background:#8f7fe0; }
+.cal-kinds button[data-k="him"]{ background:var(--tint-pink); } .cal-kinds button[data-k="him"] i{ width:14px; height:14px; border-radius:0; background:url("/images/heart.gif") center/contain no-repeat; image-rendering:pixelated; }
+.cal-repeat{ display:flex; flex-wrap:wrap; gap:8px; }
+.cal-repeat button{ border:2px solid transparent; border-radius:14px; padding:7px 12px; font-family:inherit; font-weight:800; font-size:13px; cursor:pointer; color:var(--ink); background:var(--surface-soft); }
+.cal-repeat button.active{ border-color:var(--ink); }
 .cal-kinds button.active{ border-color:var(--ink); }
 :root[data-theme="dark"] .cal-kinds button[data-k="work"]{ background:#23324a; }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .cal-kinds button[data-k="work"]{ background:#23324a; } }
