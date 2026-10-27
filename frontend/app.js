@@ -3397,14 +3397,22 @@ function homeCancelEdit() {
 }
 
 var homeTogglesPending_ = 0;
-function homeToggleCheck(item) {
+// Ticking only flips that one row in place (its strike-through + checkmark animate
+// once) — the list is NOT rebuilt, which used to replay every row's entrance
+// animation twice (once on tap, again when the server answered).
+function homeSetRowChecked_(el, on) {
+  el.classList.toggle('checked', on);
+  var box = el.querySelector('.todo-check');
+  if (box) box.classList.toggle('checked', on);
+}
+function homeToggleCheck(item, el) {
   var next = !item.checked;
-  item.checked = next; // optimistic — animation gạch ngang chạy ngay, không cần chờ server
-  renderHomeList();
+  item.checked = next;
+  if (el) homeSetRowChecked_(el, next); else renderHomeList();
+  renderHomeTodoTile_();
   if (next) {
     var allDone = homeData.every(function (t) { return t.checked || t.row === null; });
-    // the stars start from the box that was just ticked (not the first ticked one)
-    var box = document.querySelector('.todo-item[data-row="' + item.row + '"] .todo-check');
+    var box = el && el.querySelector('.todo-check');
     var r = box ? box.getBoundingClientRect() : null;
     if (allDone) confetti(null, null, 70);
     else { buzz(10); confetti(r ? r.left + r.width / 2 : null, r ? r.top + r.height / 2 : null, 34); }
@@ -3413,15 +3421,22 @@ function homeToggleCheck(item) {
   google.script.run
     .withSuccessHandler(function (list) {
       homeTogglesPending_--;
-      // Re-render from the server's list so every row's tap handler points at the
-      // current data (before, the old handlers kept editing stale objects → 2 taps).
-      // Wait while other ticks are still in flight so a late reply can't undo them.
-      if (homeTogglesPending_ === 0 && homeEditingRow === null) { homeData = list; renderHomeList(); }
+      if (homeTogglesPending_ !== 0 || homeEditingRow !== null || !Array.isArray(list)) return;
+      // Same rows in the same order → just refresh the data behind them, no redraw.
+      // Identical to what's on screen → nothing to do (no redraw, no replayed animation).
+      // Anything different (edited elsewhere, server disagreed) → show the server's list.
+      var same = list.length === homeData.length && list.every(function (t, i) {
+        var h = homeData[i];
+        return h && h.row === t.row && h.checked === t.checked && h.todolist === t.todolist && h.deadline === t.deadline;
+      });
+      if (!same) { homeData = list; renderHomeList(); }
+      renderHomeTodoTile_();
     })
     .withFailureHandler(function (err) {
       homeTogglesPending_--;
       item.checked = !next;
-      renderHomeList();
+      if (el) homeSetRowChecked_(el, !next); else renderHomeList();
+      renderHomeTodoTile_();
       toast('Error: ' + err.message);
     })
     .toggleHomeCheck(item.row, next);
@@ -3514,7 +3529,7 @@ function renderHomeList() {
         '<span class="todo-content-text">' + icdEscape(item.todolist || '(chưa có nội dung)') + '</span>' +
         (item.deadline ? '<span class="todo-deadline">' + homeFormatDeadline(item.deadline) + '</span>' : '') +
         '<button class="todo-edit-btn acc-edit-icon-btn" title="Edit">✎</button>';
-      el.querySelector('.todo-check').onclick = function () { homeToggleCheck(item); };
+      el.querySelector('.todo-check').onclick = function () { homeToggleCheck(item, el); };
       el.querySelector('.todo-edit-btn').onclick = function () { homeOpenEdit(item); };
     }
 
