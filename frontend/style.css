@@ -5,6 +5,10 @@
   font-style: normal;
 }
 
+/* Phones: tapping the same spot twice fast mustn't zoom the page (pinch-zoom still works).
+   Low specificity, so game boards that set their own touch-action keep it. */
+:where(*){ touch-action:manipulation; }
+
 /* ============================================================
    DESIGN SYSTEM — cute pastel, applied to the Home/Tools/Games layout
    ============================================================ */
