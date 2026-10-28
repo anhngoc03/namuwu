@@ -1018,7 +1018,9 @@ function workTaskIn_(t) {
   const title = String(t.title || '').trim().slice(0, 200);
   if (!title) throw new Error('Task needs a title');
   const subs = Array.isArray(t.subtasks) ? t.subtasks.slice(0, 50).map(function (x) {
-    return { text: String((x && x.text) || '').trim().slice(0, 200), done: !!(x && x.done) };
+    const sub = { text: String((x && x.text) || '').trim().slice(0, 200), done: !!(x && x.done) };
+    if (x && /^\d{4}-\d{2}-\d{2}$/.test(x.due || '')) sub.due = x.due;   // each item can have its own deadline
+    return sub;
   }).filter(function (x) { return x.text; }) : [];
   const fee = t.fee === '' || t.fee === null || t.fee === undefined ? null : Number(t.fee);
   return {
@@ -1051,11 +1053,18 @@ async function workApplyStatus_(env, row, status) {
       patch.timer_started_at = null;
     }
     if (row.repeat_every) {
+      // checklist deadlines move by as much as the task's own deadline does
+      const nextDue = workNextDue_(row.due_date, row.repeat_every);
+      const shift = Date.parse(nextDue) - Date.parse(row.due_date || expenseTodayStr_());
       await sb(env, 'work_tasks', { method: 'POST', prefer: 'return=minimal', body: JSON.stringify([{
         title: row.title, group_id: row.group_id, status: 'todo', priority: row.priority,
-        due_date: workNextDue_(row.due_date, row.repeat_every), note: row.note || '', fee: row.fee,
+        due_date: nextDue, note: row.note || '', fee: row.fee,
         repeat_every: row.repeat_every,
-        subtasks: (row.subtasks || []).map(function (x) { return { text: x.text, done: false }; })
+        subtasks: (row.subtasks || []).map(function (x) {
+          const sub = { text: x.text, done: false };
+          if (x.due) sub.due = new Date(Date.parse(x.due) + shift).toISOString().slice(0, 10);
+          return sub;
+        })
       }]) });
     }
   } else if (status !== 'done' && row.status === 'done') {
@@ -1135,12 +1144,17 @@ async function deleteWorkGroup(env, [id]) {
 // Public (Home, before the password): only numbers, never task names.
 async function getWorkHomeSummary(env) {
   let rows;
-  try { rows = await sb(env, 'work_tasks?status=in.(todo,doing)&select=status,due_date'); }
+  try { rows = await sb(env, 'work_tasks?status=in.(todo,doing)&select=status,due_date,subtasks'); }
   catch (e) { return { ready: false }; }          // tables not created yet
   const today = expenseTodayStr_();
+  // late = the task's deadline or one of its unticked checklist items' deadlines has passed
+  const late = function (r) {
+    return (r.due_date && r.due_date < today) ||
+      (r.subtasks || []).some(function (x) { return !x.done && x.due && x.due < today; });
+  };
   return {
     ready: true,
-    overdue: rows.filter(function (r) { return r.due_date && r.due_date < today; }).length,
+    overdue: rows.filter(late).length,
     doing: rows.filter(function (r) { return r.status === 'doing'; }).length,
     todo: rows.filter(function (r) { return r.status === 'todo'; }).length
   };

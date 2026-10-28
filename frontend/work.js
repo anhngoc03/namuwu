@@ -98,7 +98,13 @@ function workGroupName(id) {
   var g = workData.groups.find(function (x) { return x.id === id; });
   return g ? g.name : '';
 }
-function workIsOverdue(t) { return t.status !== 'done' && t.due && t.due < workToday_(); }
+// Nearest deadline of a task: its own, or an unticked checklist item's if that's sooner.
+function workEffDue_(t) {
+  var d = t.due || '';
+  (t.subtasks || []).forEach(function (x) { if (!x.done && x.due && (!d || x.due < d)) d = x.due; });
+  return d;
+}
+function workIsOverdue(t) { var d = workEffDue_(t); return t.status !== 'done' && !!d && d < workToday_(); }
 function workElapsed(t) {     // seconds, including a running timer
   var s = t.timeSpent || 0;
   if (t.timerStartedAt) s += Math.max(0, (Date.now() + workClockSkew_ - Date.parse(t.timerStartedAt)) / 1000);
@@ -117,9 +123,9 @@ function workDoFirst(tasks, n) {
   var today = workToday_();
   return tasks.filter(function (t) { return t.status === 'todo' || t.status === 'doing'; })
     .slice().sort(function (a, b) {
-      var ao = a.due && a.due < today ? 0 : 1, bo = b.due && b.due < today ? 0 : 1;
+      var ad = workEffDue_(a) || '9999-99-99', bd = workEffDue_(b) || '9999-99-99';
+      var ao = ad < today ? 0 : 1, bo = bd < today ? 0 : 1;
       if (ao !== bo) return ao - bo;
-      var ad = a.due || '9999-99-99', bd = b.due || '9999-99-99';
       if (ad !== bd) return ad < bd ? -1 : 1;
       var ap = WORK_PRIO_RANK[a.priority] + (a.status === 'doing' ? 0.5 : 0);
       var bp = WORK_PRIO_RANK[b.priority] + (b.status === 'doing' ? 0.5 : 0);
@@ -200,7 +206,7 @@ function workRenderFirst() {
     row.className = 'work-first-row prio-' + t.priority;
     row.innerHTML = '<span class="work-first-n">' + (i + 1) + '</span>' +
       '<span class="work-first-name">' + icdEscape(t.title) + '</span>' +
-      (t.due ? '<span class="work-due' + (workIsOverdue(t) ? ' over' : '') + '">' + workFmtDue(t.due) + '</span>' : '');
+      (workEffDue_(t) ? '<span class="work-due' + (workIsOverdue(t) ? ' over' : '') + '">' + workFmtDue(workEffDue_(t)) + '</span>' : '');
     row.onclick = function () { workOpenTask(t); };
     list.appendChild(row);
   });
@@ -213,8 +219,15 @@ function workTaskRow_(t, compact) {
   var subsDone = t.subtasks.filter(function (x) { return x.done; }).length;
   var meta = [];
   if (t.groupId) meta.push('<span class="work-chip">' + icdEscape(workGroupName(t.groupId)) + '</span>');
-  if (t.due) meta.push('<span class="work-due' + (workIsOverdue(t) ? ' over' : '') + '">' + workFmtDue(t.due) + (t.repeat ? ' ↻' : '') + '</span>');
-  if (t.subtasks.length) meta.push('<span class="work-meta">☑ ' + subsDone + '/' + t.subtasks.length + '</span>');
+  var today = workToday_();
+  if (t.due) meta.push('<span class="work-due' + (t.status !== 'done' && t.due < today ? ' over' : '') + '">' + workFmtDue(t.due) + (t.repeat ? ' ↻' : '') + '</span>');
+  if (t.subtasks.length) {
+    // the next unticked item's deadline rides along with the checklist count
+    var nextSub = t.status === 'done' ? null : t.subtasks.filter(function (x) { return !x.done && x.due; })
+      .sort(function (a, b) { return a.due < b.due ? -1 : 1; })[0];
+    meta.push('<span class="work-meta' + (nextSub && nextSub.due < today ? ' over' : '') + '">☑ ' + subsDone + '/' + t.subtasks.length +
+      (nextSub ? ' · ' + workFmtDue(nextSub.due) : '') + '</span>');
+  }
   if (t.fee) meta.push('<span class="work-meta money">' + formatThousands(Math.round(t.fee)) + 'đ</span>');
   var running = !!t.timerStartedAt;
   row.innerHTML =
@@ -388,7 +401,9 @@ function workOpenTask(t) {
   document.getElementById('work-t-repeat').value = t ? t.repeat : '';
   document.getElementById('work-t-note').value = t ? t.note : '';
   expenseSetAmountInputValue(document.getElementById('work-t-fee'), t && t.fee ? t.fee : 0);
-  workDraftSubs_ = t ? t.subtasks.map(function (x) { return { text: x.text, done: x.done }; }) : [];
+  workDraftSubs_ = t ? t.subtasks.map(function (x) { return { text: x.text, done: x.done, due: x.due || '' }; }) : [];
+  workPendingSubDue_ = '';
+  workRenderSubDue_(document.getElementById('work-t-sub-due'), '');
   workDraftPriority_ = t ? t.priority : 'medium';
   workRenderPrioPick_();
   workRenderSubs_();
@@ -412,7 +427,11 @@ function workRenderSubs_() {
   workDraftSubs_.forEach(function (x, i) {
     var row = document.createElement('div');
     row.className = 'work-sub' + (x.done ? ' done' : '');
-    row.innerHTML = '<span class="work-sub-check"></span><span class="work-sub-text">' + icdEscape(x.text) + '</span><button type="button" class="work-sub-del">✕</button>';
+    row.innerHTML = '<span class="work-sub-check"></span><span class="work-sub-text">' + icdEscape(x.text) + '</span>' +
+      '<label class="work-sub-due"><span></span><input type="date"></label><button type="button" class="work-sub-del">✕</button>';
+    var dl = row.querySelector('.work-sub-due');
+    workRenderSubDue_(dl, x.due, x.done);
+    workWireSubDue_(dl, function (v) { x.due = v; workRenderSubDue_(dl, v, x.done); });
     var tick = function () {
       x.done = !x.done; workRenderSubs_();
       if (x.done) animIn(document.querySelectorAll('#work-t-subs .work-sub-check')[i], 'anim-pop');
@@ -451,11 +470,25 @@ function workSuggest_() {
     box.appendChild(b);
   });
 }
+// Checklist deadline chip: "📅" when empty, "dd/mm" when set (red once it's passed);
+// tapping it opens the date picker of the invisible date field laid over it.
+var workPendingSubDue_ = '';
+function workRenderSubDue_(label, due, done) {
+  label.querySelector('input').value = due || '';
+  label.querySelector('span').textContent = due ? workFmtDue(due) : '📅';
+  label.classList.toggle('set', !!due);
+  label.classList.toggle('over', !!due && !done && due < workToday_());
+}
+function workWireSubDue_(label, onChange) {
+  var input = label.querySelector('input');
+  input.onclick = function (e) { e.stopPropagation(); try { input.showPicker(); } catch (err) {} };
+  input.onchange = function () { onChange(input.value); };
+}
 function workSaveTask() {
   var title = document.getElementById('work-t-title').value.trim();
   if (!title) { toast('Enter a task'); return; }
   var pending = document.getElementById('work-t-sub-input').value.trim();
-  if (pending) { workDraftSubs_.push({ text: pending, done: false }); document.getElementById('work-t-sub-input').value = ''; }
+  if (pending) { workDraftSubs_.push({ text: pending, done: false, due: workPendingSubDue_ }); document.getElementById('work-t-sub-input').value = ''; }
   var g = document.getElementById('work-t-group').value;
   var task = {
     id: workEditingId,
@@ -535,7 +568,7 @@ function workLoadHomeBlock() {
         var today = d.today;
         var open = d.tasks.filter(function (t) { return t.status === 'todo' || t.status === 'doing'; });
         show({
-          overdue: open.filter(function (t) { return t.due && t.due < today; }).length,
+          overdue: open.filter(function (t) { var e = workEffDue_(t); return e && e < today; }).length,
           doing: open.filter(function (t) { return t.status === 'doing'; }).length,
           todo: open.filter(function (t) { return t.status === 'todo'; }).length
         }, workDoFirst(d.tasks, 3));
@@ -585,10 +618,16 @@ document.addEventListener('DOMContentLoaded', function () {
     e.preventDefault(); e.stopPropagation();
     var v = this.value.trim();
     if (!v) return;
-    workDraftSubs_.push({ text: v, done: false });
+    workDraftSubs_.push({ text: v, done: false, due: workPendingSubDue_ });
     this.value = '';
+    workPendingSubDue_ = '';
+    workRenderSubDue_(document.getElementById('work-t-sub-due'), '');
     workRenderSubs_();
   };
+  workWireSubDue_(document.getElementById('work-t-sub-due'), function (v) {
+    workPendingSubDue_ = v;
+    workRenderSubDue_(document.getElementById('work-t-sub-due'), v);
+  });
 
   document.getElementById('work-group-close').onclick = function () { document.getElementById('work-group-modal').classList.remove('active'); };
   document.getElementById('work-group-cancel').onclick = function () { document.getElementById('work-group-modal').classList.remove('active'); };
