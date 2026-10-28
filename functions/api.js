@@ -1128,6 +1128,11 @@ async function stopWorkTimer(env, [id]) {
   }
   return getWorkData(env);
 }
+async function resetWorkTimer(env, [id]) {     // back to 0:00 and stopped
+  await sb(env, 'work_tasks?id=eq.' + Number(id), { method: 'PATCH', prefer: 'return=minimal',
+    body: JSON.stringify({ time_spent: 0, timer_started_at: null }) });
+  return getWorkData(env);
+}
 async function saveWorkGroup(env, [id, name, hasPosts]) {
   name = String(name || '').trim().slice(0, 60);
   if (!name) throw new Error('Group needs a name');
@@ -1363,6 +1368,7 @@ const ACTIONS = {
   deleteWorkTask,
   startWorkTimer,
   stopWorkTimer,
+  resetWorkTimer,
   saveWorkGroup,
   deleteWorkGroup,
   getWorkHomeSummary,

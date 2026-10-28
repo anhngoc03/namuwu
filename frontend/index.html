@@ -907,7 +907,10 @@
       <div class="expense-amount-row"><input type="text" id="work-t-fee" class="expense-amount-field" placeholder="0" inputmode="numeric"><span>đ</span></div>
       <div class="expense-field-caption">Note</div>
       <textarea id="work-t-note" rows="3" data-own-enter></textarea>
-      <div class="work-time-line" id="work-t-time"></div>
+      <div class="work-time-line" id="work-t-timebox">
+        <span id="work-t-time"></span>
+        <button type="button" class="work-time-reset" id="work-t-time-reset">Reset timer</button>
+      </div>
       <div class="modal-actions">
         <button class="pill-btn secondary" id="work-task-delete" style="display:none;">Delete</button>
         <button class="pill-btn secondary" id="work-task-cancel">Cancel</button>

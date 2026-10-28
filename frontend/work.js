@@ -410,6 +410,7 @@ function workOpenTask(t) {
   var tl = document.getElementById('work-t-time');
   tl.dataset.timer = t && t.timerStartedAt ? t.id : '';
   tl.textContent = t && (t.timeSpent || t.timerStartedAt) ? '⏱ ' + workFmtTime(workElapsed(t)) : '';
+  document.getElementById('work-t-timebox').style.display = tl.textContent ? '' : 'none';
   document.getElementById('work-task-delete').style.display = t ? '' : 'none';
   document.getElementById('work-t-suggest').innerHTML = '';
   document.getElementById('work-task-modal').classList.add('active');
@@ -623,6 +624,16 @@ document.addEventListener('DOMContentLoaded', function () {
     workPendingSubDue_ = '';
     workRenderSubDue_(document.getElementById('work-t-sub-due'), '');
     workRenderSubs_();
+  };
+  document.getElementById('work-t-time-reset').onclick = function () {
+    var id = workEditingId;
+    if (!id) return;
+    expenseConfirm('Reset the timer of this task to 0?', function () {
+      document.getElementById('work-t-time').dataset.timer = '';
+      document.getElementById('work-t-timebox').style.display = 'none';
+      workRun_('resetWorkTimer')(id);
+      toast('Timer reset');
+    });
   };
   workWireSubDue_(document.getElementById('work-t-sub-due'), function (v) {
     workPendingSubDue_ = v;
