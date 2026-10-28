@@ -273,25 +273,39 @@ function workRenderList() {
   staggerIn(wrap.children);
 }
 
+// Board: every checklist item is its own card (with its task's name under it);
+// a task without a checklist is one card as usual.
+function workSubSt_(x) { return x.done ? 'done' : (x.st && x.st !== 'done' ? x.st : 'todo'); }
 function workRenderBoard() {
   var board = document.getElementById('work-board');
   var tasks = workFiltered(true);
+  var cards = [];
+  tasks.forEach(function (t) {
+    if (t.subtasks.length) t.subtasks.forEach(function (x, i) { cards.push({ t: t, x: x, i: i, st: workSubSt_(x), due: x.due || t.due || '' }); });
+    else cards.push({ t: t, st: t.status, due: t.due || '' });
+  });
   board.innerHTML = '';
   WORK_STATUS_ORDER.forEach(function (st, idx) {
     var col = document.createElement('div');
     col.className = 'work-col';
     col.dataset.status = st;
-    var items = tasks.filter(function (t) { return t.status === st; });
-    items = st === 'done' ? items.sort(function (a, b) { return String(b.doneAt || '').localeCompare(String(a.doneAt || '')); })
-                          : workDoFirst(items.map(function (t) { return Object.assign({}, t, { status: 'todo' }); }), items.length)
-                              .map(function (c) { return items.find(function (t) { return t.id === c.id; }); });
+    var items = cards.filter(function (c) { return c.st === st; });
+    // nearest deadline first, then the higher priority; done ones newest task first
+    items.sort(st === 'done'
+      ? function (a, b) { return String(b.t.doneAt || '').localeCompare(String(a.t.doneAt || '')); }
+      : function (a, b) {
+          var ad = a.due || '9999', bd = b.due || '9999';
+          if (ad !== bd) return ad < bd ? -1 : 1;
+          return WORK_PRIO_RANK[b.t.priority] - WORK_PRIO_RANK[a.t.priority];
+        });
     col.innerHTML = '<div class="work-col-head st-' + st + '">' + WORK_STATUS_LABEL[st] + ' <span>' + items.length + '</span></div>';
     var body = document.createElement('div');
     body.className = 'work-col-body';
-    items.forEach(function (t) {
-      var card = workTaskRow_(t, true);
+    items.forEach(function (c) {
+      var card = c.x ? workSubCard_(c) : workTaskRow_(c.t, true);
+      var key = c.x ? 'sub:' + c.t.id + ':' + c.i : 'task:' + c.t.id;
       card.draggable = true;
-      card.ondragstart = function (e) { e.dataTransfer.setData('text/plain', String(t.id)); card.classList.add('dragging'); };
+      card.ondragstart = function (e) { e.dataTransfer.setData('text/plain', key); card.classList.add('dragging'); };
       card.ondragend = function () { card.classList.remove('dragging'); };
       // phones can't drag: arrows move a card to the previous / next column
       var nav = document.createElement('div');
@@ -299,7 +313,7 @@ function workRenderBoard() {
       if (idx > 0) nav.insertAdjacentHTML('beforeend', '<button type="button" data-to="' + WORK_STATUS_ORDER[idx - 1] + '">‹</button>');
       if (idx < 3) nav.insertAdjacentHTML('beforeend', '<button type="button" data-to="' + WORK_STATUS_ORDER[idx + 1] + '">›</button>');
       nav.querySelectorAll('button').forEach(function (b) {
-        b.onclick = function (e) { e.stopPropagation(); workSetStatus(t, b.dataset.to, b); };
+        b.onclick = function (e) { e.stopPropagation(); workMoveCard_(key, b.dataset.to, b); };
       });
       card.appendChild(nav);
       body.appendChild(card);
@@ -309,12 +323,36 @@ function workRenderBoard() {
     col.ondragleave = function () { col.classList.remove('drop'); };
     col.ondrop = function (e) {
       e.preventDefault(); col.classList.remove('drop');
-      var t = workData.tasks.find(function (x) { return String(x.id) === e.dataTransfer.getData('text/plain'); });
-      if (t && t.status !== st) workSetStatus(t, st, col);
+      workMoveCard_(e.dataTransfer.getData('text/plain'), st, col);
     };
     col.appendChild(body);
     board.appendChild(col);
   });
+}
+function workSubCard_(c) {
+  var card = document.createElement('div');
+  var over = c.st !== 'done' && c.x.due && c.x.due < workToday_();
+  card.className = 'work-task compact work-subcard prio-' + c.t.priority + (c.st === 'done' ? ' done' : '');
+  card.innerHTML = '<div class="work-task-main"><div class="work-task-title">' + icdEscape(c.x.text) + '</div>' +
+    '<div class="work-task-meta"><span class="work-chip">' + icdEscape(c.t.title) + '</span>' +
+    (c.x.due ? '<span class="work-due' + (over ? ' over' : '') + '">' + workFmtDue(c.x.due) + '</span>' : '') + '</div></div>';
+  card.onclick = function () { workOpenTask(c.t); };
+  return card;
+}
+// key = "task:<id>" or "sub:<taskId>:<index>"
+function workMoveCard_(key, status, fromEl) {
+  var p = String(key || '').split(':');
+  var t = workData.tasks.find(function (x) { return String(x.id) === p[1]; });
+  if (!t) return;
+  if (p[0] === 'task') { if (t.status !== status) workSetStatus(t, status, fromEl); return; }
+  var i = Number(p[2]), x = t.subtasks[i];
+  if (!x || workSubSt_(x) === status) return;
+  var r = fromEl ? fromEl.getBoundingClientRect() : null;
+  var finishes = status === 'done' && t.subtasks.every(function (y, j) { return j === i || y.done; });
+  if (finishes) confetti(null, null, 80);                       // last item → the whole task is done: fireworks
+  else if (status === 'done') confetti(r ? r.left + r.width / 2 : null, r ? r.top + r.height / 2 : null, 34);
+  else buzz(8);
+  workRun_('setWorkSubStatus')(t.id, i, x.text, status);
 }
 
 function workRenderStats() {
@@ -333,6 +371,9 @@ function workRenderStats() {
       '<div class="' + (overdue ? 'over' : '') + '"><b>' + overdue + '</b><span>overdue</span></div>' +
       (withDue.length ? '<div><b>' + pct(onTime, withDue.length) + '%</b><span>on time</span></div>' : '') +
     '</div>';
+  var subs = [];
+  tasks.forEach(function (t) { subs = subs.concat(t.subtasks); });
+  if (subs.length) html += '<div class="work-stat-sub">Checklist: <b>' + subs.filter(function (x) { return x.done; }).length + '/' + subs.length + '</b> items done</div>';
   WORK_STATUS_ORDER.forEach(function (st) {
     html += '<div class="work-stat-row"><span class="work-stat-name">' + WORK_STATUS_LABEL[st] + '</span>' +
       '<div class="work-stat-bar"><div class="work-stat-fill st-' + st + '" style="width:0" data-w="' + pct(by[st], n) + '"></div></div>' +
@@ -401,7 +442,7 @@ function workOpenTask(t) {
   document.getElementById('work-t-repeat').value = t ? t.repeat : '';
   document.getElementById('work-t-note').value = t ? t.note : '';
   expenseSetAmountInputValue(document.getElementById('work-t-fee'), t && t.fee ? t.fee : 0);
-  workDraftSubs_ = t ? t.subtasks.map(function (x) { return { text: x.text, done: x.done, due: x.due || '' }; }) : [];
+  workDraftSubs_ = t ? t.subtasks.map(function (x) { return { text: x.text, done: x.done, due: x.due || '', st: x.st || '' }; }) : [];
   workPendingSubDue_ = '';
   workRenderSubDue_(document.getElementById('work-t-sub-due'), '');
   workDraftPriority_ = t ? t.priority : 'medium';
@@ -503,6 +544,8 @@ function workSaveTask() {
     fee: expenseAmountInputValue(document.getElementById('work-t-fee')) || null,
     subtasks: workDraftSubs_
   };
+  // every checklist item ticked → the task is done too
+  if (task.subtasks.length && task.subtasks.every(function (x) { return x.done; })) task.status = 'done';
   var wasDone = workEditingId && (workData.tasks.find(function (t) { return t.id === workEditingId; }) || {}).status === 'done';
   if (task.status === 'done' && !wasDone) confetti(null, null, 50);
   workCloseTask_();

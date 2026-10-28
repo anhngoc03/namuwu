@@ -1019,6 +1019,8 @@ function workTaskIn_(t) {
   if (!title) throw new Error('Task needs a title');
   const subs = Array.isArray(t.subtasks) ? t.subtasks.slice(0, 50).map(function (x) {
     const sub = { text: String((x && x.text) || '').trim().slice(0, 200), done: !!(x && x.done) };
+    // its Board column; "done" (the tick) wins over it
+    sub.st = sub.done ? 'done' : (['todo', 'doing', 'paused'].indexOf(x && x.st) !== -1 ? x.st : 'todo');
     if (x && /^\d{4}-\d{2}-\d{2}$/.test(x.due || '')) sub.due = x.due;   // each item can have its own deadline
     return sub;
   }).filter(function (x) { return x.text; }) : [];
@@ -1061,7 +1063,7 @@ async function workApplyStatus_(env, row, status) {
         due_date: nextDue, note: row.note || '', fee: row.fee,
         repeat_every: row.repeat_every,
         subtasks: (row.subtasks || []).map(function (x) {
-          const sub = { text: x.text, done: false };
+          const sub = { text: x.text, done: false, st: 'todo' };
           if (x.due) sub.due = new Date(Date.parse(x.due) + shift).toISOString().slice(0, 10);
           return sub;
         })
@@ -1090,6 +1092,29 @@ async function setWorkTaskStatus(env, [id, status]) {
   const cur = await sb(env, 'work_tasks?id=eq.' + Number(id) + '&select=*');
   if (!cur.length) throw new Error('Task not found');
   const patch = await workApplyStatus_(env, cur[0], status);
+  await sb(env, 'work_tasks?id=eq.' + Number(id), { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' });
+  return getWorkData(env);
+}
+// Board moves one checklist item (found by position, checked against its text).
+// The task follows its items: all done → task done (repeat etc. as usual); an item
+// taken back out of done → task back to Doing; an item started → task Doing.
+async function setWorkSubStatus(env, [id, index, text, status]) {
+  if (WORK_STATUSES_.indexOf(status) === -1) throw new Error('Bad status');
+  const cur = await sb(env, 'work_tasks?id=eq.' + Number(id) + '&select=*');
+  if (!cur.length) throw new Error('Task not found');
+  const row = cur[0];
+  const subs = Array.isArray(row.subtasks) ? row.subtasks.slice() : [];
+  let i = Number(index);
+  if (!subs[i] || subs[i].text !== text) i = subs.findIndex(function (x) { return x.text === text; });
+  if (i < 0) throw new Error('Checklist item not found');
+  subs[i] = Object.assign({}, subs[i], { st: status, done: status === 'done' });
+  let patch = { subtasks: subs };
+  const allDone = subs.every(function (x) { return x.done; });
+  let next = null;
+  if (allDone && row.status !== 'done') next = 'done';
+  else if (!allDone && row.status === 'done') next = 'doing';
+  else if (status === 'doing' && row.status !== 'doing' && row.status !== 'done') next = 'doing';
+  if (next) patch = Object.assign(await workApplyStatus_(env, row, next), patch);
   await sb(env, 'work_tasks?id=eq.' + Number(id), { method: 'PATCH', body: JSON.stringify(patch), prefer: 'return=minimal' });
   return getWorkData(env);
 }
@@ -1368,6 +1393,7 @@ const ACTIONS = {
   deleteWorkTask,
   startWorkTimer,
   stopWorkTimer,
+  setWorkSubStatus,
   resetWorkTimer,
   saveWorkGroup,
   deleteWorkGroup,
