@@ -251,12 +251,12 @@ function staggerIn(rows) {
 }
 
 // Empty screens: every <span class="empty-icon"> that shows up (they're rendered
-// all over app.js) gets the little jumping cat (images/cat.gif) — butterflies in dark mode.
+// all over app.js) gets the two sleepy cats (images/cats.webp) — Kero in dark mode.
 function jellyfy_(root) {
   (root.querySelectorAll ? root.querySelectorAll('.empty-icon:not([data-jelly])') : []).forEach(function (el) {
     el.setAttribute('data-jelly', '1');
-    el.innerHTML = '<img src="/images/cat.gif" alt="" class="empty-cat light-only" draggable="false">' +
-      '<img src="/images/butterfly.gif" alt="" class="empty-cat dark-only" draggable="false">';
+    el.innerHTML = '<img src="/images/cats.webp" alt="" class="empty-cat light-only" draggable="false">' +
+      '<img src="/images/kero.webp" alt="" class="empty-cat dark-only" draggable="false">';
   });
 }
 new MutationObserver(function (muts) {
@@ -4146,7 +4146,7 @@ function qrRenderCanvas(container, link, embedLogo) {
       fixVisibility();
     };
     logo.onerror = fixVisibility;
-    logo.src = '/images/favicon.png';
+    logo.src = '/images/icon-192.png';
   } else {
     setTimeout(fixVisibility, 0);
   }

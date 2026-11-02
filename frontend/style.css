@@ -831,7 +831,10 @@ input[type=text]:focus-visible, input[type=date]:focus-visible, select:focus-vis
   border-radius:var(--r-md); overflow:hidden; cursor:pointer;
   background:var(--cream); margin-bottom:8px;
 }
-.qr-canvas-wrap canvas{ width:100%; height:100%; display:block; }
+.qr-canvas-wrap canvas{ width:100%; height:100%; display:block !important; }
+/* qrcode.js also adds a 480px <img> copy; it must never show (it used to, full size,
+   until the logo finished loading on a first visit) */
+.qr-canvas-wrap img{ display:none !important; }
 .qr-delete-btn{
   position:absolute; top:4px; right:4px; width:24px; height:24px;
   border-radius:50%; border:none; background:rgba(90,74,74,0.55); color:#fff;
@@ -1668,10 +1671,12 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
    and small motion everywhere
    ============================================================ */
 /* Mascot: every empty-state's ✿ icon becomes the pixel cat GIF (app.js). */
-.empty-state .empty-icon{ display:block; width:140px; margin:0 auto 8px; font-size:0; color:transparent; }
-#home-todo-list .empty-state .empty-icon{ width:180px; }
-.empty-cat{ display:block; width:100%; height:auto; image-rendering:pixelated; }
-.empty-cat.dark-only{ display:none; width:50%; margin:0 auto; }   /* butterflies: smaller than the cat */
+.empty-state .empty-icon{ display:block; width:110px; margin:0 auto 8px; font-size:0; color:transparent; }
+#home-todo-list .empty-state .empty-icon{ width:130px; }
+/* the cats' white background melts into the light card */
+.empty-cat{ display:block; width:100%; height:auto; mix-blend-mode:multiply; }
+/* Kero comes with his own (dark) scene: a small rounded picture */
+.empty-cat.dark-only{ display:none; width:80%; margin:0 auto; border-radius:14px; mix-blend-mode:normal; box-shadow:var(--shadow-sm); }
 :root[data-theme="dark"] .empty-cat.light-only{ display:none; }
 :root[data-theme="dark"] .empty-cat.dark-only{ display:block; }
 @media (prefers-color-scheme: dark){
