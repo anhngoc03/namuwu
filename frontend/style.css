@@ -1673,10 +1673,9 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
 /* Mascot: every empty-state's ✿ icon becomes the pixel cat GIF (app.js). */
 .empty-state .empty-icon{ display:block; width:110px; margin:0 auto 8px; font-size:0; color:transparent; }
 #home-todo-list .empty-state .empty-icon{ width:130px; }
-/* the cats' white background melts into the light card */
-.empty-cat{ display:block; width:100%; height:auto; mix-blend-mode:multiply; }
+.empty-cat{ display:block; width:100%; height:auto; }
 /* Kero comes with his own (dark) scene: a small rounded picture */
-.empty-cat.dark-only{ display:none; width:80%; margin:0 auto; border-radius:14px; mix-blend-mode:normal; box-shadow:var(--shadow-sm); }
+.empty-cat.dark-only{ display:none; width:80%; margin:0 auto; border-radius:14px; box-shadow:var(--shadow-sm); }
 :root[data-theme="dark"] .empty-cat.light-only{ display:none; }
 :root[data-theme="dark"] .empty-cat.dark-only{ display:block; }
 @media (prefers-color-scheme: dark){
