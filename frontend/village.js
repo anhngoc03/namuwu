@@ -29,7 +29,16 @@
     { id: 'health',   label: 'Food & Gym', roof: 'mint',  open: null },
     { id: 'notes',    label: 'Notes',      roof: 'yellow',open: null },
     { id: 'love',     label: 'Love',       roof: 'pink',  open: 'openLove', heart: true },
-    { id: 'goals',    label: 'Goals',      roof: 'lav',   open: null }
+    { id: 'goals',    label: 'Goals',      roof: 'lav',   open: null },
+    // open to everyone (no password): Tools & Games
+    { id: 'daycount', label: 'Day Counter', roof: 'yellow', open: 'openDateDiff',     pub: true, kind: 'tool' },
+    { id: 'pdf',      label: 'PDF',         roof: 'blue',   open: 'openConverter',    pub: true, kind: 'tool' },
+    { id: 'qr',       label: 'QR',          roof: 'mint',   open: 'openQrCollection', pub: true, kind: 'tool' },
+    { id: 'symbols',  label: 'Symbols',     roof: 'lav',    open: 'loadSymbols',      pub: true, kind: 'tool' },
+    { id: 'yakult',   label: 'Yakult',      roof: 'peach',  open: 'openEating',       pub: true, kind: 'tool' },
+    { id: 'memory',   label: 'Memory',      roof: 'pink',   open: 'openMemory',       pub: true, kind: 'game' },
+    { id: 'mines',    label: 'Minesweeper', roof: 'mint',   open: 'openMinesweeper',  pub: true, kind: 'game' },
+    { id: 'mochi',    label: 'Mochi Fly',   roof: 'yellow', open: 'openMochi',        pub: true, kind: 'game' }
   ];
 
   var root, stage, labelsEl, starBtn, clockEl;
@@ -47,7 +56,7 @@
     if (loading) return;
     loading = true;
     var sc = document.createElement('script');
-    sc.src = '/village3d.js?v=9';
+    sc.src = '/village3d.js?v=10';
     sc.onload = function () { loading = false; var w = loadWaiters; loadWaiters = []; w.forEach(function (f) { f(); }); };
     sc.onerror = function () { loading = false; loadWaiters = []; toast("Couldn't load the village ʕ´-ก̀ʔᐝ"); };
     document.head.appendChild(sc);
@@ -105,31 +114,49 @@
     if (!labelsEl) return;
     root.classList.toggle('village-unlocked', unlocked());
     tagEls = {};
-    if (!unlocked()) { labelsEl.innerHTML = ''; return; }
-    var html = '';
+    var open = unlocked(), html = '';
+    // locked: only the houses anyone may use show their names (Tools & Games)
     HOUSES.forEach(function (h) {
-      html += '<button type="button" class="village-tag' + (h.open ? '' : ' soon') + '" data-house="' + h.id + '">' + h.label + '</button>';
+      if (!open && !h.pub) return;
+      html += '<button type="button" class="village-tag' + (h.open ? '' : ' soon') + (h.pub ? ' pub' : '') + '" data-house="' + h.id + '">' + h.label + '</button>';
     });
-    html += '<button type="button" class="village-tag hall' + (urgent.length ? ' alert' : '') + '" data-house="hall">Town Hall' +
+    if (open) html += '<button type="button" class="village-tag hall' + (urgent.length ? ' alert' : '') + '" data-house="hall">Town Hall' +
       (urgent.length ? ' <b>' + urgent.length + '</b>' : '') + '</button>';
     labelsEl.innerHTML = html;
     labelsEl.querySelectorAll('[data-house]').forEach(function (b) { tagEls[b.dataset.house] = b; });
     placeTags();
   }
+  // name tags follow the houses; they stay on screen and nudge up so they never sit on top of each other
+  var tagSize = {};
   function placeTags() {
     if (!scene3d) return;
+    var W = innerWidth, list = [];
     for (var id in tagEls) {
       var a = scene3d.anchor(id), el = tagEls[id];
       if (!a || !a.visible) { el.style.display = 'none'; continue; }
       el.style.display = '';
-      el.style.transform = 'translate(' + Math.round(a.x) + 'px,' + Math.round(a.y) + 'px) translate(-50%,-100%)';
+      var sz = tagSize[id];
+      if (!sz || sz.t !== el.textContent) { sz = tagSize[id] = { w: el.offsetWidth || 60, h: el.offsetHeight || 20, t: el.textContent }; }
+      list.push({ el: el, x: a.x, y: a.y, w: sz.w, h: sz.h, hall: id === 'hall' });
     }
+    list.sort(function (p, q) { return (q.hall ? 1 : 0) - (p.hall ? 1 : 0) || q.y - p.y; });   // the hall first, then from the front
+    var placed = [];
+    list.forEach(function (t) {
+      t.x = Math.max(t.w / 2 + 4, Math.min(W - t.w / 2 - 4, t.x));
+      for (var k = 0; k < 6; k++) {
+        var hit = placed.filter(function (o) { return Math.abs(o.x - t.x) < (o.w + t.w) / 2 + 2 && Math.abs(o.y - t.y) < (o.h + t.h) / 2 + 1; })[0];
+        if (!hit) break;
+        t.y = hit.y - (hit.h + t.h) / 2 - 2;
+      }
+      placed.push(t);
+      t.el.style.transform = 'translate(' + Math.round(t.x) + 'px,' + Math.round(t.y) + 'px) translate(-50%,-100%)';
+    });
   }
 
   function openHouse(id) {
-    if (!unlocked()) return;
-    if (id === 'hall') { openHall(); return; }
     var h = HOUSES.filter(function (x) { return x.id === id; })[0];
+    if (!unlocked() && !(h && h.pub)) return;        // Personal houses wait for the password
+    if (id === 'hall') { openHall(); return; }
     if (!h) return;
     if (!h.open || typeof window[h.open] !== 'function') { toast('Coming soon ✿'); return; }
     if (entering) return;
@@ -143,7 +170,7 @@
       setTimeout(function () {
         entering = false;
         walkingIn = true;
-        requirePersonal(window[h.open]);
+        if (h.pub) window[h.open](); else requirePersonal(window[h.open]);
         walkingIn = false;
         setTimeout(function () { fade.classList.remove('on'); }, 120);
       }, 120);
@@ -167,7 +194,9 @@
   var entering = false;
 
   /* ---------------- inside a house: the room behind a feature page ---------------- */
-  var VIEW_HOUSE = { 'work-view': 'work', 'expense-view': 'money', 'calendar-view': 'calendar', 'accounts-view': 'account', 'love-view': 'love' };
+  var VIEW_HOUSE = { 'work-view': 'work', 'expense-view': 'money', 'calendar-view': 'calendar', 'accounts-view': 'account', 'love-view': 'love',
+    'datediff-view': 'daycount', 'converter-view': 'pdf', 'qr-view': 'qr', 'symbols-view': 'symbols', 'eating-view': 'yakult',
+    'memory-view': 'memory', 'minesweeper-view': 'mines', 'mochi-view': 'mochi' };
   var roomPhotos = [];
   // the Love room's frames show the latest album photos (love.js calls this)
   window.villageRoomPhotos = function (urls) { roomPhotos = urls || []; if (room && room.setPhotos) room.setPhotos(roomPhotos); };
@@ -192,7 +221,7 @@
       var spec = HOUSES[idx];
       try {
         room = Village3D.room(el, {
-          house: house, roof: Village3D.ROOF[spec.roof], look: Village3D.LOOKS[idx],
+          house: house, kind: spec.kind, roof: Village3D.ROOF[spec.roof], look: Village3D.LOOKS[idx],
           looks: house === 'love' ? [Village3D.LOVE.her, Village3D.LOVE.him] : null,
           corner: currentCorner(house), timeMode: timeMode(), walkIn: walkingIn
         });

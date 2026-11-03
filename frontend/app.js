@@ -579,7 +579,8 @@ function showView(id) {
   document.querySelectorAll('.app-view').forEach(function (v) { v.style.display = 'none'; });
   document.getElementById(id).style.display = 'block';
   // Personal features (Work, Money…) hide the dock and show ‹ (village) + 🛖 (Home) instead
-  document.body.classList.toggle('personal-view', NAV_SECTION_MAP_[id] === 'personal');
+  // every page now lives in a house of the village: ‹ back to the village, 🍅 Home (no dock)
+  document.body.classList.toggle('personal-view', id !== 'menu-view');
   if (id !== 'menu-view' && typeof villageShow === 'function') villageShow(false);
   if (typeof villageRoom === 'function') villageRoom(id);       // the room inside that house, behind the page
   if (id === 'menu-view') {

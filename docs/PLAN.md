@@ -93,6 +93,14 @@ Nguyên tắc: **dữ liệu cũ giữ nguyên**, nhà mới dùng lại bảng 
 6. Chạy `supabase/love.sql` trong Supabase SQL Editor.
 7. Personal → ⚙︎ → Google Drive → Connect → chọn tài khoản Google có thư mục ảnh → (Google báo "chưa xác minh": Advanced → Go to …) → Allow.
 
+## 5e. Cả thị trấn trên một hòn đảo
+
+- 19 nhà + Town Hall. 11 nhà Personal (cần mật khẩu) và 8 nhà mở cho mọi người: Day Counter, PDF, QR, Symbols, Yakult, Memory, Minesweeper, Mochi Fly — lúc khoá vẫn hiện tên và vào được.
+- Mỗi nhà có 1 người ở (nhà Love: cặp đôi). Nhà trò chơi có phòng với TV + ghế lười.
+- Đảo hình tròn tròn, mép lượn (siêu elip + gợn sóng) — `shoreR()` trong `src/village3d.js`.
+- Thanh dưới chỉ còn Home + Village; vào trang nào cũng có ‹ (về đảo) + 🍅 (về Home).
+- Các vật đứng yên được gộp thành vài lô lớn, nhân vật gộp theo khớp → ~300 lần vẽ/khung hình (trước ~660) cho điện thoại.
+
 ## 6. Đã chốt
 
 1. Agent được tự làm tất cả (hỏi lại trước khi xoá).
