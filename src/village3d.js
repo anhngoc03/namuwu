@@ -1259,6 +1259,9 @@ function create(container, opts) {
     const two = () => { const v = Array.from(tp.values()); return { a: v[0], b: v[1], mx: (v[0].x + v[1].x) / 2, my: (v[0].y + v[1].y) / 2, d: Math.hypot(v[1].x - v[0].x, v[1].y - v[0].y), ang: Math.atan2(v[1].y - v[0].y, v[1].x - v[0].x) }; };
     el.addEventListener('pointerdown', (e) => {
       if (fake || e.pointerType !== 'touch') return;
+      // the first finger of a new touch: nothing else can be down, so forget any finger we lost track of
+      // (a lift that happened over a label or outside the canvas) — otherwise one finger reads as a pinch
+      if (e.isPrimary) { tp.clear(); g2 = null; }
       tp.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (tp.size === 2) {
         e.stopImmediatePropagation();                  // OrbitControls never learns about the second finger…
@@ -1311,6 +1314,8 @@ function create(container, opts) {
     };
     el.addEventListener('pointerup', lift, { capture: true });
     el.addEventListener('pointercancel', lift, { capture: true });
+    const gone = (e) => { if (e.pointerType === 'touch' && e.target !== el) { tp.delete(e.pointerId); if (tp.size < 2) g2 = null; } };
+    window.addEventListener('pointerup', gone, true); window.addEventListener('pointercancel', gone, true);
   }
   renderer.domElement.tabIndex = 0;              // arrow keys move the view once the village is clicked
   renderer.domElement.style.outline = 'none';
