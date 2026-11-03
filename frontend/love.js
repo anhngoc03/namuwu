@@ -170,33 +170,83 @@ function loveSave() {
     tags: document.getElementById('love-f-tags').value.split(/[,#]/).map(function (t) { return t.trim(); }).filter(Boolean)
   };
   if (!m.day) { toast('Pick a date'); return; }
-  var files = loveNewFiles.slice();
+  var files = loveNewFiles.map(function (f) { return f.file; });
   showLoading();
   google.script.run
     .withSuccessHandler(function (r) {
-      var id = r.id, done = 0, failed = 0;
-      var next = function () {
-        if (!files.length) {
-          hideLoading();
-          document.getElementById('love-edit-modal').classList.remove('active');
-          toast(failed ? failed + ' photo(s) failed to upload' : 'Saved ♡');
-          loveLoad();
-          return;
-        }
-        var f = files.shift();
-        toast('Uploading ' + (++done) + ' / ' + (done + files.length) + '…');
-        loveReadB64(f.file).then(function (b64) {
-          google.script.run
-            .withSuccessHandler(function () { next(); })
-            .withFailureHandler(function (err) { failed++; toast((err && err.message) || 'Upload failed'); next(); })
-            .uploadLovePhoto(id, { name: f.file.name, type: f.file.type || 'image/jpeg', data: b64 });
-        }).catch(function () { failed++; next(); });
-      };
-      next();
+      hideLoading();
+      document.getElementById('love-edit-modal').classList.remove('active');
+      toast(files.length ? 'Saved ♡ — photos are uploading' : 'Saved ♡');
+      loveLoad();
+      files.forEach(function (f) { loveQueue.push({ memoryId: r.id, file: f }); });
+      loveUploadKick();
     })
     .withFailureHandler(function (err) { hideLoading(); toast((err && err.message) || 'Error'); })
     .saveLoveMemory(m);
 }
+
+/* ---------- photo uploads: original files, straight to Google Drive, 3 at a time, in the background ---------- */
+var loveQueue = [], loveActive = 0, loveDone = 0, loveFailed = 0, loveTotal = 0, loveStartChain = Promise.resolve();
+var LOVE_PARALLEL = 3;
+function lovePromise(name) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  return new Promise(function (res, rej) {
+    var r = google.script.run.withSuccessHandler(res).withFailureHandler(function (e) { rej(new Error((e && e.message) || 'Error')); });
+    r[name].apply(r, args);
+  });
+}
+function loveChip() {
+  var el = document.getElementById('love-upload');
+  var left = loveQueue.length + loveActive;
+  if (!loveTotal) { el.classList.remove('on'); return; }
+  el.classList.add('on');
+  var pct = Math.round(loveDone / loveTotal * 100);
+  el.querySelector('.love-upload-text').textContent = left
+    ? '♡ Uploading ' + (loveDone + 1 > loveTotal ? loveTotal : loveDone + 1) + ' / ' + loveTotal
+    : (loveFailed ? loveFailed + ' photo' + (loveFailed === 1 ? '' : 's') + ' didn\'t upload' : 'All photos uploaded ♡');
+  el.querySelector('.love-upload-bar i').style.width = (left ? pct : 100) + '%';
+  if (!left) {
+    setTimeout(function () { if (!loveQueue.length && !loveActive) { loveTotal = loveDone = loveFailed = 0; loveChip(); } }, 2600);
+    if (document.getElementById('love-view').style.display !== 'none') loveLoad();
+  }
+}
+function loveUploadKick() {
+  loveTotal = loveDone + loveFailed + loveActive + loveQueue.length;
+  loveChip();
+  while (loveActive < LOVE_PARALLEL && loveQueue.length) loveUploadOne(loveQueue.shift());
+}
+// the old way (through the server, as text) — only if the direct upload is blocked
+function loveUploadViaServer(job) {
+  return loveReadB64(job.file).then(function (b64) {
+    return lovePromise('uploadLovePhoto', job.memoryId, { name: job.file.name, type: job.file.type || 'image/jpeg', data: b64 });
+  });
+}
+function loveUploadOne(job) {
+  loveActive++;
+  var f = job.file, type = f.type || (/\.heic$/i.test(f.name) ? 'image/heic' : 'image/jpeg');
+  // ask for upload links one at a time (keeps file names in order), send the photos side by side
+  var start = loveStartChain = loveStartChain.then(function () {
+    return lovePromise('startLovePhotoUpload', job.memoryId, { name: f.name, type: type, size: f.size });
+  });
+  start.catch(function () {});
+  start.then(function (s) {
+    return fetch(s.uploadUrl, { method: 'PUT', headers: { 'Content-Type': type }, body: f })
+      .then(function (res) {
+        if (!res.ok) throw new Error('Drive ' + res.status);
+        return res.json();
+      })
+      .then(function (d) { return lovePromise('finishLovePhotoUpload', s.photoId, d.id); })
+      .catch(function (err) {
+        // blocked / dropped → tidy up, then try the slower way once
+        lovePromise('cancelLovePhotoUpload', s.photoId).catch(function () {});
+        return loveUploadViaServer(job);
+      });
+  }).then(function () { loveDone++; }, function (err) { loveFailed++; toast((err && err.message) || 'Upload failed'); })
+    .then(function () { loveActive--; loveUploadKick(); });
+}
+window.addEventListener('beforeunload', function (e) {
+  if (loveQueue.length || loveActive) { e.preventDefault(); e.returnValue = ''; }
+});
 
 function loveWire() {
   if (!document.getElementById('love-view')) return;

@@ -1468,6 +1468,9 @@ const ACTIONS = {
   getLoveData,
   saveLoveMemory,
   uploadLovePhoto,
+  startLovePhotoUpload,
+  finishLovePhotoUpload,
+  cancelLovePhotoUpload,
   deleteLovePhoto,
   deleteLoveMemory
 };
@@ -1709,8 +1712,10 @@ function loveMemoryOut_(m, photos) {
 async function getLoveData(env) {
   const [mem, ph] = await Promise.all([
     sb(env, 'love_memories?select=id,day,province,place,note,tags&order=day.desc,id.desc&limit=2000'),
-    sb(env, 'love_photos?select=id,memory_id,drive_id,name&order=id.asc&limit=10000')
+    sb(env, 'love_photos?select=id,memory_id,drive_id,name&drive_id=not.like.pending:*&order=id.asc&limit=10000')
   ]);
+  // uploads that never finished (closed tab, lost signal) → forget them after a day
+  sb(env, 'love_photos?drive_id=like.pending:*&created_at=lt.' + new Date(Date.now() - 86400000).toISOString(), { method: 'DELETE', prefer: 'return=minimal' }).catch(() => {});
   let him = [];
   try { him = (await sb(env, 'calendar_notes?kind=eq.him&select=day,note,repeat&order=day.asc')).map((r) => ({ day: r.day, note: r.note || '', repeat: r.repeat || '' })); }
   catch (e) { him = []; }
@@ -1742,18 +1747,55 @@ async function uploadLovePhoto(env, [memoryId, file]) {
   if (data.length * 0.75 > LOVE_MAX_BYTES_) throw new Error('Photo is over 25MB');
   const mem = await sb(env, 'love_memories?id=eq.' + Number(memoryId) + '&select=id,day,province');
   if (!mem.length) throw new Error('Memory not found');
-  const base = loveFileName_(mem[0].day, mem[0].province);
-  // same day + place more than once → _2, _3 …
-  const same = await sb(env, 'love_photos?name=like.' + encodeURIComponent(base.replace(/[%_]/g, (c) => '\\' + c)) + '*&select=name');
-  const taken = new Set(same.map((r) => r.name.replace(/\.[^.]+$/, '')));
-  let name = base, n = 1;
-  while (taken.has(name)) name = base + '_' + (++n);
-  name += '.' + (LOVE_EXT_[mime] || (String(file.name || '').split('.').pop() || 'jpg').toLowerCase());
+  const name = await loveFreeName_(env, mem[0], mime, file.name);
   const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
   const token = await driveToken_(env);
   const up = await drive.uploadFile(token, loveFolder_(await googleSaved_(env)), name, mime, bytes);
   const row = (await sb(env, 'love_photos', { method: 'POST', body: JSON.stringify([{ memory_id: mem[0].id, drive_id: up.id, name, mime }]) }))[0];
   return { id: row.id, driveId: up.id, name };
+}
+// same day + place more than once → _2, _3 …
+async function loveFreeName_(env, mem, mime, original) {
+  const base = loveFileName_(mem.day, mem.province);
+  const same = await sb(env, 'love_photos?name=like.' + encodeURIComponent(base.replace(/[%_]/g, (c) => '\\' + c)) + '*&select=name');
+  const taken = new Set(same.map((r) => r.name.replace(/\.[^.]+$/, '')));
+  let name = base, n = 1;
+  while (taken.has(name)) name = base + '_' + (++n);
+  return name + '.' + (LOVE_EXT_[mime] || (String(original || '').split('.').pop() || 'jpg').toLowerCase());
+}
+// Fast path: the browser sends the ORIGINAL photo straight to Google Drive.
+// 1) startLovePhotoUpload → keeps the file name + gives a one-time upload link
+// 2) the browser PUTs the file to that link
+// 3) finishLovePhotoUpload → checks the file landed in the album folder, saves it
+async function startLovePhotoUpload(env, [memoryId, file]) {
+  file = file || {};
+  const mime = String(file.type || 'image/jpeg').toLowerCase();
+  if (!/^image\//.test(mime)) throw new Error('Only photos can go in the album');
+  const mem = await sb(env, 'love_memories?id=eq.' + Number(memoryId) + '&select=id,day,province');
+  if (!mem.length) throw new Error('Memory not found');
+  const name = await loveFreeName_(env, mem[0], mime, file.name);
+  const pendingId = 'pending:' + crypto.randomUUID();
+  const row = (await sb(env, 'love_photos', { method: 'POST', body: JSON.stringify([{ memory_id: mem[0].id, drive_id: pendingId, name, mime }]) }))[0];
+  try {
+    const url = await drive.startUpload(await driveToken_(env), loveFolder_(await googleSaved_(env)), name, mime, Number(file.size) || 0, env.__origin);
+    return { photoId: row.id, uploadUrl: url, name };
+  } catch (e) {
+    await sb(env, 'love_photos?id=eq.' + row.id, { method: 'DELETE', prefer: 'return=minimal' });
+    throw e;
+  }
+}
+async function finishLovePhotoUpload(env, [photoId, driveId]) {
+  const rows = await sb(env, 'love_photos?id=eq.' + Number(photoId) + '&select=id,drive_id,name');
+  if (!rows.length || rows[0].drive_id.indexOf('pending:') !== 0) throw new Error('Upload not found');
+  const g = await googleSaved_(env);
+  const info = await drive.fileInfo(await driveToken_(env), String(driveId || ''));
+  if (!info || info.trashed || !(info.parents || []).includes(loveFolder_(g))) throw new Error('That file is not in the album folder');
+  await sb(env, 'love_photos?id=eq.' + Number(photoId), { method: 'PATCH', body: JSON.stringify({ drive_id: info.id }), prefer: 'return=minimal' });
+  return { id: Number(photoId), driveId: info.id, name: rows[0].name };
+}
+async function cancelLovePhotoUpload(env, [photoId]) {
+  await sb(env, 'love_photos?id=eq.' + Number(photoId) + '&drive_id=like.pending:*', { method: 'DELETE', prefer: 'return=minimal' });
+  return { ok: true };
 }
 async function deleteLovePhoto(env, [id]) {
   const rows = await sb(env, 'love_photos?id=eq.' + Number(id) + '&select=drive_id');
