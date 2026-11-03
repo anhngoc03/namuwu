@@ -526,8 +526,16 @@
       if (d.error) hint.textContent = d.error;
     }).catch(function (e) { st.textContent = 'Error'; hint.textContent = e.message; });
   }
+  // page colours (the pages inside the houses): follow the phone, or always light / dark
+  function pageTheme() { try { var t = localStorage.getItem('henlo_theme'); return t === 'dark' || t === 'light' ? t : 'auto'; } catch (e) { return 'auto'; } }
+  function setPageTheme(t) {
+    try { if (t === 'auto') localStorage.removeItem('henlo_theme'); else localStorage.setItem('henlo_theme', t); } catch (e) {}
+    if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+  }
   function openSettings() {
     if (!unlocked()) return;
+    var th = pageTheme();
+    document.querySelectorAll('input[name=set-theme]').forEach(function (r) { r.checked = r.value === th; });
     document.getElementById('village-settings-modal').classList.add('active');
     renderPush();
     renderDrive();
@@ -556,6 +564,7 @@
       call('sendTestPush').then(function (r) { toast(r.sent ? 'Sent ✿ (' + r.sent + ' device' + (r.sent === 1 ? '' : 's') + ')' : 'No device has notifications on'); })
         .catch(function (e) { toast(e.message); });
     };
+    document.querySelectorAll('input[name=set-theme]').forEach(function (r) { r.onchange = function () { setPageTheme(r.value); }; });
     document.getElementById('set-drive-btn').onclick = function () {
       if (driveOn) {
         if (!confirm('Disconnect Google Drive? Photos stay in Drive; the album can\'t show them until you connect again.')) return;
@@ -590,9 +599,7 @@
       if (unlocked()) { lockPersonal(); villageRefresh(); return; }
       openPersonalGate(function () { villageRefresh(); });
     };
-    document.getElementById('village-home').onclick = function () { goHome('home'); };
     document.getElementById('personal-back').onclick = leaveHouse;
-    document.getElementById('personal-home').onclick = function () { goHome('home'); };
     labelsEl.addEventListener('click', function (e) {
       var b = e.target.closest('[data-house]');
       if (b) openHouse(b.dataset.house);

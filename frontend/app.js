@@ -387,7 +387,7 @@ var VIEW_OPENERS_ = {
    reloading stays on the same page and the browser Back button works.
    Cloudflare Pages serves index.html for any unknown path (no 404.html), which is
    what lets "/tools/yakult" etc. load this same page. */
-var SECTION_PATHS_ = { home: '/', tools: '/tools', games: '/games', personal: '/personal' };
+var SECTION_PATHS_ = { personal: '/' };      // the village is the front page (old /, /personal, /tools, /games all land there)
 var VIEW_PATHS_ = {
   'datediff-view': '/tools/day-counter',
   'converter-view': '/tools/pdf-converter',
@@ -426,9 +426,8 @@ function routeFromLocation_() {
       VIEW_OPENERS_[viewId]();
       return;
     }
-    var section = Object.keys(SECTION_PATHS_).find(function (k) { return SECTION_PATHS_[k] === path; }) || 'home';
-    goHome(section);   // Personal opens the village; its ✮⋆˙ asks for the password
-    if (path !== SECTION_PATHS_[section]) history.replaceState(null, '', SECTION_PATHS_[section]);
+    goHome('personal');   // any other address opens the village; its ✮⋆˙ asks for the password
+    if (path !== '/') history.replaceState(null, '', '/');
   } finally {
     routing_ = false;
   }
@@ -549,7 +548,7 @@ var MOBILE_NAV_OPENERS_ = {
 
 // Controls which part of the Home tab is visible: 'home' = To Do List section only,
 // 'tools' = only the Tools cards, 'games' = only the Games cards. Each is exclusive now.
-var currentHomeSection_ = 'home';
+var currentHomeSection_ = 'personal';
 function showHomeSection(section) {
   // Personal = the village. Locked it is only a picture (village.js); the features
   // behind it still each go through requirePersonal().
@@ -616,6 +615,8 @@ function syncFixedHeaderOffsets() {
 // running" step (stopping timers/music/polling), regardless of which view you're
 // actually leaving. Harmless no-op for anything that wasn't running.
 function goHome(section) {
+  // There's no Home page any more: everything lives in the village (/), so every "go home" lands there.
+  if (section !== 'personal') section = 'personal';
   stopRunningViews_();
   showView('menu-view');
   showHomeSection(section);

@@ -101,6 +101,12 @@ Nguyên tắc: **dữ liệu cũ giữ nguyên**, nhà mới dùng lại bảng 
 - Thanh dưới chỉ còn Home + Village; vào trang nào cũng có ‹ (về đảo) + 🍅 (về Home).
 - Các vật đứng yên được gộp thành vài lô lớn, nhân vật gộp theo khớp → ~300 lần vẽ/khung hình (trước ~660) cho điện thoại.
 
+## 5f. Không còn trang Home
+
+- Vào web (`/`) là thấy đảo 3D luôn; mọi đường dẫn cũ (`/personal`, `/tools`, `/games`…) đều về đảo. Không còn thanh menu dưới; trong mỗi nhà chỉ có ‹ (về đảo). Sáng/tối của các trang: ⚙︎ → Page colours.
+- Người kiểu Minecraft: mỗi người một "skin" 64×64 điểm ảnh (vẽ bằng canvas), dán lên các khối đầu/thân/tay/chân.
+- Đồi phía sau (Town Hall + nhà Goals) có đường dốc lên; núi tuyết phía sau, thác nước → sông chảy xuống hồ, cầu gỗ chỗ sông cắt đường; công viên quanh hồ (đường dạo, ghế, bồn hoa, vịt). Bầu trời chuyển màu, cỏ loang lổ.
+
 ## 6. Đã chốt
 
 1. Agent được tự làm tất cả (hỏi lại trước khi xoá).
