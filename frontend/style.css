@@ -2305,19 +2305,24 @@ body.love-room #love-view .love-head, body.love-room #love-view .love-hint{ poin
 .lb-wrap.in .lb-book{ transform:none; opacity:1; }
 /* a portrait book bound on the left: the cover and the pages turn from right to left */
 .lb-cover{ position:absolute; inset:0; border-radius:6px 16px 16px 6px; cursor:pointer; z-index:3;
-  background:radial-gradient(120% 90% at 30% 20%, #f8d777 0%, #f2c14e 55%, #e2a93a 100%);
+  background:radial-gradient(120% 90% at 30% 20%, #e3f1fd 0%, #c9e3f8 55%, #b4d6f2 100%);
   box-shadow:inset 12px 0 0 rgba(0,0,0,.09), inset 14px 0 0 rgba(255,255,255,.12), 0 18px 40px rgba(60,30,20,.35);
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:#7a4a2a;
   transform-origin:left center; transition:transform .8s cubic-bezier(.5,0,.3,1), opacity .2s ease .6s; backface-visibility:hidden; }
-.lb-cover::before{ content:''; position:absolute; inset:16px 14px 14px 24px; border:2px dashed rgba(122,74,42,.35); border-radius:6px 12px 12px 6px; pointer-events:none; }
-.lb-heart{ font-size:72px; line-height:1; color:#e0485f; text-shadow:0 3px 0 rgba(150,30,50,.25); }
-.lb-names{ font-family:'Dancing Script', cursive; font-weight:700; font-size:clamp(26px, 7.2vw, 34px); line-height:1.15; text-align:center; color:#7a4a2a; }
+.lb-cover::before{ content:''; position:absolute; inset:16px 14px 14px 24px; border:2px dashed rgba(107,74,47,.3); border-radius:6px 12px 12px 6px; pointer-events:none; }
+.lb-cover::after{ content:'★   ✦        ✦   ★'; white-space:pre; position:absolute; inset:34px 30px auto 40px; text-align:center; color:#fff; font-size:16px; line-height:1.4; opacity:.9; pointer-events:none; }
+@font-face{ font-family:'Pretty On The Inside'; src:url('/fonts/PrettyOnTheInside.woff2') format('woff2'), url('/fonts/PrettyOnTheInside.ttf') format('truetype'); font-display:swap; }
+.lb-heart{ width:min(30vw, 118px); height:auto; filter:drop-shadow(0 4px 0 rgba(214,110,150,.28)); animation:lbBeat 2.4s ease-in-out infinite; }
+@keyframes lbBeat{ 0%,100%{ transform:scale(1); } 12%{ transform:scale(1.08); } 24%{ transform:scale(.98); } 36%{ transform:scale(1.05); } }
+.lb-title{ font-family:'Pretty On The Inside', 'Henny Penny', cursive; font-size:clamp(28px, 8vw, 38px); line-height:1.08; text-align:center; color:#6b4a2f; padding:0 22px; }
+.lb-names{ font-family:'Dancing Script', cursive; font-weight:700; font-size:clamp(19px, 5.2vw, 24px); line-height:1.2; text-align:center; color:#6b4a2f; padding:0 26px; }
+.lb-sym{ font-family:'Noto Sans Warang Citi', 'Dancing Script', sans-serif; font-weight:400; color:#e88fb0; white-space:nowrap; }
 .lb-day{ font-family:'Dancing Script', cursive; font-size:20px; color:#8a5a3a; }
 .lb-day b{ font-family:'Nunito', sans-serif; font-size:16px; margin-left:4px; }
 .lb-open{ position:absolute; bottom:22px; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase; opacity:.55; }
 .lb-book.open .lb-cover{ transform:rotateY(-178deg); opacity:0; pointer-events:none; }
-.lb-spread{ position:absolute; inset:0; border-radius:6px 16px 16px 6px; background:#e2a93a; padding:6px 6px 6px 12px; box-shadow:0 18px 40px rgba(60,30,20,.35); transform-style:preserve-3d; }
-.lb-spread::after{ content:''; position:absolute; top:6px; bottom:6px; left:12px; width:18px; background:linear-gradient(90deg, rgba(120,80,40,.22), transparent); pointer-events:none; z-index:3; }
+.lb-spread{ position:absolute; inset:0; border-radius:6px 16px 16px 6px; background:#b4d6f2; padding:6px 6px 6px 12px; box-shadow:0 18px 40px rgba(60,30,20,.35); transform-style:preserve-3d; }
+.lb-spread::after{ content:''; position:absolute; top:6px; bottom:6px; left:12px; width:18px; background:linear-gradient(90deg, rgba(90,120,160,.2), transparent); pointer-events:none; z-index:3; }
 .lb-page, .lb-face{ position:absolute; top:6px; bottom:6px; left:12px; right:6px; background:#fffaf0; overflow:hidden; border-radius:2px 10px 10px 2px; }
 .lb-leaf{ position:absolute; top:6px; bottom:6px; left:12px; right:6px; transform-origin:left center; transform-style:preserve-3d; display:none; z-index:2; }
 .lb-leaf .lb-face{ inset:0; }
@@ -2327,12 +2332,12 @@ body.love-room #love-view .love-head, body.love-room #love-view .love-hint{ poin
 @keyframes lbLeft{ from{ transform:rotateY(0deg); } 60%{ box-shadow:-20px 0 30px rgba(0,0,0,.15); } to{ transform:rotateY(-178deg); } }
 @keyframes lbRight{ from{ transform:rotateY(-178deg); } to{ transform:rotateY(0deg); } }
 .lb-face{ backface-visibility:hidden; }
-.lb-back{ transform:rotateY(180deg); background:repeating-linear-gradient(#fffaf0 0 25px, #f3e6d2 25px 26px); }
+.lb-back{ transform:rotateY(180deg); background:repeating-linear-gradient(#fffaf5 0 25px, #e6eefa 25px 26px); }
 /* the page: words on top, the photos in frames below */
 .lb-pg{ position:relative; height:100%; display:flex; flex-direction:column; gap:10px; padding:16px 16px 26px 22px; color:#6b4a3a;
-  background:linear-gradient(#fffaf0, #fbf2e3); }
+  background:linear-gradient(#fffaf5, #fdf1f5); }
 .lb-head{ position:relative; display:flex; gap:12px; align-items:flex-start; padding-right:30px; }
-.lb-date{ font-family:'Dancing Script', cursive; font-size:46px; line-height:.85; color:#c0485f; text-align:center; }
+.lb-date{ font-family:'Dancing Script', cursive; font-size:46px; line-height:.85; color:#e88fb0; text-align:center; }
 .lb-date small{ display:block; font-family:'Nunito', sans-serif; font-size:11px; font-weight:800; color:#8a6a5a; letter-spacing:.5px; margin-top:6px; white-space:nowrap; }
 .lb-meta{ flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
 .lb-prov{ font-weight:800; font-size:14px; }
@@ -2345,7 +2350,7 @@ body.love-room #love-view .love-head, body.love-room #love-view .love-hint{ poin
 .lb-col.n4{ grid-template:1fr 1fr / 1fr 1fr; }
 .lb-col.n5{ grid-template:1.2fr 1fr / repeat(6, 1fr); } .lb-col.n5 .lb-cell:nth-child(-n+2){ grid-column:span 3; } .lb-col.n5 .lb-cell:nth-child(n+3){ grid-column:span 2; }
 .lb-col.n6{ grid-template:1fr 1fr 1fr / 1fr 1fr; }
-.lb-cell{ position:relative; border:0; padding:4px; background:#fff; border-radius:4px; box-shadow:0 2px 6px rgba(120,80,40,.18); cursor:pointer; min-height:0; overflow:hidden; }
+.lb-cell{ position:relative; border:0; padding:4px; background:#fff; border-radius:4px; box-shadow:0 2px 6px rgba(120,110,160,.2); cursor:pointer; min-height:0; overflow:hidden; }
 .lb-cell:nth-child(odd){ transform:rotate(-0.8deg); } .lb-cell:nth-child(even){ transform:rotate(0.8deg); }
 .lb-cell img{ width:100%; height:100%; object-fit:cover; display:block; border-radius:2px; }
 .lb-more{ position:absolute; inset:4px; display:flex; align-items:center; justify-content:center; background:rgba(60,40,45,.45); color:#fff; font-weight:800; font-size:20px; border-radius:2px; }
@@ -2353,7 +2358,7 @@ body.love-room #love-view .love-head, body.love-room #love-view .love-hint{ poin
 .lb-none small{ font-size:12px; font-weight:700; color:#b89a8a; }
 .lb-pno{ position:absolute; bottom:8px; right:14px; font-size:11px; font-weight:800; color:#b89a8a; }
 .lb-end{ align-items:center; justify-content:center; text-align:center; font-weight:700; }
-.lb-end-heart{ font-size:42px; color:#e0485f; }
+.lb-end-heart{ font-size:42px; color:#f4a6c0; }
 .lb-nav{ display:flex; gap:14px; align-items:center; opacity:0; transition:opacity .3s ease .15s; }
 .lb-wrap.in .lb-nav{ opacity:1; }
 .lb-nav button{ width:44px; height:44px; border-radius:50%; border:0; background:#fffaf0; color:#6b4a3a; font-size:24px; cursor:pointer; }

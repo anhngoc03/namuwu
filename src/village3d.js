@@ -2414,15 +2414,15 @@ const ROOMS = {
       R.frames = [pic];
       // fairy lights along the wall top
       for (let k = 0; k < 14; k++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), new THREE.MeshBasicMaterial({ color: [0xfff1a8, 0xffb6c1][k % 2] })); b.position.set(-4 + k * 0.62, 3.45 - Math.sin(k * 0.9) * 0.08, -3.38); g.add(b); }
-      // a little table beside the sofa with the yellow album (a heart on the cover) — tap it
+      // a little table beside the sofa with the pastel-blue album (a pink heart on the cover) — tap it
       const st = new THREE.Group(); st.position.set(1.65, 0, -2.3); g.add(st);
       const top = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.06, 18), mat(0xe2c39e)); top.position.y = 0.6; st.add(top);
       st.add(box(0.07, 0.6, 0.07, 0xb08a68, 0, 0.3, 0));
       const base = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 0.04, 14), mat(0xb08a68)); base.position.y = 0.02; st.add(base);
       const album = new THREE.Group(); album.position.set(0, 0.67, 0); album.rotation.y = -0.35; album.userData.pick = 'album'; st.add(album);
-      album.add(box(0.5, 0.08, 0.38, 0xf2c14e, 0, 0, 0));
-      album.add(box(0.04, 0.085, 0.38, 0xd9a62e, -0.25, 0, 0));
-      const ah = heart(0xe0485f); ah.scale.setScalar(0.15); ah.rotation.x = -Math.PI / 2; ah.position.set(0.02, 0.045, 0.06); album.add(ah);
+      album.add(box(0.5, 0.08, 0.38, 0xc9e3f8, 0, 0, 0));
+      album.add(box(0.04, 0.085, 0.38, 0xa9cbe8, -0.25, 0, 0));
+      const ah = heart(0xf48fb1); ah.scale.setScalar(0.15); ah.rotation.x = -Math.PI / 2; ah.position.set(0.02, 0.045, 0.06); album.add(ah);
       R.album = album;
       // the dining table (bún chả at lunchtime)
       const dt = new THREE.Group(); dt.position.set(1.3, 0, 1.25); g.add(dt);

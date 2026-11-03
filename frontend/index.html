@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#ffb6c1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Fredoka:wght@400;600;700&family=Baloo+2:wght@500;700&family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Fredoka:wght@400;600;700&family=Baloo+2:wght@500;700&family=Dancing+Script:wght@600;700&family=Henny+Penny&family=Noto+Sans+Warang+Citi&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
   <script src="/theme.js"></script>
 </head>
@@ -89,8 +89,15 @@
     <div class="lb-stage" id="lb-stage">
       <div class="lb-book" id="lb-book">
         <div class="lb-cover" id="lb-cover">
-          <div class="lb-heart">♥</div>
-          <div class="lb-names">Mai Ánh Ngọc<br>&amp;<br>Nguyễn Tuấn Hùng</div>
+          <svg class="lb-heart" viewBox="0 0 120 110" aria-hidden="true">
+            <defs><linearGradient id="lbHg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc6d9"/><stop offset="1" stop-color="#f48fb1"/></linearGradient></defs>
+            <path d="M60 102 C20 74 6 52 6 33 C6 16 19 5 34 5 C46 5 55 12 60 22 C65 12 74 5 86 5 C101 5 114 16 114 33 C114 52 100 74 60 102 Z" fill="url(#lbHg)" stroke="#fff" stroke-width="5" stroke-linejoin="round"/>
+            <path d="M28 22 C22 25 19 31 19 37" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".85"/>
+            <circle cx="22" cy="47" r="3.5" fill="#fff" opacity=".85"/>
+            <path d="M100 8 l3 7 7 1 -5 5 1 7 -6 -4 -6 4 1 -7 -5 -5 7 -1z" fill="#fff3a6" stroke="#fff" stroke-width="1.5"/>
+          </svg>
+          <div class="lb-title">Love you to the<br>moon and back</div>
+          <div class="lb-names">Mai Ánh Ngọc <span class="lb-sym">𑣲⋆</span> Nguyễn Tuấn Hùng</div>
           <div class="lb-day" id="lb-day"></div>
           <div class="lb-open">tap to open</div>
         </div>
