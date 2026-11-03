@@ -2076,3 +2076,65 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
   .cal-sheet .modal-box{ max-width:none; border-radius:28px 28px 0 0; padding-bottom:calc(var(--sp-6) + env(safe-area-inset-bottom)); transform:translateY(40px); }
   .cal-sheet.active .modal-box{ transform:none; }
 }
+
+/* ============================================================
+   PERSONAL › VILLAGE (village.js) — pixel scene on a canvas.
+   Locked: picture only + the tiny ✮⋆˙ button. Unlocked: house name tags.
+   ============================================================ */
+.content-section.personal .nav-card-grid{ display:none !important; }
+.village{
+  position:relative; width:100%; margin:0 auto;
+  max-width:min(980px, calc((100vh - 120px) * 1.6));
+  aspect-ratio:256 / 160;
+  border-radius:var(--r-lg); overflow:hidden;
+  box-shadow:var(--shadow-card);
+  background:#c6e6ad;
+  user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent;
+}
+.village.village-port{ max-width:min(520px, calc((100vh - 110px) * 0.625)); }
+.village-canvas{
+  position:absolute; inset:0; width:100%; height:100%;
+  image-rendering:pixelated; image-rendering:crisp-edges; display:block;
+}
+.village-labels{ position:absolute; inset:0; }
+.village-star{
+  position:absolute; top:8px; right:8px; z-index:3;
+  padding:3px 8px; border:0; border-radius:var(--r-pill);
+  background:rgba(255,255,255,.45); color:#8a7a9a;
+  font-size:12px; line-height:1.2; letter-spacing:1px; cursor:pointer;
+  backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
+  transition:background var(--dur-component), transform var(--dur-component);
+}
+.village-star:hover{ background:rgba(255,255,255,.7); }
+.village-star:active{ transform:scale(.92); }
+.village-unlocked .village-star{ color:#d97a94; }
+
+.village-spot{
+  position:absolute; padding:0; border:0; background:transparent; cursor:pointer;
+  display:flex; align-items:flex-end; justify-content:center;
+  animation:villageTagIn .3s cubic-bezier(.22,.9,.3,1) both;
+}
+.village-tag{
+  transform:translateY(70%);
+  padding:1px 6px; border-radius:var(--r-pill);
+  background:rgba(255,250,234,.92); color:var(--ink-on-pastel);
+  font-size:clamp(9px, 1.25vw, 12px); font-weight:800; white-space:nowrap;
+  box-shadow:0 1px 3px rgba(90,74,74,.18); pointer-events:none;
+}
+.village-port .village-tag{ font-size:clamp(9px, 2.6vw, 12px); }
+.village-spot.soon .village-tag{ opacity:.72; }
+.village-spot:hover .village-tag, .village-spot:focus-visible .village-tag{ background:#fff; transform:translateY(70%) scale(1.06); }
+.village-spot.hall .village-tag{ background:#ffd6df; }
+.village-spot.hall.alert .village-tag{ background:#ff9bb0; color:#fff; animation:villagePulse 1.2s ease-in-out infinite; }
+.village-spot.hall .village-tag b{ margin-left:2px; }
+@keyframes villageTagIn{ from{ opacity:0; transform:translateY(4px); } to{ opacity:1; transform:none; } }
+@keyframes villagePulse{ 50%{ transform:translateY(70%) scale(1.08); } }
+.village-hall-list{ display:flex; flex-direction:column; gap:2px; }
+.village-hall-empty{ text-align:center; padding:var(--sp-4) 0; font-weight:700; opacity:.75; }
+
+:root[data-theme="dark"] .village{ background:#3e5b4c; }
+:root[data-theme="dark"] .village-star{ background:rgba(0,0,0,.28); color:#cfc5b4; }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .village{ background:#3e5b4c; }
+  :root:not([data-theme="light"]) .village-star{ background:rgba(0,0,0,.28); color:#cfc5b4; }
+}

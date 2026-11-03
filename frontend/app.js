@@ -419,19 +419,14 @@ function routeFromLocation_() {
     if (viewId) {
       stopRunningViews_();
       if (/^(accounts|expense|work|calendar)-view$/.test(viewId)) {
-        // Personal: show Home underneath, then ask for the password first.
-        if (!personalUnlocked) { showView('menu-view'); showHomeSection('home'); }
+        // Personal: show the (locked) village underneath, then ask for the password first.
+        if (!personalUnlocked) { showView('menu-view'); showHomeSection('personal'); }
       }
       VIEW_OPENERS_[viewId]();
       return;
     }
     var section = Object.keys(SECTION_PATHS_).find(function (k) { return SECTION_PATHS_[k] === path; }) || 'home';
-    if (section === 'personal') {
-      if (!personalUnlocked) { goHome('home'); }
-      requirePersonal(function () { goHome('personal'); });
-    } else {
-      goHome(section);
-    }
+    goHome(section);   // Personal opens the village; its ✮⋆˙ asks for the password
     if (path !== SECTION_PATHS_[section]) history.replaceState(null, '', SECTION_PATHS_[section]);
   } finally {
     routing_ = false;
@@ -555,8 +550,8 @@ var MOBILE_NAV_OPENERS_ = {
 // 'tools' = only the Tools cards, 'games' = only the Games cards. Each is exclusive now.
 var currentHomeSection_ = 'home';
 function showHomeSection(section) {
-  // Personal is never shown without the password having been entered this session.
-  if (section === 'personal' && !personalUnlocked) section = 'home';
+  // Personal = the village. Locked it is only a picture (village.js); the features
+  // behind it still each go through requirePersonal().
   currentHomeSection_ = section;
   var parts = {
     home: document.querySelector('.home-section'),
@@ -574,6 +569,7 @@ function showHomeSection(section) {
     loadHomeYakultTile();
     if (typeof workLoadHomeBlock === 'function') workLoadHomeBlock();
   }
+  if (section === 'personal' && typeof villageRefresh === 'function') villageRefresh();
   setNavActive(section);
   setPath_(SECTION_PATHS_[section]);
 }
@@ -693,7 +689,7 @@ window.addEventListener('personal-unauthorized', function () {
   window.__personalToken = null;
   hideLoading();
   toast('Session expired — please log in again');
-  goHome('home');
+  goHome(/^\/personal/.test(location.pathname) ? 'personal' : 'home');
 });
 
 // Auto-lock: 10 minutes without touching anything → Personal locks again.
@@ -710,7 +706,7 @@ function lockPersonal(reason) {
   document.querySelectorAll('.modal-overlay.active').forEach(function (m) { m.classList.remove('active'); });
   hideLoading();
   var onPersonal = /^\/personal/.test(location.pathname);
-  if (onPersonal) goHome('home');
+  if (onPersonal) goHome('personal');   // back to the village, locked
   if (reason) toast(reason);
 }
 function checkPersonalIdle_() {
@@ -4259,8 +4255,7 @@ document.addEventListener('DOMContentLoaded', function () {
     btn.onclick = function () {
       var sec = btn.dataset.navSection;
       closeMobileNavDrawer();
-      if (sec === 'personal') requirePersonal(function () { goHome('personal'); });
-      else goHome(sec);
+      goHome(sec);
     };
   });
   document.querySelectorAll('.app-nav-group-toggle').forEach(function (btn) {
@@ -4341,7 +4336,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('acc-gate-close').onclick = function () {
     document.getElementById('accounts-modal').classList.remove('active');
     personalAfterUnlock_ = null;
-    if (!personalUnlocked && /^\/personal/.test(location.pathname)) goHome('home');
+    if (!personalUnlocked && /^\/personal\//.test(location.pathname)) goHome('personal');
   };
 
   document.getElementById('home-add-btn').onclick = homeOpenAdd;

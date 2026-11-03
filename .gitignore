@@ -1,0 +1,17 @@
+# Secrets — never commit (put real values in Cloudflare → Settings → Variables and Secrets)
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# build / tooling
+node_modules/
+.wrangler/
+dist/
