@@ -23,8 +23,8 @@
     { id: 'money',    label: 'Money',      roof: 'peach', open: 'openExpense' },
     { id: 'calendar', label: 'Calendar',   roof: 'blue',  open: 'openCalendar' },
     { id: 'account',  label: 'Account',    roof: 'mint',  open: 'loadAccounts' },
-    { id: 'language', label: 'Languages',  roof: 'pink',  open: null },
-    { id: 'skills',   label: 'Skills',     roof: 'yellow',open: null },
+    { id: 'language', label: 'Languages',  roof: 'pink',  open: 'openStudyLanguage' },
+    { id: 'skills',   label: 'Skills',     roof: 'yellow',open: 'openStudySkills' },
     { id: 'law',      label: 'Law',        roof: 'blue',  open: null },
     { id: 'health',   label: 'Food & Gym', roof: 'mint',  open: null },
     { id: 'notes',    label: 'Notes',      roof: 'yellow',open: null },
@@ -59,7 +59,7 @@
     if (loading) return;
     loading = true;
     var sc = document.createElement('script');
-    sc.src = '/village3d.js?v=16';
+    sc.src = '/village3d.js?v=17';
     sc.onload = function () { loading = false; var w = loadWaiters; loadWaiters = []; w.forEach(function (f) { f(); }); };
     sc.onerror = function () { loading = false; loadWaiters = []; toast("Couldn't load the village ʕ´-ก̀ʔᐝ"); };
     document.head.appendChild(sc);
@@ -226,7 +226,7 @@
     return 'main';
   }
   function villageRoom(viewId) {
-    var house = VIEW_HOUSE[viewId] || null;
+    var house = viewId === 'study-view' ? (window.studyHouse === 'skills' ? 'skills' : 'language') : (VIEW_HOUSE[viewId] || null);
     roomWant = house;
     var el = document.getElementById('room-bg');
     document.body.classList.toggle('room-on', !!house);

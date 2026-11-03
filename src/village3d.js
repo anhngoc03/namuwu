@@ -2646,6 +2646,33 @@ const ROOMS = {
       rShelf(g, -4.25, 1.8, Math.PI / 2, 5); rPlant(g, 3.9, -3);
       R.windowX = 2.9;
     }, corners: { main: [0.4, 2.8, 5.6, 0, 1.1, -2.6] } },
+  language: { first: 'main', build(g, R) {
+      // a study desk with open books, flash cards on the wall, a little globe
+      const d = rDesk(g, -1.2, -2.3, 0, 0xf6c1cf);
+      d.add(box(0.5, 0.05, 0.36, 0xffffff, -0.2, 0.83, 0)); d.add(box(0.5, 0.05, 0.36, 0xfff6e8, 0.32, 0.83, 0));
+      d.add(box(0.02, 0.06, 0.36, 0xc49674, 0.06, 0.84, 0));
+      [0xa6d8e8, 0xffb6c1, 0xf5d888].forEach((c, k) => d.add(box(0.4, 0.07, 0.28, c, 0.85, 0.83 + k * 0.075, -0.05)));
+      const globe = new THREE.Mesh(new THREE.SphereGeometry(0.18, 20, 14), mat(0x9fcfe4)); globe.position.set(-0.8, 1.08, 0); d.add(globe);
+      d.add(box(0.05, 0.25, 0.05, 0xc49674, -0.8, 0.9, 0));
+      rChair(g, -1.0, -1.45, Math.PI); R.seat = { x: -1.0, z: -1.5, ry: Math.PI, y: 0.54 };
+      rWallBoard(g, -4.45, 1.9, 0.2, Math.PI / 2, 2.4, 1.4, 0xffffff,
+        [[-0.75, 0.35, 0xffb6c1], [-0.25, 0.35, 0xfff1a8], [0.25, 0.35, 0xa6d8e8], [0.75, 0.35, 0xa3d9bd], [-0.5, -0.25, 0xd9c9f0], [0, -0.25, 0xffb6c1], [0.5, -0.25, 0xfff1a8]]);
+      rShelf(g, 4.25, -0.4, -Math.PI / 2, 5); rPoster(g, 4.44, 2.3, 1.8, -Math.PI / 2); rPlant(g, 3.9, -3);
+      R.windowX = 2.2;
+    }, corners: { main: [-0.3, 2.9, 5.8, -0.9, 1.1, -2.3] } },
+  skills: { first: 'main', build(g, R) {
+      // a workbench: laptop, a sketchbook, a toolbox, an easel, a progress chart
+      const d = rDesk(g, -0.6, -2.3, 0, 0xf5d888); rLaptop(d, -0.3, 0);
+      d.add(box(0.45, 0.04, 0.32, 0xffffff, 0.45, 0.83, 0.05)); d.add(box(0.02, 0.02, 0.3, 0xe8799f, 0.62, 0.86, 0.05));
+      const tb = box(0.6, 0.3, 0.32, 0xe56b6b, 3.4, 0.15, -2.6); g.add(tb); g.add(box(0.3, 0.05, 0.05, 0x3a3540, 3.4, 0.35, -2.6));
+      rChair(g, -0.4, -1.45, Math.PI); R.seat = { x: -0.4, z: -1.5, ry: Math.PI, y: 0.54 };
+      const easel = new THREE.Group(); easel.position.set(-3.3, 0, -1.6); easel.rotation.y = 0.5; g.add(easel);
+      [-0.4, 0.4].forEach((x) => { const l = box(0.07, 1.9, 0.07, 0xc49674, x, 0.95, 0); l.rotation.z = -x * 0.15; easel.add(l); });
+      easel.add(box(1.0, 0.8, 0.05, 0xffffff, 0, 1.35, 0.06)); easel.add(box(0.5, 0.3, 0.06, 0xa6d8e8, -0.15, 1.45, 0.08)); easel.add(box(0.25, 0.25, 0.06, 0xffb6c1, 0.25, 1.2, 0.08));
+      rWallBoard(g, 4.44, 2.0, -0.5, -Math.PI / 2, 1.6, 1.2, 0xffffff, [[-0.5, -0.25, 0xa3d9bd, 0.3], [-0.15, -0.1, 0xf5d888, 0.3], [0.2, 0.05, 0xffb6c1, 0.3], [0.55, 0.2, 0xa6d8e8, 0.3]]);
+      rShelf(g, -4.25, 1.4, Math.PI / 2, 5); rPlant(g, 3.9, 2.4);
+      R.windowX = 2.4;
+    }, corners: { main: [0, 2.9, 5.8, -0.3, 1.1, -2.2] } },
   other: { first: 'main', build(g, R) {
       const d = rDesk(g, -1, -2.3); rLaptop(d, 0, 0); rChair(g, -0.8, -1.45, Math.PI); R.seat = { x: -0.8, z: -1.5, ry: Math.PI, y: 0.54 };
       rShelf(g, 4.25, -0.6, -Math.PI / 2); rPlant(g, -3.9, -3);

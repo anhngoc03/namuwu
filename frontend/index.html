@@ -390,6 +390,15 @@
         <input type="file" id="love-frame-file" accept="image/*" hidden>
       </div>
 
+      <div id="study-view" class="app-view" style="display:none;">
+        <div class="study-head">
+          <button type="button" class="st-backbtn" id="study-back" hidden aria-label="All roadmaps">‹</button>
+          <h2 class="page-title" id="study-title">Languages</h2>
+          <button class="pill-btn" id="study-new-btn">✨ New roadmap</button>
+        </div>
+        <div class="study-main" id="study-main"></div>
+      </div>
+
       <div id="calendar-view" class="app-view" style="display:none;">
         <h2 class="page-title">Calendar</h2>
         <div class="work-card cal-list-card">
@@ -897,6 +906,54 @@
         <button class="pill-btn secondary" id="love-food-clear">Clear</button>
         <button class="pill-btn" id="love-food-save">Order</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ===== Study › a new roadmap ===== -->
+  <div id="study-new-modal" class="modal-overlay">
+    <div class="modal-box study-box">
+      <div class="modal-header"><h3>✨ New roadmap</h3><button id="st-new-close" class="modal-close">✕</button></div>
+      <div class="st-form">
+        <div class="expense-field-caption">What do you want to learn?</div>
+        <input type="text" id="st-new-subject" maxlength="120" autocomplete="off">
+        <small class="st-hint" id="st-new-hint"></small>
+        <div class="expense-field-caption">Where are you now?</div>
+        <input type="text" id="st-new-level" maxlength="300" placeholder="e.g. know hiragana, about N4 / total beginner" autocomplete="off">
+        <div class="expense-field-caption">Goal</div>
+        <input type="text" id="st-new-goal" maxlength="600" placeholder="e.g. pass JLPT N3 in December, read news" autocomplete="off">
+        <div class="st-row">
+          <label><span>Weeks</span><select id="st-new-weeks"><option>2</option><option>4</option><option>6</option><option selected>8</option><option>10</option><option>12</option><option>16</option></select></label>
+          <label><span>Days / week</span><select id="st-new-days"><option>2</option><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option></select></label>
+          <label><span>Minutes / day</span><select id="st-new-min"><option>15</option><option>20</option><option selected>30</option><option>45</option><option>60</option><option>90</option></select></label>
+        </div>
+        <div class="expense-field-caption">Start</div>
+        <input type="date" id="st-new-start">
+        <div class="expense-field-caption">Anything else? (optional)</div>
+        <textarea id="st-new-notes" rows="2" maxlength="1000" placeholder="e.g. I learn best with examples from work; weak at listening"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="st-new-cancel">Cancel</button>
+        <button class="pill-btn" id="st-new-save">✨ Make my roadmap</button>
+      </div>
+    </div>
+  </div>
+  <!-- ===== Study › a lesson ===== -->
+  <div id="study-lesson-modal" class="modal-overlay">
+    <div class="modal-box study-box study-read">
+      <div class="modal-header"><h3 id="st-lesson-title"></h3><button id="st-lesson-close" class="modal-close">✕</button></div>
+      <div class="st-body" id="st-lesson-body"></div>
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="st-lesson-done">Mark done</button>
+        <button class="pill-btn" id="st-lesson-ex">✍️ Exercise</button>
+      </div>
+    </div>
+  </div>
+  <!-- ===== Study › exercise / test ===== -->
+  <div id="study-test-modal" class="modal-overlay">
+    <div class="modal-box study-box study-read">
+      <div class="modal-header"><h3 id="st-test-title"></h3><button id="st-test-close" class="modal-close">✕</button></div>
+      <div class="st-body" id="st-test-body"></div>
+      <div class="modal-actions"><button class="pill-btn" id="st-test-submit">Hand in</button></div>
     </div>
   </div>
 
@@ -1652,6 +1709,7 @@
   <script src="/posts.js"></script>
   <script src="/calendar.js"></script>
   <script src="/love.js"></script>
+  <script src="/study.js"></script>
   <script src="/village.js"></script>
   <script src="/enter-confirm.js"></script>
 </body>

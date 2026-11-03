@@ -123,3 +123,10 @@ Nguyên tắc: **dữ liệu cũ giữ nguyên**, nhà mới dùng lại bảng 
 3. Luật: vbpl.vn, baochinhphu.vn, thuvienphapluat.vn — văn bản QPPL + hướng dẫn lĩnh vực y tế, và tất cả các luật, bộ luật.
 4. Savings goal chuyển sang nhà Goals.
 5. Thứ tự các nhà: như mục 5.
+
+## 5h. Study — Languages + Skills (lộ trình học, bài tập, test)
+- Bảng: `supabase/study.sql` (study_plans, study_lessons, study_tests). Chạy 1 lần trong SQL Editor.
+- AI: `lib/study.js` (Claude, JSON có cấu trúc): lập lộ trình theo tuần → soạn bài khi mở lần đầu →
+  bài tập theo bài, test theo tuần / tổng hợp, ôn lại câu sai → chấm (trắc nghiệm chấm ngay, câu viết Claude chấm).
+- Đáp án giữ ở server tới khi nộp bài. Bài tập đạt ≥ 70% thì tự tick bài học.
+- Trang: `frontend/study.js` (view `study-view`, đường dẫn /personal/study). Hall agent có tool `get_study`, `set_study_lesson_done`.

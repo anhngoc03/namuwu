@@ -17,6 +17,7 @@
  */
 
 import { drawFood } from '../lib/food.js';
+import * as study from '../lib/study.js';
 import { agentChat as runAgentChat } from '../lib/agent.js';
 import { makeVapidKeys, sendPush } from '../lib/push.js';
 import * as drive from '../lib/drive.js';
@@ -67,6 +68,7 @@ function isPersonalAction_(action) {
   if (action === 'saveHomeProfile') return true;
   if (/^agent/.test(action)) return true;              // Town Hall AI agent (village.js → lib/agent.js)
   if (/Push|Reminder/.test(action)) return action !== 'runReminders';
+  if (/Study/.test(action)) return true;                // Languages / Skills: roadmaps, lessons, tests
   if (/Love|Drive|google/.test(action)) return true;   // Love album + Google Drive link   // settings + this device; the timer itself is public        // anyone sees the Home photo/name, only you change it
   return /Expense/.test(action) && action !== 'getExpenseTodayTotal';
 }
@@ -1477,6 +1479,16 @@ const ACTIONS = {
   saveLoveFood,
   findLoveFoodImages,
   drawLoveFood,
+  getStudyData,
+  getStudyPlan,
+  createStudyPlan,
+  updateStudyPlan,
+  deleteStudyPlan,
+  openStudyLesson,
+  setStudyLessonDone,
+  makeStudyTest,
+  submitStudyTest,
+  deleteStudyTest,
   deleteLovePhoto,
   deleteLoveMemory
 };
@@ -1731,6 +1743,160 @@ async function getLoveData(env) {
   return { today: vnNow_().date, memories: mem.map((m) => loveMemoryOut_(m, ph)), him, frame: g.loveFrame || '', food };
 }
 
+
+/* ============================================================
+ *  STUDY — Languages + Skills houses (supabase/study.sql, lib/study.js)
+ *  Claude plans the roadmap, writes lessons on first open, makes exercises /
+ *  tests and marks them. Answers stay on the server until a test is handed in.
+ * ============================================================ */
+const STUDY_HOUSES_ = ['language', 'skills'];
+function studyPlanOut_(p, lessons) {
+  const ls = lessons || [];
+  return {
+    id: p.id, house: p.house, subject: p.subject, level: p.level, goal: p.goal, minutesPerDay: p.minutes_per_day,
+    daysPerWeek: p.days_per_week, weeks: p.weeks, startDate: p.start_date, notes: p.notes, summary: p.summary, status: p.status,
+    total: ls.length, done: ls.filter((l) => l.done).length,
+    next: (ls.filter((l) => !l.done).sort((a, b) => a.seq - b.seq)[0] || null)
+  };
+}
+function studyLessonOut_(l, full) {
+  return { id: l.id, planId: l.plan_id, week: l.week, seq: l.seq, day: l.day, title: l.title, goal: l.goal, done: !!l.done, hasContent: !!l.content, content: full ? l.content : undefined };
+}
+function studyTestOut_(t, reveal) {
+  const qs = (t.questions || []).map((q) => (reveal ? q : { type: q.type, q: q.q, options: q.options, points: q.points }));
+  return { id: t.id, planId: t.plan_id, lessonId: t.lesson_id, kind: t.kind, title: t.title, questions: qs, answers: t.answers || null,
+    results: t.results || null, score: t.score, max: t.max_score, feedback: t.feedback || '', createdAt: t.created_at, submittedAt: t.submitted_at };
+}
+function studyMissingTable_(e) {
+  if (/study_|does not exist|42P01/.test(String(e && e.message))) throw new Error('Run supabase/study.sql in Supabase first');
+  throw e;
+}
+async function studyPlanRow_(env, id) {
+  const rows = await sb(env, 'study_plans?id=eq.' + Number(id) + '&select=*');
+  if (!rows.length) throw new Error('Roadmap not found');
+  return rows[0];
+}
+async function getStudyData(env, [house]) {
+  house = STUDY_HOUSES_.includes(house) ? house : 'language';
+  try {
+    const plans = await sb(env, 'study_plans?house=eq.' + house + '&select=*&order=created_at.desc');
+    const ids = plans.map((p) => p.id);
+    const lessons = ids.length ? await sb(env, 'study_lessons?plan_id=in.(' + ids.join(',') + ')&select=id,plan_id,week,seq,day,title,goal,done&order=seq.asc') : [];
+    return { today: vnNow_().date, plans: plans.map((p) => studyPlanOut_(p, lessons.filter((l) => l.plan_id === p.id))) };
+  } catch (e) { studyMissingTable_(e); }
+}
+async function getStudyPlan(env, [id]) {
+  const p = await studyPlanRow_(env, id);
+  const [lessons, tests] = await Promise.all([
+    sb(env, 'study_lessons?plan_id=eq.' + p.id + '&select=id,plan_id,week,seq,day,title,goal,done,content&order=seq.asc'),
+    sb(env, 'study_tests?plan_id=eq.' + p.id + '&select=*&order=created_at.desc&limit=200')
+  ]);
+  return { today: vnNow_().date, plan: studyPlanOut_(p, lessons), lessons: lessons.map((l) => studyLessonOut_(l, false)), tests: tests.map((t) => studyTestOut_(t, !!t.submitted_at)) };
+}
+// spread the lessons over the weeks: N lessons a week, on evenly spaced days
+function studyDays_(start, lessons, perWeek) {
+  const d0 = new Date(start + 'T00:00:00Z'), gap = Math.max(1, Math.floor(7 / perWeek));
+  const byWeek = {};
+  return lessons.map((l) => {
+    const k = byWeek[l.week] = (byWeek[l.week] || 0) + 1;
+    const d = new Date(d0.getTime() + ((l.week - 1) * 7 + (k - 1) * gap) * 86400000);
+    return Object.assign({}, l, { day: d.toISOString().slice(0, 10) });
+  });
+}
+async function createStudyPlan(env, [input]) {
+  const i = input || {};
+  const plan = {
+    house: STUDY_HOUSES_.includes(i.house) ? i.house : 'language',
+    subject: String(i.subject || '').trim().slice(0, 120),
+    level: String(i.level || '').trim().slice(0, 300),
+    goal: String(i.goal || '').trim().slice(0, 600),
+    minutes_per_day: Math.max(10, Math.min(240, Number(i.minutesPerDay) || 30)),
+    days_per_week: Math.max(1, Math.min(7, Number(i.daysPerWeek) || 5)),
+    weeks: Math.max(1, Math.min(16, Number(i.weeks) || 8)),
+    start_date: /^\d{4}-\d{2}-\d{2}$/.test(String(i.startDate || '')) ? i.startDate : vnNow_().date,
+    notes: String(i.notes || '').trim().slice(0, 1000)
+  };
+  if (!plan.subject) throw new Error('What do you want to learn?');
+  await sb(env, 'study_plans?select=id&limit=1').catch(studyMissingTable_);
+  const map = await study.makeRoadmap(env, plan);
+  const [row] = await sb(env, 'study_plans', { method: 'POST', body: JSON.stringify([Object.assign({}, plan, { summary: map.summary })]) });
+  const rows = studyDays_(plan.start_date, map.lessons, plan.days_per_week).map((l) => ({ plan_id: row.id, week: l.week, seq: l.seq, day: l.day, title: l.title, goal: l.goal }));
+  await sb(env, 'study_lessons', { method: 'POST', body: JSON.stringify(rows), prefer: 'return=minimal' });
+  return getStudyPlan(env, [row.id]);
+}
+async function updateStudyPlan(env, [id, patch]) {
+  const p = patch || {}, body = {};
+  if (['active', 'paused', 'done'].includes(p.status)) body.status = p.status;
+  if (typeof p.notes === 'string') body.notes = p.notes.slice(0, 1000);
+  if (Object.keys(body).length) await sb(env, 'study_plans?id=eq.' + Number(id), { method: 'PATCH', body: JSON.stringify(body), prefer: 'return=minimal' });
+  return getStudyPlan(env, [id]);
+}
+async function deleteStudyPlan(env, [id]) {
+  const p = await studyPlanRow_(env, id);
+  await sb(env, 'study_plans?id=eq.' + p.id, { method: 'DELETE', prefer: 'return=minimal' });
+  return getStudyData(env, [p.house]);
+}
+async function openStudyLesson(env, [id]) {
+  const rows = await sb(env, 'study_lessons?id=eq.' + Number(id) + '&select=*');
+  if (!rows.length) throw new Error('Lesson not found');
+  const l = rows[0];
+  if (!l.content) {
+    const p = await studyPlanRow_(env, l.plan_id);
+    const before = (await sb(env, 'study_lessons?plan_id=eq.' + p.id + '&seq=lt.' + l.seq + '&select=title&order=seq.asc')).map((x) => x.title).slice(-12);
+    l.content = String(await study.writeLesson(env, p, l, before)).slice(0, 40000);
+    await sb(env, 'study_lessons?id=eq.' + l.id, { method: 'PATCH', body: JSON.stringify({ content: l.content }), prefer: 'return=minimal' });
+  }
+  return studyLessonOut_(l, true);
+}
+async function setStudyLessonDone(env, [id, done]) {
+  await sb(env, 'study_lessons?id=eq.' + Number(id), { method: 'PATCH', body: JSON.stringify({ done: !!done, done_at: done ? new Date().toISOString() : null }), prefer: 'return=minimal' });
+  return { ok: true };
+}
+// kind: exercise (one lesson) | test (a week, or everything done so far) | review (redo what was wrong)
+async function makeStudyTest(env, [planId, opts]) {
+  const o = opts || {}, p = await studyPlanRow_(env, planId);
+  const kind = ['exercise', 'test', 'review'].includes(o.kind) ? o.kind : 'exercise';
+  let lessons = [], mistakes = [], title = '';
+  if (kind === 'exercise') {
+    const rows = await sb(env, 'study_lessons?id=eq.' + Number(o.lessonId) + '&plan_id=eq.' + p.id + '&select=*');
+    if (!rows.length) throw new Error('Lesson not found');
+    lessons = rows; title = 'Exercise · ' + rows[0].title;
+  } else if (kind === 'test') {
+    const all = await sb(env, 'study_lessons?plan_id=eq.' + p.id + '&select=id,week,seq,title,goal,done&order=seq.asc');
+    lessons = o.week ? all.filter((l) => l.week === Number(o.week)) : all.filter((l) => l.done);
+    if (!lessons.length) lessons = all.slice(0, p.days_per_week);
+    title = o.week ? 'Week ' + o.week + ' test' : 'Test · everything so far';
+  } else {
+    const done = await sb(env, 'study_tests?plan_id=eq.' + p.id + '&submitted_at=not.is.null&select=questions,results&order=submitted_at.desc&limit=30');
+    done.forEach((t) => (t.results || []).forEach((r, i) => { if (r && !r.correct && t.questions[i]) mistakes.push({ q: t.questions[i].q, answer: t.questions[i].answer }); }));
+    mistakes = mistakes.slice(0, 20);
+    if (!mistakes.length) throw new Error('No mistakes to review yet ♡');
+    title = 'Review · ' + mistakes.length + ' things you missed';
+  }
+  const count = kind === 'exercise' ? 6 : kind === 'review' ? Math.min(12, Math.max(4, mistakes.length)) : Math.min(15, 6 + lessons.length);
+  const made = await study.makeQuestions(env, p, { kind, lessons, mistakes, count });
+  const [row] = await sb(env, 'study_tests', { method: 'POST', body: JSON.stringify([{ plan_id: p.id, lesson_id: kind === 'exercise' ? lessons[0].id : null, kind, title: title || made.title, questions: made.questions, max_score: made.questions.reduce((s, q) => s + q.points, 0) }]) });
+  return studyTestOut_(row, false);
+}
+async function submitStudyTest(env, [id, answers]) {
+  const rows = await sb(env, 'study_tests?id=eq.' + Number(id) + '&select=*');
+  if (!rows.length) throw new Error('Test not found');
+  const t = rows[0];
+  if (t.submitted_at) return studyTestOut_(t, true);
+  const p = await studyPlanRow_(env, t.plan_id);
+  const ans = (Array.isArray(answers) ? answers : []).slice(0, t.questions.length).map((a) => String(a == null ? '' : a).slice(0, 4000));
+  while (ans.length < t.questions.length) ans.push('');
+  const g = await study.gradeAnswers(env, p, t.questions, ans);
+  const [row] = await sb(env, 'study_tests?id=eq.' + t.id, { method: 'PATCH', body: JSON.stringify({ answers: ans, results: g.results, score: g.score, max_score: g.max, feedback: g.feedback, submitted_at: new Date().toISOString() }) });
+  // an exercise done well ticks its lesson off
+  if (t.kind === 'exercise' && t.lesson_id && g.max && g.score / g.max >= 0.7) await setStudyLessonDone(env, [t.lesson_id, true]);
+  return studyTestOut_(row, true);
+}
+async function deleteStudyTest(env, [id]) {
+  await sb(env, 'study_tests?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' });
+  return { ok: true };
+}
+
 /* ---- Love: food they "order" — shows on the table at their meals (up to 4 dishes) ---- */
 async function saveLoveFood(env, [items]) {
   const clean = (Array.isArray(items) ? items : []).slice(0, 4).map((it) => ({
@@ -1900,7 +2066,8 @@ async function agentChat(env, args) {
     getWorkData, saveWorkTask, deleteWorkTask,
     getExpenseData, addExpenseEntry, deleteExpenseEntry, addExpenseIncomeEntry,
     getCalendarNotes, saveCalendarNote, deleteCalendarNote,
-    getHomeData, addHomeItem, toggleHomeCheck
+    getHomeData, addHomeItem, toggleHomeCheck,
+    getStudyData, setStudyLessonDone
   });
 }
 
