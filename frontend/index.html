@@ -399,6 +399,35 @@
         <div class="study-main" id="study-main"></div>
       </div>
 
+      <div id="notes-view" class="app-view" style="display:none;">
+        <div class="study-head"><h2 class="page-title">Notes</h2><button class="pill-btn" id="notes-new">+ Note</button></div>
+        <input type="search" class="hs-search" id="notes-q" placeholder="Search notes…" autocomplete="off">
+        <div class="hs-chips" id="notes-fields"></div>
+        <div class="study-main" id="notes-main"></div>
+      </div>
+
+      <div id="goals-view" class="app-view" style="display:none;">
+        <div class="study-head"><h2 class="page-title">Goals</h2><select class="hs-year" id="goals-year" aria-label="Year"></select><button class="pill-btn" id="goals-new">+ Goal</button></div>
+        <div class="study-main" id="goals-main"></div>
+      </div>
+
+      <div id="health-view" class="app-view" style="display:none;">
+        <div class="study-head"><h2 class="page-title">Food &amp; Gym</h2></div>
+        <div class="study-main" id="health-main"></div>
+      </div>
+
+      <div id="law-view" class="app-view" style="display:none;">
+        <div class="study-head"><h2 class="page-title">Law</h2></div>
+        <div class="st-card hs-lawbar">
+          <div class="hs-lawrow"><select id="law-scope" aria-label="What to look for"><option value="health">🏥 Health (y tế)</option><option value="law">⚖️ Laws &amp; codes</option><option value="all">Everything important</option></select>
+            <button type="button" class="pill-btn" id="law-check">✨ Check for new documents</button></div>
+          <small id="law-last"></small><small>From vbpl.vn · baochinhphu.vn · thuvienphapluat.vn — only the info and a short summary are kept.</small>
+        </div>
+        <input type="search" class="hs-search" id="law-q" placeholder="Search number, title…" autocomplete="off">
+        <div class="hs-chips" id="law-filters"></div>
+        <div class="study-main" id="law-main"></div>
+      </div>
+
       <div id="calendar-view" class="app-view" style="display:none;">
         <h2 class="page-title">Calendar</h2>
         <div class="work-card cal-list-card">
@@ -943,6 +972,7 @@
       <div class="modal-header"><h3 id="st-lesson-title"></h3><button id="st-lesson-close" class="modal-close">✕</button></div>
       <div class="st-body" id="st-lesson-body"></div>
       <div class="modal-actions">
+        <button class="pill-btn secondary" id="st-lesson-speak">🔊 Listen</button>
         <button class="pill-btn secondary" id="st-lesson-done">Mark done</button>
         <button class="pill-btn" id="st-lesson-ex">✍️ Exercise</button>
       </div>
@@ -954,6 +984,73 @@
       <div class="modal-header"><h3 id="st-test-title"></h3><button id="st-test-close" class="modal-close">✕</button></div>
       <div class="st-body" id="st-test-body"></div>
       <div class="modal-actions"><button class="pill-btn" id="st-test-submit">Hand in</button></div>
+    </div>
+  </div>
+
+  <!-- ===== Notes › a note ===== -->
+  <div id="note-modal" class="modal-overlay">
+    <div class="modal-box study-box study-read">
+      <div class="modal-header"><h3 id="note-head">Note</h3><button id="note-close" class="modal-close">✕</button></div>
+      <div class="st-body" id="note-read"></div>
+      <div class="st-form hs-noteform" id="note-form">
+        <div class="hs-row2"><input type="text" id="note-field" list="note-fields-list" maxlength="60" placeholder="Field (e.g. Work, Japanese, Recipes)" autocomplete="off"><label class="hs-pinlbl"><input type="checkbox" id="note-pin"> 📌</label></div>
+        <datalist id="note-fields-list"></datalist>
+        <input type="text" id="note-title" maxlength="200" placeholder="Title" autocomplete="off">
+        <textarea id="note-body" rows="12" placeholder="Write anything… (## heading, - list, **bold**)"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="note-del">Delete</button>
+        <button class="pill-btn secondary" id="note-undo" hidden>↶ Undo tidy</button>
+        <button class="pill-btn secondary" id="note-tidy">✨ Tidy up</button>
+        <button class="pill-btn" id="note-edit">✎ Edit</button>
+        <button class="pill-btn" id="note-save">Save</button>
+      </div>
+    </div>
+  </div>
+  <!-- ===== Goals › a goal ===== -->
+  <div id="goal-modal" class="modal-overlay">
+    <div class="modal-box study-box study-read">
+      <div class="modal-header"><h3 id="goal-head">Goal</h3><button id="goal-close" class="modal-close">✕</button></div>
+      <div class="st-body st-form">
+        <input type="text" id="goal-title" maxlength="200" placeholder="What do you want? e.g. Pass JLPT N3" autocomplete="off">
+        <div class="hs-row2"><input type="text" id="goal-area" maxlength="60" placeholder="Area (Health, Study, Money…)" autocomplete="off">
+          <select id="goal-status"><option value="active">Active</option><option value="done">Done ✓</option><option value="dropped">Dropped</option></select></div>
+        <input type="text" id="goal-why" maxlength="1000" placeholder="Why does it matter? (optional)" autocomplete="off">
+        <div class="st-row"><label><span>Deadline</span><input type="date" id="goal-deadline"></label></div>
+        <div class="st-row"><label><span>Cost (₫)</span><input type="text" inputmode="numeric" id="goal-target" placeholder="0"></label><label><span>Saved / spent (₫)</span><input type="text" inputmode="numeric" id="goal-saved" placeholder="0"></label></div>
+        <div class="st-week-h hs-steps-h"><b>Steps</b><span></span><button type="button" class="st-chip" id="goal-ai">✨ Break it down</button></div>
+        <div id="goal-steps"></div>
+        <button type="button" class="st-chip hs-addstep" id="goal-add-step">+ Step</button>
+      </div>
+      <div class="modal-actions"><button class="pill-btn secondary" id="goal-del">Delete</button><button class="pill-btn" id="goal-save">Save</button></div>
+    </div>
+  </div>
+  <!-- ===== Food & Gym › log something ===== -->
+  <div id="hl-modal" class="modal-overlay">
+    <div class="modal-box study-box">
+      <div class="modal-header"><h3 id="hl-head">Meal</h3><button id="hl-close" class="modal-close">✕</button></div>
+      <div class="st-form">
+        <div id="hl-title-wrap"><input type="text" id="hl-title" maxlength="200" autocomplete="off"></div>
+        <div class="st-row">
+          <label id="hl-min-wrap"><span>Minutes</span><input type="number" id="hl-min" min="0" max="1440" inputmode="numeric"></label>
+          <label id="hl-kcal-wrap"><span>kcal</span><span class="hs-est"><input type="number" id="hl-kcal" min="0" max="9999" inputmode="numeric"><button type="button" class="st-chip" id="hl-est">✨ Estimate</button></span></label>
+          <label id="hl-val-wrap"><span>kg</span><input type="number" id="hl-val" step="0.1" min="0" inputmode="decimal"></label>
+        </div>
+        <small class="st-hint" id="hl-note"></small>
+      </div>
+      <div class="modal-actions"><button class="pill-btn" id="hl-save">Save</button></div>
+    </div>
+  </div>
+  <div id="hp-modal" class="modal-overlay">
+    <div class="modal-box study-box">
+      <div class="modal-header"><h3>⚙︎ About me</h3><button id="hp-close" class="modal-close">✕</button></div>
+      <div class="st-form">
+        <div class="st-row"><label><span>Height (cm)</span><input type="number" id="hp-height" inputmode="numeric"></label><label><span>Weight (kg)</span><input type="number" id="hp-weight" step="0.1" inputmode="decimal"></label><label><span>Goal (kg)</span><input type="number" id="hp-goalw" step="0.1" inputmode="decimal"></label></div>
+        <div class="st-row"><label><span>kcal / day target</span><input type="number" id="hp-kcal" inputmode="numeric" placeholder="e.g. 1600"></label></div>
+        <div class="expense-field-caption">Goal</div><input type="text" id="hp-goal" maxlength="300" placeholder="e.g. lose 3 kg, more energy, stronger back" autocomplete="off">
+        <div class="expense-field-caption">Notes (food you avoid, injuries, gym or home…)</div><textarea id="hp-notes" rows="2" maxlength="600"></textarea>
+      </div>
+      <div class="modal-actions"><button class="pill-btn" id="hp-save">Save</button></div>
     </div>
   </div>
 
@@ -1238,7 +1335,7 @@
         <button id="village-hall-close" class="modal-close">✕</button>
       </div>
       <div class="hall-due" id="hall-due">
-        <div class="hall-due-head"><span>Due soon</span><button type="button" class="expense-edit-link hall-open-work" id="village-hall-work">Work →</button></div>
+        <div class="hall-due-head"><span>Due soon</span><button type="button" class="expense-edit-link hall-open-work" id="village-hall-sum">✿ Summary</button><button type="button" class="expense-edit-link hall-open-work" id="village-hall-work">Work →</button></div>
         <div id="village-hall-list" class="village-hall-list"></div>
       </div>
       <div class="hall-chat" id="hall-chat"></div>
@@ -1346,6 +1443,9 @@
         <label class="set-row"><input type="checkbox" id="set-evening-on"><span>Evening · tomorrow</span><input type="time" id="set-evening-time"></label>
         <label class="set-row"><input type="checkbox" id="set-before-on"><span>Ahead</span>
           <select id="set-before-days"><option value="1">1 day before</option><option value="2">2 days before</option><option value="3">3 days before</option><option value="5">5 days before</option><option value="7">7 days before</option><option value="14">14 days before</option></select><input type="time" id="set-before-time"></label>
+        <label class="set-row"><input type="checkbox" id="set-digest-on"><span>✿ AI summary</span>
+          <select id="set-digest-weekly"><option value="1">Sundays</option><option value="0">Every day</option></select><input type="time" id="set-digest-time"></label>
+        <div class="set-hint">The summary is written by the Town Hall AI from all your houses (uses a little of the API each time).</div>
       </div>
       <div class="set-section">
         <div class="set-title">From</div>
@@ -1353,6 +1453,8 @@
           <label><input type="checkbox" id="set-src-work"> Work</label>
           <label><input type="checkbox" id="set-src-calendar"> Calendar</label>
           <label><input type="checkbox" id="set-src-todo"> To-do</label>
+          <label><input type="checkbox" id="set-src-study"> Study</label>
+          <label><input type="checkbox" id="set-src-goals"> Goals</label>
         </div>
         <label class="set-row"><input type="checkbox" id="set-private"><span>Hide details on the lock screen</span></label>
       </div>
@@ -1710,6 +1812,7 @@
   <script src="/calendar.js"></script>
   <script src="/love.js"></script>
   <script src="/study.js"></script>
+  <script src="/houses.js"></script>
   <script src="/village.js"></script>
   <script src="/enter-confirm.js"></script>
 </body>

@@ -25,11 +25,11 @@
     { id: 'account',  label: 'Account',    roof: 'mint',  open: 'loadAccounts' },
     { id: 'language', label: 'Languages',  roof: 'pink',  open: 'openStudyLanguage' },
     { id: 'skills',   label: 'Skills',     roof: 'yellow',open: 'openStudySkills' },
-    { id: 'law',      label: 'Law',        roof: 'blue',  open: null },
-    { id: 'health',   label: 'Food & Gym', roof: 'mint',  open: null },
-    { id: 'notes',    label: 'Notes',      roof: 'yellow',open: null },
+    { id: 'law',      label: 'Law',        roof: 'blue',  open: 'openLaw' },
+    { id: 'health',   label: 'Food & Gym', roof: 'mint',  open: 'openHealth' },
+    { id: 'notes',    label: 'Notes',      roof: 'yellow',open: 'openNotes' },
     { id: 'love',     label: 'Love',       roof: 'pink',  open: 'openLove', heart: true },
-    { id: 'goals',    label: 'Goals',      roof: 'lav',   open: null },
+    { id: 'goals',    label: 'Goals',      roof: 'lav',   open: 'openGoals' },
     // open to everyone (no password): Tools & Games
     { id: 'daycount', label: 'Day Counter', roof: 'yellow', open: 'openDateDiff',     pub: true, kind: 'tool' },
     { id: 'pdf',      label: 'PDF',         roof: 'blue',   open: 'openConverter',    pub: true, kind: 'tool' },
@@ -59,7 +59,7 @@
     if (loading) return;
     loading = true;
     var sc = document.createElement('script');
-    sc.src = '/village3d.js?v=17';
+    sc.src = '/village3d.js?v=18';
     sc.onload = function () { loading = false; var w = loadWaiters; loadWaiters = []; w.forEach(function (f) { f(); }); };
     sc.onerror = function () { loading = false; loadWaiters = []; toast("Couldn't load the village ʕ´-ก̀ʔᐝ"); };
     document.head.appendChild(sc);
@@ -199,7 +199,7 @@
   var entering = false;
 
   /* ---------------- inside a house: the room behind a feature page ---------------- */
-  var VIEW_HOUSE = { 'work-view': 'work', 'expense-view': 'money', 'calendar-view': 'calendar', 'accounts-view': 'account', 'love-view': 'love',
+  var VIEW_HOUSE = { 'work-view': 'work', 'expense-view': 'money', 'calendar-view': 'calendar', 'accounts-view': 'account', 'love-view': 'love', 'notes-view': 'notes', 'goals-view': 'goals', 'health-view': 'health', 'law-view': 'law',
     'datediff-view': 'daycount', 'converter-view': 'pdf', 'qr-view': 'qr', 'symbols-view': 'symbols', 'eating-view': 'yakult',
     'memory-view': 'games', 'minesweeper-view': 'games', 'mochi-view': 'games' };
   var roomPhotos = [], roomFrame = '';
@@ -271,7 +271,19 @@
     };
   });
 
+  // ✿ Summary: today's summary from the Town Hall AI (re-used if it was made today)
+  function hallSummary() {
+    if (chat.busy) return;
+    chat.busy = true; renderChat();
+    var today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+    call('getDigest').then(function (d) { return d && d.at === today && !d.weekly ? d : call('makeDigestNow', false); })
+      .then(function (d) { chat.view.push({ who: 'bot', text: '✿ ' + ((d && d.text) || 'Nothing to sum up yet') }); })
+      .catch(function (e) { chat.view.push({ who: 'bot', err: true, text: (e && e.message) || 'Could not make the summary' }); })
+      .then(function () { chat.busy = false; renderChat(); });
+  }
   function openHall() {
+    var sb0 = document.getElementById('village-hall-sum');
+    if (sb0 && !sb0.onclick) sb0.onclick = hallSummary;
     renderDue();
     renderChat();
     document.getElementById('village-hall-modal').classList.add('active');
@@ -519,6 +531,9 @@
     if (!sel.querySelector('option[value="' + r.before.days + '"]')) sel.insertAdjacentHTML('beforeend', '<option value="' + r.before.days + '">' + r.before.days + ' days before</option>');
     sel.value = String(r.before.days);
     $('set-src-work').checked = r.sources.work; $('set-src-calendar').checked = r.sources.calendar; $('set-src-todo').checked = r.sources.todo;
+    $('set-src-study').checked = r.sources.study !== false; $('set-src-goals').checked = r.sources.goals !== false;
+    var dg = r.digest || { on: false, time: '21:00', weekly: true };
+    $('set-digest-on').checked = !!dg.on; $('set-digest-time').value = dg.time; $('set-digest-weekly').value = dg.weekly ? '1' : '0';
     $('set-private').checked = !!r.private;
   }
   function readSettings() {
@@ -527,7 +542,8 @@
       morning: { on: $('set-morning-on').checked, time: $('set-morning-time').value },
       evening: { on: $('set-evening-on').checked, time: $('set-evening-time').value },
       before: { on: $('set-before-on').checked, days: Number($('set-before-days').value), time: $('set-before-time').value },
-      sources: { work: $('set-src-work').checked, calendar: $('set-src-calendar').checked, todo: $('set-src-todo').checked },
+      sources: { work: $('set-src-work').checked, calendar: $('set-src-calendar').checked, todo: $('set-src-todo').checked, study: $('set-src-study').checked, goals: $('set-src-goals').checked },
+      digest: { on: $('set-digest-on').checked, time: $('set-digest-time').value, weekly: $('set-digest-weekly').value === '1' },
       private: $('set-private').checked
     };
   }

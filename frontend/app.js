@@ -357,7 +357,7 @@ function showScreen(id) {
 // Maps each app-view to the navbar section it belongs to, purely for highlighting the active nav link.
 var NAV_SECTION_MAP_ = {
   'menu-view': 'home',
-  'accounts-view': 'personal', 'expense-view': 'personal', 'work-view': 'personal', 'calendar-view': 'personal', 'love-view': 'personal', 'study-view': 'personal',
+  'accounts-view': 'personal', 'expense-view': 'personal', 'work-view': 'personal', 'calendar-view': 'personal', 'love-view': 'personal', 'study-view': 'personal', 'notes-view': 'personal', 'goals-view': 'personal', 'health-view': 'personal', 'law-view': 'personal',
   'symbols-view': 'tools', 'datediff-view': 'tools', 'eating-view': 'tools',
   'qr-view': 'tools', 'converter-view': 'tools',
   'memory-view': 'games', 'mochi-view': 'games', 'minesweeper-view': 'games'
@@ -377,6 +377,10 @@ var VIEW_OPENERS_ = {
   'work-view': function () { requirePersonal(openWork); },
   'calendar-view': function () { requirePersonal(openCalendar); },
   'love-view': function () { requirePersonal(openLove); },
+  'notes-view': function () { requirePersonal(openNotes); },
+  'goals-view': function () { requirePersonal(openGoals); },
+  'health-view': function () { requirePersonal(openHealth); },
+  'law-view': function () { requirePersonal(openLaw); },
   'study-view': function () { requirePersonal(function () { openStudy(new URLSearchParams(location.search).get('h') || 'language'); }); },
   'memory-view': openMemory,
   'mochi-view': openMochi,
@@ -403,7 +407,11 @@ var VIEW_PATHS_ = {
   'work-view': '/personal/work',
   'calendar-view': '/personal/calendar',
   'love-view': '/personal/love',
-  'study-view': '/personal/study'
+  'study-view': '/personal/study',
+  'notes-view': '/personal/notes',
+  'goals-view': '/personal/goals',
+  'health-view': '/personal/food-gym',
+  'law-view': '/personal/law'
 };
 var routing_ = false; // true while applying a URL (load / Back) — don't push it again
 

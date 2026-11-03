@@ -18,6 +18,7 @@
 
 import { drawFood } from '../lib/food.js';
 import * as study from '../lib/study.js';
+import * as hai from '../lib/houses.js';
 import { agentChat as runAgentChat } from '../lib/agent.js';
 import { makeVapidKeys, sendPush } from '../lib/push.js';
 import * as drive from '../lib/drive.js';
@@ -67,8 +68,10 @@ function isPersonalAction_(action) {
   if (/Post|Calendar/.test(action)) return true;
   if (action === 'saveHomeProfile') return true;
   if (/^agent/.test(action)) return true;              // Town Hall AI agent (village.js → lib/agent.js)
+  if (/Digest/.test(action)) return true;               // the AI summary
   if (/Push|Reminder/.test(action)) return action !== 'runReminders';
-  if (/Study/.test(action)) return true;                // Languages / Skills: roadmaps, lessons, tests
+  if (/Study/.test(action)) return true;
+  if (/^(getNotesData|saveNote|deleteNote|tidyNote)$/.test(action) || /Goal|Health|Law/.test(action)) return true;   // Notes, Goals, Food & Gym, Law                // Languages / Skills: roadmaps, lessons, tests
   if (/Love|Drive|google/.test(action)) return true;   // Love album + Google Drive link   // settings + this device; the timer itself is public        // anyone sees the Home photo/name, only you change it
   return /Expense/.test(action) && action !== 'getExpenseTodayTotal';
 }
@@ -1458,6 +1461,8 @@ const ACTIONS = {
   getExpenseTodayTotal,
   agentChat,
   getReminderSettings,
+  getDigest,
+  makeDigestNow,
   saveReminderSettings,
   getPushKey,
   savePushSubscription,
@@ -1489,6 +1494,10 @@ const ACTIONS = {
   makeStudyTest,
   submitStudyTest,
   deleteStudyTest,
+  getNotesData, saveNote, deleteNote, tidyNote,
+  getGoalsData, saveGoal, deleteGoal, planGoalSteps,
+  getHealthData, saveHealthLog, deleteHealthLog, estimateHealthKcal, saveHealthProfile, makeHealthPlan,
+  getLawDocs, checkLawUpdates, setLawDoc, deleteLawDoc,
   deleteLovePhoto,
   deleteLoveMemory
 };
@@ -1520,8 +1529,11 @@ function reminderClean_(r) {
       time: t(r.before && r.before.time, d.before.time)
     },
     sources: {
-      work: pick(r.sources, 'work') ?? true, calendar: pick(r.sources, 'calendar') ?? true, todo: pick(r.sources, 'todo') ?? true
+      work: pick(r.sources, 'work') ?? true, calendar: pick(r.sources, 'calendar') ?? true, todo: pick(r.sources, 'todo') ?? true,
+      study: pick(r.sources, 'study') ?? true, goals: pick(r.sources, 'goals') ?? true
     },
+    // an AI summary of your days (off unless turned on: it costs a little each time)
+    digest: { on: pick(r.digest, 'on') ?? false, time: t(r.digest && r.digest.time, '21:00'), weekly: pick(r.digest, 'weekly') ?? true },
     private: typeof r.private === 'boolean' ? r.private : d.private
   };
 }
@@ -1611,6 +1623,22 @@ async function reminderItems_(env, day, cfg, includeLate) {
       cal.notes.forEach((n) => { if (n.day === day && n.kind !== 'off') items.push({ text: n.note, kind: n.kind }); });
     } catch (e) { /* calendar not set up */ }
   }
+  if (cfg.sources.study) {
+    let rows = [];
+    try { rows = await sb(env, 'study_lessons?done=eq.false&day=lte.' + day + '&select=title,day,study_plans!inner(subject,status)&study_plans.status=eq.active&order=day.asc&limit=20'); } catch (e) { rows = []; }
+    rows.forEach((r) => {
+      if (r.day === day) items.push({ text: '📖 ' + r.title });
+      else if (includeLate) items.push({ text: '📖 ' + r.title, late: r.day });
+    });
+  }
+  if (cfg.sources.goals) {
+    let rows = [];
+    try { rows = await sb(env, 'goals?status=eq.active&select=title,deadline,steps'); } catch (e) { rows = []; }
+    rows.forEach((g) => {
+      if (g.deadline === day) items.push({ text: '🎯 ' + g.title });
+      (g.steps || []).forEach((x) => { if (!x.done && x.due === day) items.push({ text: '🎯 ' + x.text }); });
+    });
+  }
   if (cfg.sources.todo) {
     let rows = [];
     try { rows = await sb(env, 'home_todos?check=eq.false&deadline=not.is.null&select=todolist,deadline'); } catch (e) { rows = []; }
@@ -1632,6 +1660,21 @@ function reminderBody_(items, cfg, what) {
   if (items.length > 6) lines.push('+' + (items.length - 6) + ' more');
   return lines.join('\n');
 }
+// the summary is written by the Town Hall agent, which can read every house
+async function makeDigest_(env, weekly) {
+  const ask = weekly
+    ? 'Tóm tắt TUẦN này của mình cho thông báo điện thoại (tối đa 6 dòng ngắn, có emoji nhẹ): việc đã xong / còn trễ trong Work, chi tiêu tuần (tổng + mục nhiều nhất), tiến độ học (Languages/Skills), mục tiêu, lịch tuần tới. Kết thúc bằng 1 câu động viên. Chỉ đọc dữ liệu, không thay đổi gì.'
+    : 'Tóm tắt HÔM NAY của mình cho thông báo điện thoại (tối đa 5 dòng ngắn, có emoji nhẹ): đã làm được gì, còn gì trễ, chi tiêu hôm nay, mai có gì. Chỉ đọc dữ liệu, không thay đổi gì.';
+  const r = await agentChat(env, [[], ask, []]);
+  const text = String(r.reply || '').trim();
+  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'digest', value: { at: vnNow_().date, weekly: !!weekly, text } }]), prefer: 'resolution=merge-duplicates,return=minimal' }).catch(() => {});
+  return { text };
+}
+async function getDigest(env) {
+  const rows = await sb(env, 'app_settings?key=eq.digest&select=value').catch(() => []);
+  return (rows[0] && rows[0].value) || null;
+}
+async function makeDigestNow(env, [weekly]) { return makeDigest_(env, !!weekly).then(() => getDigest(env)); }
 async function runReminders(env) {
   const cfg = await getReminderSettings(env);
   const now = vnNow_();                                          // Vietnam time
@@ -1646,6 +1689,16 @@ async function runReminders(env) {
     jobs.push({ key: 'before:' + now.date, day, late: false, title: '⏳ In ' + cfg.before.days + ' day' + (cfg.before.days === 1 ? '' : 's') + ' · ' + day.slice(8, 10) + '/' + day.slice(5, 7), what: 'coming up', tag: 'before' });
   }
   const done = [];
+  // the AI summary: every day, or on Sunday evenings
+  const sunday = new Date(now.date + 'T00:00:00Z').getUTCDay() === 0;
+  if (due(cfg.digest) && (!cfg.digest.weekly || sunday)) {
+    try {
+      await sb(env, 'push_log', { method: 'POST', body: JSON.stringify([{ key: 'digest:' + now.date }]), prefer: 'return=minimal' });
+      const d = await makeDigest_(env, cfg.digest.weekly);
+      const sent = await pushToAll_(env, { title: cfg.digest.weekly ? '✿ Your week' : '✿ Your day', body: cfg.private ? 'Your summary is ready in the Town Hall ✿' : d.text.slice(0, 220), tag: 'digest', url: '/' });
+      done.push({ key: 'digest:' + now.date, sent });
+    } catch (e) { /* already sent today, or the AI failed — try again tomorrow */ }
+  }
   for (const j of jobs) {
     // claim the slot first (primary key) so two runs can't both send it
     try { await sb(env, 'push_log', { method: 'POST', body: JSON.stringify([{ key: j.key }]), prefer: 'return=minimal' }); }
@@ -1896,6 +1949,152 @@ async function deleteStudyTest(env, [id]) {
   await sb(env, 'study_tests?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' });
   return { ok: true };
 }
+
+
+/* ============================================================
+ *  NOTES · GOALS · FOOD & GYM · LAW (supabase/houses.sql, lib/houses.js)
+ * ============================================================ */
+function housesMissing_(e) {
+  if (/notes|goals|health_logs|law_docs|does not exist|42P01/.test(String(e && e.message))) throw new Error('Run supabase/houses.sql in Supabase first');
+  throw e;
+}
+const str_ = (v, n) => String(v == null ? '' : v).slice(0, n);
+const day_ = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : null);
+
+/* ---- Notes: by field ---- */
+function noteOut_(r) { return { id: r.id, field: r.field, title: r.title, body: r.body, pinned: r.pinned, updatedAt: r.updated_at, createdAt: r.created_at }; }
+async function getNotesData(env) {
+  try { return { notes: (await sb(env, 'notes?select=*&order=pinned.desc,updated_at.desc&limit=2000')).map(noteOut_) }; }
+  catch (e) { housesMissing_(e); }
+}
+async function saveNote(env, [n]) {
+  n = n || {};
+  const row = { field: str_(n.field, 60).trim() || 'General', title: str_(n.title, 200).trim(), body: str_(n.body, 60000), pinned: !!n.pinned, updated_at: new Date().toISOString() };
+  if (!row.title && !row.body.trim()) throw new Error('The note is empty');
+  if (n.id) await sb(env, 'notes?id=eq.' + Number(n.id), { method: 'PATCH', body: JSON.stringify(row), prefer: 'return=minimal' });
+  else await sb(env, 'notes', { method: 'POST', body: JSON.stringify([row]), prefer: 'return=minimal' }).catch(housesMissing_);
+  return getNotesData(env);
+}
+async function deleteNote(env, [id]) { await sb(env, 'notes?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' }); return getNotesData(env); }
+async function tidyNote(env, [n]) { return hai.tidyNote(env, n || {}); }
+
+/* ---- Goals: by year, with cost + steps ---- */
+function goalOut_(r) {
+  const steps = Array.isArray(r.steps) ? r.steps : [];
+  return { id: r.id, year: r.year, title: r.title, area: r.area, why: r.why, deadline: r.deadline, target: Number(r.target_amount) || 0, saved: Number(r.saved_amount) || 0,
+    status: r.status, steps, createdAt: r.created_at };
+}
+async function getGoalsData(env, [year]) {
+  const y = Number(year) || Number(vnNow_().date.slice(0, 4));
+  try {
+    const rows = await sb(env, 'goals?year=eq.' + y + '&select=*&order=status.asc,deadline.asc.nullslast,id.asc');
+    const years = (await sb(env, 'goals?select=year')).map((r) => r.year);
+    return { today: vnNow_().date, year: y, years: Array.from(new Set(years.concat([y, Number(vnNow_().date.slice(0, 4))]))).sort(), goals: rows.map(goalOut_) };
+  } catch (e) { housesMissing_(e); }
+}
+function goalRow_(g) {
+  return {
+    year: Math.max(2000, Math.min(2100, Number(g.year) || Number(vnNow_().date.slice(0, 4)))),
+    title: str_(g.title, 200).trim(), area: str_(g.area, 60).trim(), why: str_(g.why, 1000), deadline: day_(g.deadline),
+    target_amount: Math.max(0, Number(g.target) || 0), saved_amount: Math.max(0, Number(g.saved) || 0),
+    status: ['active', 'done', 'dropped'].includes(g.status) ? g.status : 'active',
+    steps: (Array.isArray(g.steps) ? g.steps : []).slice(0, 30).map((x) => ({ text: str_(x && x.text, 300).trim(), done: !!(x && x.done), due: day_(x && x.due) || '' })).filter((x) => x.text)
+  };
+}
+async function saveGoal(env, [g]) {
+  g = g || {};
+  const row = goalRow_(g);
+  if (!row.title) throw new Error('Give the goal a name');
+  if (g.id) await sb(env, 'goals?id=eq.' + Number(g.id), { method: 'PATCH', body: JSON.stringify(row), prefer: 'return=minimal' });
+  else await sb(env, 'goals', { method: 'POST', body: JSON.stringify([row]), prefer: 'return=minimal' }).catch(housesMissing_);
+  return getGoalsData(env, [row.year]);
+}
+async function deleteGoal(env, [id, year]) { await sb(env, 'goals?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' }); return getGoalsData(env, [year]); }
+async function planGoalSteps(env, [g]) { return { steps: await hai.goalSteps(env, goalRow_(g || {}), vnNow_().date) }; }
+
+/* ---- Food & Gym ---- */
+function healthOut_(r) { return { id: r.id, day: r.day, kind: r.kind, title: r.title, kcal: r.kcal, minutes: r.minutes, value: r.value == null ? null : Number(r.value), note: r.note }; }
+async function healthProfile_(env) {
+  const rows = await sb(env, 'app_settings?key=eq.health&select=value').catch(() => []);
+  return (rows[0] && rows[0].value) || {};
+}
+async function getHealthData(env, [from, to]) {
+  const today = vnNow_().date, f = day_(from) || vnAddDays_(today, -27), t = day_(to) || today;
+  try {
+    const rows = await sb(env, 'health_logs?day=gte.' + f + '&day=lte.' + t + '&select=*&order=day.asc,id.asc&limit=3000');
+    const last = await sb(env, 'health_logs?kind=eq.weight&select=day,value&order=day.desc&limit=1');
+    return { today, from: f, to: t, logs: rows.map(healthOut_), profile: await healthProfile_(env), lastWeight: last[0] ? Number(last[0].value) : null };
+  } catch (e) { housesMissing_(e); }
+}
+async function saveHealthLog(env, [l, range]) {
+  l = l || {};
+  const kind = ['meal', 'workout', 'weight', 'water'].includes(l.kind) ? l.kind : 'meal';
+  const num = (v, a, b) => (v === '' || v == null || isNaN(Number(v)) ? null : Math.max(a, Math.min(b, Number(v))));
+  const row = { day: day_(l.day) || vnNow_().date, kind, title: str_(l.title, 200).trim(), kcal: num(l.kcal, 0, 9999) == null ? null : Math.round(num(l.kcal, 0, 9999)),
+    minutes: num(l.minutes, 0, 1440) == null ? null : Math.round(num(l.minutes, 0, 1440)), value: num(l.value, 0, 20000), note: str_(l.note, 500) };
+  if ((kind === 'meal' || kind === 'workout') && !row.title) throw new Error('What was it?');
+  if ((kind === 'weight' || kind === 'water') && row.value == null) throw new Error('Type a number');
+  if (l.id) await sb(env, 'health_logs?id=eq.' + Number(l.id), { method: 'PATCH', body: JSON.stringify(row), prefer: 'return=minimal' });
+  else await sb(env, 'health_logs', { method: 'POST', body: JSON.stringify([row]), prefer: 'return=minimal' }).catch(housesMissing_);
+  return getHealthData(env, range || []);
+}
+async function deleteHealthLog(env, [id, range]) { await sb(env, 'health_logs?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' }); return getHealthData(env, range || []); }
+async function estimateHealthKcal(env, [kind, text, minutes]) {
+  if (kind === 'workout') { const p = await healthProfile_(env); return hai.workoutKcal(env, text, minutes, p.weight); }
+  return hai.mealKcal(env, text);
+}
+async function saveHealthProfile(env, [p]) {
+  const cur = await healthProfile_(env), n = (v) => (v === '' || v == null || isNaN(Number(v)) ? null : Number(v));
+  const value = Object.assign({}, cur, {
+    height: n(p && p.height), weight: n(p && p.weight), goalWeight: n(p && p.goalWeight), kcalTarget: n(p && p.kcalTarget),
+    goal: str_(p && p.goal, 300), notes: str_(p && p.notes, 600)
+  });
+  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'health', value }]), prefer: 'resolution=merge-duplicates,return=minimal' });
+  return value;
+}
+async function makeHealthPlan(env) {
+  const p = await healthProfile_(env), today = vnNow_().date;
+  const rows = await sb(env, 'health_logs?day=gte.' + vnAddDays_(today, -14) + '&select=day,kind,title,kcal,minutes,value&order=day.asc').catch(() => []);
+  const recent = rows.slice(-120).map((r) => r.day.slice(5) + ' ' + r.kind + ' ' + (r.title || '') + (r.kcal ? ' ' + r.kcal + 'kcal' : '') + (r.minutes ? ' ' + r.minutes + 'p' : '') + (r.value != null ? ' ' + r.value : '')).join('; ') || '(chưa có)';
+  const plan = await hai.healthPlan(env, p, recent);
+  const value = Object.assign({}, p, { plan: plan.slice(0, 30000), planAt: today });
+  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'health', value }]), prefer: 'resolution=merge-duplicates,return=minimal' });
+  return value;
+}
+
+/* ---- Law: new documents (vbpl.vn, baochinhphu.vn, thuvienphapluat.vn) ---- */
+function lawOut_(r) { return { id: r.id, number: r.number, title: r.title, kind: r.kind, issuer: r.issuer, issued: r.issued, effective: r.effective, status: r.status, field: r.field, url: r.url, summary: r.summary, read: r.is_read, starred: r.starred, foundAt: r.found_at }; }
+async function getLawDocs(env) {
+  try {
+    const rows = await sb(env, 'law_docs?select=*&order=found_at.desc,issued.desc.nullslast&limit=1000');
+    const rows2 = await sb(env, 'app_settings?key=eq.law&select=value').catch(() => []);
+    return { docs: rows.map(lawOut_), lastCheck: (rows2[0] && rows2[0].value && rows2[0].value.lastCheck) || null };
+  } catch (e) { housesMissing_(e); }
+}
+async function checkLawUpdates(env, [scope]) {
+  scope = ['health', 'law', 'all'].includes(scope) ? scope : 'health';
+  const today = vnNow_().date;
+  const have = await sb(env, 'law_docs?select=number').catch(housesMissing_);
+  const st = await sb(env, 'app_settings?key=eq.law&select=value').catch(() => []);
+  const last = (st[0] && st[0].value && st[0].value.lastCheck) || vnAddDays_(today, -60);
+  const since = last < vnAddDays_(today, -120) ? vnAddDays_(today, -120) : vnAddDays_(last.slice(0, 10), -14);
+  const found = await hai.lawSearch(env, { scope, since, known: have.map((r) => r.number) });
+  const known = new Set(have.map((r) => r.number.toLowerCase()));
+  const fresh = found.filter((d) => !known.has(d.number.toLowerCase()));
+  if (fresh.length) await sb(env, 'law_docs?on_conflict=number', { method: 'POST', body: JSON.stringify(fresh), prefer: 'resolution=ignore-duplicates,return=minimal' });
+  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'law', value: { lastCheck: today } }]), prefer: 'resolution=merge-duplicates,return=minimal' });
+  const out = await getLawDocs(env);
+  out.added = fresh.length;
+  return out;
+}
+async function setLawDoc(env, [id, patch]) {
+  const body = {};
+  if (patch && typeof patch.read === 'boolean') body.is_read = patch.read;
+  if (patch && typeof patch.starred === 'boolean') body.starred = patch.starred;
+  if (Object.keys(body).length) await sb(env, 'law_docs?id=eq.' + Number(id), { method: 'PATCH', body: JSON.stringify(body), prefer: 'return=minimal' });
+  return { ok: true };
+}
+async function deleteLawDoc(env, [id]) { await sb(env, 'law_docs?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' }); return getLawDocs(env); }
 
 /* ---- Love: food they "order" — shows on the table at their meals (up to 4 dishes) ---- */
 async function saveLoveFood(env, [items]) {

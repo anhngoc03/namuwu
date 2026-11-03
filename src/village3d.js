@@ -1126,20 +1126,68 @@ function create(container, opts) {
   controls.rotateSpeed = 0.7;
   controls.panSpeed = 1.1;
   controls.keyPanSpeed = 22;
-  // phones: one finger moves the map; two fingers pinch to zoom, move to pan and twist to turn it — all at once
+  // phones, like a map app: one finger moves the map. Two fingers: pinch = zoom, twist = turn,
+  // move = pan — and both fingers sliding up/down together tilts the view (top-down ↔ side).
+  // OrbitControls only ever sees one finger; the two-finger gesture is handled here.
   controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
-  { let ang = null; const twist = new THREE.Vector3();
-    const angleOf = (t) => Math.atan2(t[1].clientY - t[0].clientY, t[1].clientX - t[0].clientX);
-    renderer.domElement.addEventListener('touchstart', (e) => { ang = e.touches.length === 2 ? angleOf(e.touches) : null; }, { passive: true });
-    renderer.domElement.addEventListener('touchmove', (e) => {
-      if (e.touches.length !== 2 || ang == null || !controls.enabled) return;
-      const a = angleOf(e.touches); let d = a - ang; ang = a;
-      if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2;
-      twist.copy(camera.position).sub(controls.target).applyAxisAngle(THREE.Object3D.DEFAULT_UP, d);   // turn round the point we look at
-      camera.position.copy(controls.target).add(twist);
+  { const el = renderer.domElement, tp = new Map();
+    let g2 = null, fake = false;
+    const off = new THREE.Vector3(), sph = new THREE.Spherical(), right = new THREE.Vector3(), fwd = new THREE.Vector3();
+    const two = () => { const v = Array.from(tp.values()); return { a: v[0], b: v[1], mx: (v[0].x + v[1].x) / 2, my: (v[0].y + v[1].y) / 2, d: Math.hypot(v[1].x - v[0].x, v[1].y - v[0].y), ang: Math.atan2(v[1].y - v[0].y, v[1].x - v[0].x) }; };
+    el.addEventListener('pointerdown', (e) => {
+      if (fake || e.pointerType !== 'touch') return;
+      tp.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (tp.size === 2) {
+        e.stopImmediatePropagation();                  // OrbitControls never learns about the second finger…
+        const first = Array.from(tp.entries()).find(([id]) => id !== e.pointerId);
+        if (first) {                                   // …and lets go of the first one
+          fake = true;
+          try { el.dispatchEvent(new PointerEvent('pointerup', { pointerId: first[0], pointerType: 'touch', isPrimary: true, clientX: first[1].x, clientY: first[1].y, bubbles: true })); } catch (er) {}
+          fake = false;
+        }
+        const t = two(); g2 = { last: t, moved: 0, mode: '', y0a: t.a.y, y0b: t.b.y, x0: t.mx, d0: t.d };
+      } else if (tp.size > 2) e.stopImmediatePropagation();
+    }, { capture: true });
+    el.addEventListener('pointermove', (e) => {
+      if (fake || e.pointerType !== 'touch' || !tp.has(e.pointerId)) return;
+      tp.get(e.pointerId).x = e.clientX; tp.get(e.pointerId).y = e.clientY;
+      if (!g2 || tp.size < 2) return;
+      e.stopImmediatePropagation();
+      if (!controls.enabled) return;
+      const t = two(), L = g2.last;
+      g2.moved += Math.hypot(t.mx - L.mx, t.my - L.my) + Math.abs(t.d - L.d);
+      if (!g2.mode && g2.moved > 22) {                 // decide once per gesture: tilt, or zoom/turn/pan
+        const dya = t.a.y - g2.y0a, dyb = t.b.y - g2.y0b, dy = (dya + dyb) / 2;
+        const parallel = dya * dyb > 0 && Math.min(Math.abs(dya), Math.abs(dyb)) > 0.3 * Math.max(Math.abs(dya), Math.abs(dyb));
+        g2.mode = parallel && Math.abs(t.mx - g2.x0) < Math.abs(dy) * 0.7 && Math.abs(t.d - g2.d0) < Math.max(24, Math.abs(dy) * 0.6) ? 'tilt' : 'free';
+      }
+      off.copy(camera.position).sub(controls.target);
+      if (g2.mode === 'tilt') {
+        sph.setFromVector3(off);
+        sph.phi = Math.max(controls.minPolarAngle, Math.min(controls.maxPolarAngle, sph.phi - (t.my - L.my) * 0.006));
+        off.setFromSpherical(sph); camera.position.copy(controls.target).add(off);
+      } else if (g2.mode === 'free') {
+        let da = t.ang - L.ang; if (da > Math.PI) da -= Math.PI * 2; if (da < -Math.PI) da += Math.PI * 2;
+        off.applyAxisAngle(THREE.Object3D.DEFAULT_UP, da);                                   // twist = turn
+        const len = Math.max(controls.minDistance, Math.min(controls.maxDistance, off.length() * (L.d / Math.max(1, t.d))));
+        off.setLength(len);                                                                   // pinch = zoom
+        camera.position.copy(controls.target).add(off);
+        camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize(); right.crossVectors(fwd, camera.up).normalize();
+        const k = 2 * len * Math.tan(camera.fov * Math.PI / 360) / (el.clientHeight || innerHeight);
+        panOffset.copy(right).multiplyScalar(-(t.mx - L.mx) * k).addScaledVector(fwd, (t.my - L.my) * k * 1.4);   // move = pan
+        controls.target.add(panOffset); camera.position.add(panOffset);
+      }
+      g2.last = t;
       controls.update();
-    }, { passive: true });
-    renderer.domElement.addEventListener('touchend', (e) => { ang = e.touches.length === 2 ? angleOf(e.touches) : null; }, { passive: true });
+    }, { capture: true });
+    const lift = (e) => {
+      if (fake || e.pointerType !== 'touch') return;
+      if (g2 && tp.has(e.pointerId)) e.stopImmediatePropagation();
+      tp.delete(e.pointerId);
+      if (tp.size < 2) g2 = null;
+    };
+    el.addEventListener('pointerup', lift, { capture: true });
+    el.addEventListener('pointercancel', lift, { capture: true });
   }
   renderer.domElement.tabIndex = 0;              // arrow keys move the view once the village is clicked
   renderer.domElement.style.outline = 'none';
@@ -2673,6 +2721,52 @@ const ROOMS = {
       rShelf(g, -4.25, 1.4, Math.PI / 2, 5); rPlant(g, 3.9, 2.4);
       R.windowX = 2.4;
     }, corners: { main: [0, 2.9, 5.8, -0.3, 1.1, -2.2] } },
+  notes: { first: 'main', build(g, R) {
+      // a writing desk, a cork board covered in sticky notes, piles of notebooks
+      const d = rDesk(g, -0.8, -2.3, 0, 0xf5d888); rLaptop(d, 0.4, 0);
+      [0xffb6c1, 0xa6d8e8, 0xfff1a8].forEach((c, k) => d.add(box(0.36, 0.05, 0.48, c, -0.5, 0.83 + k * 0.055, 0.02 + k * 0.03)));
+      rChair(g, -0.6, -1.45, Math.PI); R.seat = { x: -0.6, z: -1.5, ry: Math.PI, y: 0.54 };
+      rWallBoard(g, -0.6, 2.2, -3.44, 0, 2.6, 1.3, 0xd9b48f,
+        [[-1.0, 0.35, 0xfff1a8], [-0.55, 0.3, 0xffb6c1], [-0.1, 0.38, 0xa6d8e8], [0.35, 0.32, 0xa3d9bd], [0.85, 0.36, 0xfff1a8], [-0.8, -0.25, 0xd9c9f0], [-0.3, -0.22, 0xfff1a8], [0.2, -0.28, 0xffb6c1], [0.7, -0.24, 0xa6d8e8]]);
+      rShelf(g, 4.25, -0.4, -Math.PI / 2, 5); rPlant(g, -3.9, -3);
+      R.windowX = 2.8;
+    }, corners: { main: [-0.2, 2.9, 5.8, -0.6, 1.3, -2.4] } },
+  goals: { first: 'main', build(g, R) {
+      // a vision board with pictures + a big star, a desk, a trophy
+      rWallBoard(g, 0, 2.15, -3.44, 0, 3.0, 1.6, 0xffffff,
+        [[-1.1, 0.35, 0xa6d8e8, 0.45], [-0.45, 0.4, 0xffb6c1, 0.4], [0.55, 0.38, 0xa3d9bd, 0.45], [1.15, 0.3, 0xf5d888, 0.4], [-0.9, -0.35, 0xd9c9f0, 0.45], [0.95, -0.35, 0xffb6c1, 0.4]]);
+      const star = heart(0xffd36b); star.scale.setScalar(0.5); star.position.set(0, 2.1, -3.3); g.add(star);
+      const d = rDesk(g, -1.8, -1.9, 0.25, 0xd9c9f0); rLaptop(d, 0, 0);
+      rChair(g, -1.7, -1.05, Math.PI + 0.25); R.seat = { x: -1.68, z: -1.1, ry: Math.PI + 0.25, y: 0.54 };
+      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.12, 0.36, 18), mat(0xf5c84c)); cup.position.set(3.7, 1.28, -2.7); g.add(cup);
+      g.add(box(0.5, 0.9, 0.5, 0xf0dcc4, 3.7, 0.45, -2.7)); g.add(box(0.2, 0.12, 0.2, 0xf5c84c, 3.7, 1.0, -2.7));
+      rPlant(g, -3.9, -3);
+      R.windowX = 3.2;
+    }, corners: { main: [0.2, 2.8, 5.8, -0.2, 1.4, -2.4] } },
+  health: { first: 'main', build(g, R) {
+      // a yoga mat, dumbbells, a little fridge and a bowl of fruit
+      const matM = box(1.0, 0.04, 2.0, 0xa3d9bd, -1.6, 0.03, -0.6); matM.castShadow = false; g.add(matM);
+      [[-0.7, -1.4], [-0.45, -1.4]].forEach(([x, z]) => { g.add(box(0.36, 0.05, 0.05, 0x8a8f99, x, 0.12, z)); [-0.16, 0.16].forEach((dx) => { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.08, 16), mat(0xf19bb0)); w.rotation.z = Math.PI / 2; w.position.set(x + dx, 0.12, z); g.add(w); }); });
+      g.add(box(0.9, 1.6, 0.8, 0xffffff, 3.6, 0.8, -2.9)); g.add(box(0.05, 0.4, 0.05, 0xc0c6ce, 3.2, 1.0, -2.48)); g.add(box(0.9, 0.04, 0.82, 0xe9e4de, 3.6, 1.1, -2.9));
+      const t = rDesk(g, 1.2, -2.4, 0, 0xffd6c9);
+      const bowl = new THREE.Mesh(new THREE.SphereGeometry(0.25, 20, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), mat(0xffffff)); bowl.position.set(0, 1.04, 0); t.add(bowl);
+      [[0xff7f7f, -0.08, 0], [0xffd36b, 0.08, 0.04], [0x9ad690, 0, -0.08]].forEach(([c, x, z]) => { const f = new THREE.Mesh(new THREE.SphereGeometry(0.09, 14, 10), mat(c)); f.position.set(x, 1.04, z); t.add(f); });
+      const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.3, 14), mat(0x9fcfe4)); bottle.position.set(0.5, 0.98, 0.1); t.add(bottle);
+      rChair(g, 1.4, -1.55, Math.PI); R.seat = { x: 1.4, z: -1.6, ry: Math.PI, y: 0.54 };
+      rPoster(g, -4.44, 2.2, -0.6, Math.PI / 2); rPlant(g, -3.9, -3);
+      R.windowX = -0.6;
+    }, corners: { main: [0.4, 2.8, 5.8, 0.2, 1.0, -2.0] } },
+  law: { first: 'main', build(g, R) {
+      // tall bookshelves of law books, a desk with the scales of justice
+      rShelf(g, -4.25, -0.8, Math.PI / 2, 5); rShelf(g, -4.25, 1.4, Math.PI / 2, 5); rShelf(g, 4.25, -0.4, -Math.PI / 2, 5);
+      const d = rDesk(g, 0.2, -2.3, 0, 0xc49674); rLaptop(d, -0.4, 0);
+      const sc = new THREE.Group(); sc.position.set(0.55, 0.83, 0); d.add(sc);
+      sc.add(box(0.04, 0.5, 0.04, 0xd9b44a, 0, 0.25, 0)); sc.add(box(0.5, 0.03, 0.03, 0xd9b44a, 0, 0.48, 0));
+      [-0.24, 0.24].forEach((x) => { const pan = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.06, 0.03, 16), mat(0xd9b44a)); pan.position.set(x, 0.3, 0); sc.add(pan); sc.add(box(0.01, 0.18, 0.01, 0xd9b44a, x, 0.39, 0)); });
+      rChair(g, 0.4, -1.45, Math.PI); R.seat = { x: 0.4, z: -1.5, ry: Math.PI, y: 0.54 };
+      rPlant(g, 3.9, 2.4);
+      R.windowX = 2.4;
+    }, corners: { main: [0.2, 2.9, 5.8, 0.1, 1.2, -2.3] } },
   other: { first: 'main', build(g, R) {
       const d = rDesk(g, -1, -2.3); rLaptop(d, 0, 0); rChair(g, -0.8, -1.45, Math.PI); R.seat = { x: -0.8, z: -1.5, ry: Math.PI, y: 0.54 };
       rShelf(g, 4.25, -0.6, -Math.PI / 2); rPlant(g, -3.9, -3);

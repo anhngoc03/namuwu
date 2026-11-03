@@ -130,3 +130,11 @@ Nguyên tắc: **dữ liệu cũ giữ nguyên**, nhà mới dùng lại bảng 
   bài tập theo bài, test theo tuần / tổng hợp, ôn lại câu sai → chấm (trắc nghiệm chấm ngay, câu viết Claude chấm).
 - Đáp án giữ ở server tới khi nộp bài. Bài tập đạt ≥ 70% thì tự tick bài học.
 - Trang: `frontend/study.js` (view `study-view`, đường dẫn /personal/study). Hall agent có tool `get_study`, `set_study_lesson_done`.
+
+## 5i. Notes · Goals · Food & Gym · Law
+- Bảng: `supabase/houses.sql` (notes, goals, health_logs, law_docs). Chạy 1 lần trong SQL Editor.
+- AI (`lib/houses.js`): Notes ✨ Tidy up · Goals ✨ Break it down (các bước + hạn) · Food & Gym ✨ ước tính kcal, ✨ kế hoạch tuần ·
+  Law ✨ tìm văn bản mới (web search chỉ trên vbpl.vn, baochinhphu.vn, thuvienphapluat.vn; chỉ lưu thông tin + tóm tắt).
+- Nhắc việc: thêm nguồn Study (bài hôm nay / trễ) và Goals (hạn mục tiêu + từng bước).
+- ✿ AI summary: hằng ngày hoặc Chủ nhật (Cài đặt, mặc định tắt), và nút ✿ Summary ở Town Hall.
+- Study: 🔊 đọc to bài (Nhật / Anh / Việt). Điện thoại: 2 ngón cùng kéo lên/xuống = nghiêng camera.

@@ -134,6 +134,7 @@ function studyOpenLesson(id) {
   studyCall('openStudyLesson', id).then(function (r) {
     if (m.dataset.id !== String(id)) return;
     l.hasContent = true;
+    studyState.lessonText = r.content || '';
     body.innerHTML = '<div class="st-goal">🎯 ' + studyEsc(l.goal) + '</div>' + studyMd(r.content);
   }).catch(function (e) { body.innerHTML = '<div class="st-empty">' + studyEsc(e.message) + '</div>'; });
 }
@@ -141,6 +142,33 @@ function studySetDone(id, done) {
   var l = studyState.lessons.filter(function (x) { return x.id === id; })[0]; if (!l) return;
   l.done = done; studyState.plan.done += done ? 1 : -1; studyRenderPlan();
   studyCall('setStudyLessonDone', id, done).catch(function (e) { toast(e.message); });
+}
+
+/* ---------- 🔊 read a lesson aloud: Japanese, English and Vietnamese bits each in their own voice ---------- */
+function studySpeakStop() { try { speechSynthesis.cancel(); } catch (e) {} var b = document.getElementById('st-lesson-speak'); if (b) b.textContent = '🔊 Listen'; }
+function studySpeak(text) {
+  if (!('speechSynthesis' in window)) { toast('This browser can’t read aloud'); return; }
+  if (speechSynthesis.speaking) { studySpeakStop(); return; }
+  var voices = speechSynthesis.getVoices();
+  var langOf = function (s) { return /[\u3040-\u30ff\u4e00-\u9faf]/.test(s) ? 'ja-JP' : /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(s) ? 'vi-VN' : 'en-US'; };
+  // split each line into runs of the same language (e.g. "勉強(べんきょう) học" → ja + vi)
+  var parts = [];
+  String(text || '').replace(/\*\*/g, '').replace(/^#+\s*/gm, '').replace(/^\s*[-•]\s*/gm, '').split(/\n+/).forEach(function (line) {
+    line.split(/([\u3040-\u30ff\u4e00-\u9faf\u3000-\u303f\uff00-\uffef()（）]+)/).forEach(function (seg) {
+      seg = seg.trim(); if (!seg || /^[()（）\s]+$/.test(seg)) return;
+      var lang = langOf(seg), last = parts[parts.length - 1];
+      if (last && last.lang === lang) last.text += ' ' + seg; else parts.push({ lang: lang, text: seg });
+    });
+  });
+  if (!parts.length) return;
+  var btn = document.getElementById('st-lesson-speak'); btn.textContent = '⏹ Stop';
+  parts.forEach(function (p, i) {
+    var u = new SpeechSynthesisUtterance(p.text.replace(/[()（）]/g, ' '));
+    u.lang = p.lang; u.rate = p.lang === 'ja-JP' ? 0.85 : 0.95;
+    var v = voices.filter(function (x) { return x.lang && x.lang.replace('_', '-').indexOf(p.lang.slice(0, 2)) === 0; })[0]; if (v) u.voice = v;
+    if (i === parts.length - 1) u.onend = function () { btn.textContent = '🔊 Listen'; };
+    speechSynthesis.speak(u);
+  });
 }
 
 /* ---------- exercises & tests ---------- */
@@ -268,7 +296,8 @@ function studyWire() {
     else if (k === 'open-test') { var t = studyState.tests.filter(function (x) { return x.id === id; })[0]; if (t) studyShowTest(t); }
     else if (k === 'menu') studyMenu();
   });
-  document.getElementById('st-lesson-close').onclick = function () { document.getElementById('study-lesson-modal').classList.remove('active'); };
+  document.getElementById('st-lesson-close').onclick = function () { studySpeakStop(); document.getElementById('study-lesson-modal').classList.remove('active'); };
+  document.getElementById('st-lesson-speak').onclick = function () { studySpeak(studyState.lessonText); };
   document.getElementById('st-lesson-done').onclick = function () {
     var id = Number(document.getElementById('study-lesson-modal').dataset.id), l = studyState.lessons.filter(function (x) { return x.id === id; })[0];
     if (!l) return; studySetDone(id, !l.done);
