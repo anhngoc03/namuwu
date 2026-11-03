@@ -68,6 +68,15 @@ Nguyên tắc: **dữ liệu cũ giữ nguyên**, nhà mới dùng lại bảng 
 - Trời sáng/tối theo **giờ thật** của máy (bình minh ~6h, hoàng hôn ~18h; đêm có sao, đom đóm, đèn đường, cửa sổ sáng). Nút ☼/☾ của web không đổi màu làng nữa. Thử giờ khác: thêm `?hour=22` vào link.
 - Góc phải: đồng hồ + thứ/ngày, 🍅, ✮⋆˙.
 
+## 5c. Nhắc việc (thông báo đẩy) — `supabase/push.sql`, `lib/push.js`, `frontend/sw.js`
+
+- **Không cần thêm biến nào**: khoá VAPID do server tự tạo lần đầu, lưu ở `app_settings` (phần bí mật được mã hoá bằng `PERSONAL_SECRET`).
+- ⚙ (sau khi nhập mật khẩu): bật/tắt thông báo trên từng máy, gửi thử; giờ nhắc sáng (hôm nay + trễ), tối (ngày mai), nhắc trước N ngày; chọn nguồn Work / Calendar / To-do; ẩn nội dung trên màn hình khoá.
+- Supabase `pg_cron` gọi `POST /api {action: runReminders}` 5 phút/lần. Mỗi loại nhắc gửi tối đa 1 lần/ngày (`push_log`), trong vòng 1,5 giờ sau giờ đã đặt.
+- iPhone: Safari → Chia sẻ → Thêm vào MH chính → mở từ icon → ⚙ → Turn on.
+- ◐ / ☼ / ☾ (sau khi nhập mật khẩu): trời theo giờ thật / luôn ngày / luôn đêm (nhớ trên từng máy).
+- Làng: chó mèo né nhà, cây, hồ; bấm chó/mèo → nằm ngủ ~3 giây; bấm hồ → thả mồi, cá bơi tới ăn. Di chuyển: trackpad vuốt 2 ngón / chuột phải kéo / Shift+kéo / phím mũi tên; điện thoại: 2 ngón.
+
 ## 6. Đã chốt
 
 1. Agent được tự làm tất cả (hỏi lại trước khi xoá).

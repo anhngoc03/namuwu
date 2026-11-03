@@ -17,6 +17,7 @@
  */
 
 import { agentChat as runAgentChat } from '../lib/agent.js';
+import { makeVapidKeys, sendPush } from '../lib/push.js';
 
 // ---------- Helper gọi Supabase REST (PostgREST) ----------
 async function sb(env, path, options = {}) {
@@ -62,7 +63,8 @@ function isPersonalAction_(action) {
   if (/Work/.test(action)) return action !== 'getWorkHomeSummary';   // Home chỉ được xem con số
   if (/Post|Calendar/.test(action)) return true;
   if (action === 'saveHomeProfile') return true;
-  if (/^agent/.test(action)) return true;              // Town Hall AI agent (village.js → lib/agent.js)        // anyone sees the Home photo/name, only you change it
+  if (/^agent/.test(action)) return true;              // Town Hall AI agent (village.js → lib/agent.js)
+  if (/Push|Reminder/.test(action)) return action !== 'runReminders';   // settings + this device; the timer itself is public        // anyone sees the Home photo/name, only you change it
   return /Expense/.test(action) && action !== 'getExpenseTodayTotal';
 }
 
@@ -1449,8 +1451,185 @@ const ACTIONS = {
   updateExpenseCategory,
   deleteExpenseCategory,
   getExpenseTodayTotal,
-  agentChat
+  agentChat,
+  getReminderSettings,
+  saveReminderSettings,
+  getPushKey,
+  savePushSubscription,
+  deletePushSubscription,
+  getPushDevices,
+  sendTestPush,
+  runReminders
 };
+
+
+/* ============================================================
+ *  REMINDERS — push notifications to the phone (supabase/push.sql)
+ *  runReminders is called every 5 minutes by Supabase pg_cron. It's public on
+ *  purpose (no secret to keep): it only sends what's due by the saved settings,
+ *  once per kind per day (push_log), to the devices that turned it on.
+ * ============================================================ */
+const REMINDER_DEFAULTS_ = {
+  morning: { on: true, time: '08:00' },            // today + late
+  evening: { on: true, time: '20:00' },            // tomorrow
+  before: { on: true, days: 3, time: '09:00' },    // N days ahead
+  sources: { work: true, calendar: true, todo: true },
+  private: false                                   // true = only "3 things today" on the lock screen
+};
+function reminderClean_(r) {
+  const d = REMINDER_DEFAULTS_, t = (v, f) => (/^([01]\d|2[0-3]):[0-5]\d$/.test(v || '') ? v : f);
+  r = r || {};
+  const pick = (o, k) => (o && typeof o[k] === 'boolean' ? o[k] : undefined);
+  return {
+    morning: { on: pick(r.morning, 'on') ?? d.morning.on, time: t(r.morning && r.morning.time, d.morning.time) },
+    evening: { on: pick(r.evening, 'on') ?? d.evening.on, time: t(r.evening && r.evening.time, d.evening.time) },
+    before: {
+      on: pick(r.before, 'on') ?? d.before.on,
+      days: Math.max(1, Math.min(14, Math.round(Number(r.before && r.before.days) || d.before.days))),
+      time: t(r.before && r.before.time, d.before.time)
+    },
+    sources: {
+      work: pick(r.sources, 'work') ?? true, calendar: pick(r.sources, 'calendar') ?? true, todo: pick(r.sources, 'todo') ?? true
+    },
+    private: typeof r.private === 'boolean' ? r.private : d.private
+  };
+}
+async function getReminderSettings(env) {
+  const rows = await sb(env, 'app_settings?key=eq.reminders&select=value');
+  return reminderClean_(rows.length ? rows[0].value : null);
+}
+async function saveReminderSettings(env, [r]) {
+  const value = reminderClean_(r);
+  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'reminders', value }]), prefer: 'resolution=merge-duplicates,return=minimal' });
+  return value;
+}
+
+// VAPID keys: made once by the server, private half encrypted with PERSONAL_SECRET.
+async function pushVapid_(env) {
+  const rows = await sb(env, 'app_settings?key=eq.vapid&select=value');
+  if (rows.length && rows[0].value && rows[0].value.publicKey) {
+    return { publicKey: rows[0].value.publicKey, privateJwk: JSON.parse(await decryptField_(env, rows[0].value.privateJwk)) };
+  }
+  const k = await makeVapidKeys();
+  const value = { publicKey: k.publicKey, privateJwk: await encryptField_(env, JSON.stringify(k.privateJwk)) };
+  // ignore-duplicates: if two requests race, the first saved pair wins and we re-read it
+  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'vapid', value }]), prefer: 'resolution=ignore-duplicates,return=minimal' });
+  const again = await sb(env, 'app_settings?key=eq.vapid&select=value');
+  return { publicKey: again[0].value.publicKey, privateJwk: JSON.parse(await decryptField_(env, again[0].value.privateJwk)) };
+}
+const PUSH_SUBJECT_ = 'https://namuwu.pages.dev';
+
+async function getPushKey(env) {
+  return (await pushVapid_(env)).publicKey;
+}
+async function savePushSubscription(env, [sub, label]) {
+  sub = sub || {};
+  const keys = sub.keys || {};
+  if (!/^https:\/\//.test(sub.endpoint || '') || !keys.p256dh || !keys.auth) throw new Error('Bad subscription');
+  await sb(env, 'push_subscriptions?on_conflict=endpoint', {
+    method: 'POST',
+    body: JSON.stringify([{ endpoint: sub.endpoint, p256dh: keys.p256dh, auth: keys.auth, label: String(label || '').slice(0, 120) }]),
+    prefer: 'resolution=merge-duplicates,return=minimal'
+  });
+  return { ok: true };
+}
+async function deletePushSubscription(env, [endpoint]) {
+  await sb(env, 'push_subscriptions?endpoint=eq.' + encodeURIComponent(String(endpoint || '')), { method: 'DELETE', prefer: 'return=minimal' });
+  return { ok: true };
+}
+async function getPushDevices(env) {
+  const rows = await sb(env, 'push_subscriptions?select=endpoint,label,created_at&order=created_at.asc');
+  return rows.map((r) => ({ endpoint: r.endpoint, label: r.label || '', since: r.created_at }));
+}
+async function pushToAll_(env, payload) {
+  const subs = await sb(env, 'push_subscriptions?select=id,endpoint,p256dh,auth');
+  if (!subs.length) return 0;
+  const vapid = await pushVapid_(env);
+  let sent = 0;
+  for (const s of subs) {
+    try {
+      const st = await sendPush(s, payload, vapid, PUSH_SUBJECT_);
+      if (st === 404 || st === 410) await sb(env, 'push_subscriptions?id=eq.' + Number(s.id), { method: 'DELETE', prefer: 'return=minimal' });
+      else if (st >= 200 && st < 300) sent++;
+    } catch (e) { /* one bad device mustn't stop the others */ }
+  }
+  return sent;
+}
+async function sendTestPush(env) {
+  const sent = await pushToAll_(env, { title: 'Henlo ✿', body: 'Reminders work on this device (๑ᵔ⌔ᵔ๑)', tag: 'test', url: '/personal' });
+  return { sent };
+}
+
+// What's on a given day (or late, for "today").
+async function reminderItems_(env, day, cfg, includeLate) {
+  const items = [];
+  if (cfg.sources.work) {
+    let rows = [];
+    try { rows = await sb(env, 'work_tasks?status=neq.done&select=title,due_date,subtasks'); } catch (e) { rows = []; }
+    rows.forEach((r) => {
+      let eff = r.due_date || '';
+      (r.subtasks || []).forEach((x) => { if (!x.done && x.due && (!eff || x.due < eff)) eff = x.due; });
+      if (!eff) return;
+      if (eff === day) items.push({ text: r.title });
+      else if (includeLate && eff < day) items.push({ text: r.title, late: eff });
+    });
+  }
+  if (cfg.sources.calendar) {
+    try {
+      const cal = await getCalendarNotes(env, [day.slice(0, 4)]);
+      cal.notes.forEach((n) => { if (n.day === day && n.kind !== 'off') items.push({ text: n.note, kind: n.kind }); });
+    } catch (e) { /* calendar not set up */ }
+  }
+  if (cfg.sources.todo) {
+    let rows = [];
+    try { rows = await sb(env, 'home_todos?check=eq.false&deadline=not.is.null&select=todolist,deadline'); } catch (e) { rows = []; }
+    rows.forEach((r) => {
+      const d = String(r.deadline).slice(0, 10);
+      if (d === day) items.push({ text: r.todolist });
+      else if (includeLate && d < day) items.push({ text: r.todolist, late: d });
+    });
+  }
+  return items;
+}
+function vnAddDays_(day, n) {
+  const d = new Date(day + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function reminderBody_(items, cfg, what) {
+  if (cfg.private) return 'You have ' + items.length + ' thing' + (items.length === 1 ? '' : 's') + ' ' + what + ' ✿';
+  const lines = items.slice(0, 6).map((it) => '• ' + it.text + (it.late ? ' (late ' + it.late.slice(8, 10) + '/' + it.late.slice(5, 7) + ')' : '') + (it.kind === 'him' ? ' ♡' : ''));
+  if (items.length > 6) lines.push('+' + (items.length - 6) + ' more');
+  return lines.join('\n');
+}
+async function runReminders(env) {
+  const cfg = await getReminderSettings(env);
+  const now = vnNow_();                                          // Vietnam time
+  const mins = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const nowM = mins(now.time);
+  const jobs = [];
+  const due = (slot) => slot.on && nowM >= mins(slot.time) && nowM - mins(slot.time) < 90;   // within 1.5 h of the set time
+  if (due(cfg.morning)) jobs.push({ key: 'morning:' + now.date, day: now.date, late: true, title: '☀ Today', what: 'today', tag: 'morning' });
+  if (due(cfg.evening)) jobs.push({ key: 'evening:' + now.date, day: vnAddDays_(now.date, 1), late: false, title: '☾ Tomorrow', what: 'tomorrow', tag: 'evening' });
+  if (due(cfg.before)) {
+    const day = vnAddDays_(now.date, cfg.before.days);
+    jobs.push({ key: 'before:' + now.date, day, late: false, title: '⏳ In ' + cfg.before.days + ' day' + (cfg.before.days === 1 ? '' : 's') + ' · ' + day.slice(8, 10) + '/' + day.slice(5, 7), what: 'coming up', tag: 'before' });
+  }
+  const done = [];
+  for (const j of jobs) {
+    // claim the slot first (primary key) so two runs can't both send it
+    try { await sb(env, 'push_log', { method: 'POST', body: JSON.stringify([{ key: j.key }]), prefer: 'return=minimal' }); }
+    catch (e) { continue; }                                      // already sent today
+    const items = await reminderItems_(env, j.day, cfg, j.late);
+    if (!items.length) { done.push({ key: j.key, sent: 0, empty: true }); continue; }
+    const sent = await pushToAll_(env, {
+      title: j.title + ' · ' + items.length, body: reminderBody_(items, cfg, j.what), tag: j.tag, url: '/personal'
+    });
+    done.push({ key: j.key, sent });
+  }
+  // keep the log short
+  if (Math.random() < 0.05) await sb(env, 'push_log?sent_at=lt.' + new Date(Date.now() - 40 * 86400000).toISOString(), { method: 'DELETE', prefer: 'return=minimal' }).catch(() => {});
+  return { now: now.date + ' ' + now.time, done };
+}
 
 // Town Hall chat — the agent works through the same functions the app uses.
 async function agentChat(env, args) {
