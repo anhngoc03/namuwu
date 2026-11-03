@@ -223,18 +223,30 @@ function loveFoodPicked() {
       '<button type="button" data-lfx="' + i + '" aria-label="Remove">✕</button></div>';
   }).join('') : '<div class="lf-empty">Nothing yet — find a dish and tap its picture</div>';
 }
+function loveFoodTiles() {
+  var box = document.getElementById('love-food-results'), q = loveFood.q || '';
+  var ai = loveFood.ai;
+  var html = '<button type="button" class="lf-pic lf-ai' + (ai && ai.img ? '' : ' busy') + '" data-lfp="ai"' + (ai && ai.img ? '' : ' disabled') + '>' +
+    (ai && ai.img ? '<img src="' + ai.img + '" alt="">' : '<i class="lf-spin">✨</i>') +
+    '<span>' + (ai && ai.err ? loveEsc(ai.err) : ai && ai.img ? '✨ drawn for you' : 'Drawing…') + '</span></button>';
+  html += (loveFood.results || []).map(function (x, i) {
+    return '<button type="button" class="lf-pic" data-lfp="' + i + '"><img src="' + loveEsc(x.img) + '" alt="" loading="lazy" referrerpolicy="no-referrer"><span>' + loveEsc(x.alt || q) + '</span></button>';
+  }).join('');
+  if (loveFood.searching) html += '<div class="lf-wait">Looking for photos of “' + loveEsc(q) + '”…</div>';
+  box.innerHTML = html;
+}
+// Find: Claude draws the dish (always works, any dish), and real photos come from Wikipedia alongside
 function loveFoodSearch(q) {
   q = String(q || '').trim(); if (!q) return;
-  var box = document.getElementById('love-food-results');
-  box.innerHTML = '<div class="lf-wait">Looking for pictures of “' + loveEsc(q) + '”…</div>';
+  var run = (loveFood.run || 0) + 1;
+  loveFood.run = run; loveFood.q = q; loveFood.ai = null; loveFood.results = []; loveFood.searching = true;
+  loveFoodTiles();
+  lovePromise('drawLoveFood', q).then(function (r) { if (loveFood.run === run) { loveFood.ai = { img: r.img }; loveFoodTiles(); } })
+    .catch(function (e) { if (loveFood.run === run) { loveFood.ai = { err: (e && e.message) || 'Could not draw it' }; loveFoodTiles(); } });
   lovePromise('findLoveFoodImages', q).then(function (r) {
-    var imgs = (r && r.images) || [];
-    loveFood.results = [{ title: q, img: '' }].concat(imgs.map(function (x) { return { title: q, img: x.img, alt: x.title }; }));
-    box.innerHTML = loveFood.results.map(function (x, i) {
-      return x.img ? '<button type="button" class="lf-pic" data-lfp="' + i + '"><img src="' + loveEsc(x.img) + '" alt="" loading="lazy" referrerpolicy="no-referrer"><span>' + loveEsc(x.alt || q) + '</span></button>'
-        : '<button type="button" class="lf-pic emoji" data-lfp="' + i + '">🍲<span>' + loveEsc(q) + '</span></button>';
-    }).join('') + (imgs.length ? '' : '<div class="lf-wait">No pictures found — the little 🍲 works too</div>');
-  }).catch(function (e) { box.innerHTML = '<div class="lf-wait">' + loveEsc((e && e.message) || 'Could not search') + '</div>'; });
+    if (loveFood.run !== run) return;
+    loveFood.results = ((r && r.images) || []).map(function (x) { return { title: q, img: x.img, alt: x.title }; });
+  }).catch(function () {}).then(function () { if (loveFood.run === run) { loveFood.searching = false; loveFoodTiles(); } });
 }
 function loveFoodSave() {
   var btn = document.getElementById('love-food-save'); btn.disabled = true;
@@ -258,8 +270,9 @@ function loveFoodWire() {
   document.getElementById('love-food-results').addEventListener('click', function (e) {
     var b = e.target.closest('[data-lfp]'); if (!b) return;
     if (loveFood.picked.length >= 4) { toast('Up to 4 dishes ♡ remove one first'); return; }
-    var x = loveFood.results[Number(b.dataset.lfp)];
-    loveFood.picked.push({ name: x.title, img: x.img || '' });
+    var x = b.dataset.lfp === 'ai' ? { title: loveFood.q, img: loveFood.ai && loveFood.ai.img } : loveFood.results[Number(b.dataset.lfp)];
+    if (!x || !x.img) return;
+    loveFood.picked.push({ name: x.title, img: x.img });
     loveFoodPicked();
   });
   document.getElementById('love-food-picked').addEventListener('click', function (e) {

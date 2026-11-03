@@ -16,6 +16,7 @@
  * ------------------------------------------------------------------
  */
 
+import { drawFood } from '../lib/food.js';
 import { agentChat as runAgentChat } from '../lib/agent.js';
 import { makeVapidKeys, sendPush } from '../lib/push.js';
 import * as drive from '../lib/drive.js';
@@ -1475,6 +1476,7 @@ const ACTIONS = {
   setLoveFrame,
   saveLoveFood,
   findLoveFoodImages,
+  drawLoveFood,
   deleteLovePhoto,
   deleteLoveMemory
 };
@@ -1733,11 +1735,16 @@ async function getLoveData(env) {
 async function saveLoveFood(env, [items]) {
   const clean = (Array.isArray(items) ? items : []).slice(0, 4).map((it) => ({
     name: String((it && it.name) || '').trim().slice(0, 60),
-    img: /^https:\/\/upload\.wikimedia\.org\/[^\s"'<>]+$/.test(String((it && it.img) || '')) ? String(it.img) : ''
+    img: loveFoodImgOk_(String((it && it.img) || '')) ? String(it.img) : ''
   })).filter((it) => it.name);
   await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'love_food', value: { items: clean } }]), prefer: 'resolution=merge-duplicates,return=minimal' });
   return { food: clean };
 }
+function loveFoodImgOk_(u) {
+  return /^https:\/\/upload\.wikimedia\.org\/[^\s"'<>]+$/.test(u) || (/^data:image\/svg\+xml;base64,[A-Za-z0-9+\/=]+$/.test(u) && u.length < 60000);
+}
+// Claude draws the dish (a small cute SVG) — lib/food.js
+async function drawLoveFood(env, [name]) { return drawFood(env, name); }
 // pictures for a dish name, from Wikipedia (vi, en) and Wikimedia Commons — free photos, CORS-friendly
 async function findLoveFoodImages(env, [query]) {
   const q = String(query || '').trim().slice(0, 60);

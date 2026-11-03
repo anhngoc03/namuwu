@@ -36,7 +36,7 @@ const LAYOUTS = {
     hall: [134, 38], pond: [264, 206], pondR: [8, 4],
     hill: { x: 160, y: 46, w: 216, h: 74, r: 12, height: 3.2 },
     ramp: { x: 160, from: 83, to: 110.5 },
-    lot: { house: 9, x0: 172, y0: 12, x1: 258, y1: 66, car: [226, 54.4], swing: [182, 38] },
+    lot: { house: 9, x0: 172, y0: 12, x1: 258, y1: 66, car: [226, 54.4], swing: [186, 40] },
     roads: [[8,110.5,312,110.5],[8,144.5,312,144.5],[8,180.5,206,180.5],[8,214.5,170,214.5],
             [46,110.5,46,214.5],[160,110.5,160,214.5],
             [64,70,258,70],[160,70,160,110.5]],
@@ -52,7 +52,7 @@ const LAYOUTS = {
     hall: [68, 30], pond: [100, 318], pondR: [6.5, 3.6],
     hill: { x: 100, y: 52, w: 184, h: 96, r: 12, height: 3.2 },
     ramp: { x: 100, from: 100, to: 124.5 },
-    lot: { house: 9, x0: 110, y0: 40, x1: 186, y1: 90, car: [166, 81.6], swing: [118, 60] },
+    lot: { house: 9, x0: 110, y0: 40, x1: 186, y1: 90, car: [166, 81.6], swing: [122, 66] },
     roads: [[44.5,124.5,155.5,124.5],[44.5,124.5,44.5,330],[155.5,124.5,155.5,312],
             [44.5,162.5,155.5,162.5],[44.5,214.5,155.5,214.5],[44.5,274.5,155.5,274.5],
             [16,94,186,94],[100,94,100,124.5]],
@@ -118,7 +118,8 @@ function riverDist(x, z) {
   return best;
 }
 const inLot = (x, z, pad) => !!LOT && x > LOT.x0 - (pad || 0) && x < LOT.x1 + (pad || 0) && z > LOT.z0 - (pad || 0) && z < LOT.z1 + (pad || 0);
-const onRoadAt = (x, z, pad) => ROADS.some(([x1, z1, x2, z2]) => x >= Math.min(x1, x2) - 0.9 - pad && x <= Math.max(x1, x2) + 0.9 + pad && z >= Math.min(z1, z2) - 0.9 - pad && z <= Math.max(z1, z2) + 0.9 + pad);
+const ROAD_W = 2.6, RH = ROAD_W / 2;      // roads: a little wider so two can walk side by side
+const onRoadAt = (x, z, pad) => ROADS.some(([x1, z1, x2, z2]) => x >= Math.min(x1, x2) - RH - pad && x <= Math.max(x1, x2) + RH + pad && z >= Math.min(z1, z2) - RH - pad && z <= Math.max(z1, z2) + RH + pad);
 // distance from the centre to the shore at angle t
 function shoreR(t, scale) {
   const I = ISLAND, c = Math.abs(Math.cos(t)), s = Math.abs(Math.sin(t));
@@ -773,15 +774,24 @@ function makeButterfly(color) {
   return g;
 }
 
+// a big old tree in the yard with the swing hanging from its long branch
 function makeSwing() {
-  const g = new THREE.Group(), wood = 0xc49674, rope = 0xeadfcb;
-  [-1.3, 1.3].forEach((x) => [-1, 1].forEach((sz) => {
-    const leg = box(0.14, 2.75, 0.14, wood, x, 1.3, sz * 0.48); leg.rotation.x = -sz * 0.36; g.add(leg);
-  }));
-  g.add(box(2.9, 0.14, 0.16, wood, 0, 2.58, 0));
-  const pivot = new THREE.Group(); pivot.position.y = 2.52; g.add(pivot);
-  [-0.72, 0.72].forEach((x) => pivot.add(box(0.04, 1.96, 0.04, rope, x, -0.98, 0)));
-  const seat = box(1.65, 0.1, 0.5, 0xf6a9bd, 0, -1.98, 0); pivot.add(seat);
+  const g = new THREE.Group(), bark = 0x9a6f5a, rope = 0xeadfcb, BY = 3.5;
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.62, BY + 1.4, 16), mat(bark)); trunk.position.set(-2.0, (BY + 1.4) / 2, -0.2); trunk.castShadow = true; g.add(trunk);
+  [[-0.5, 0.3], [0.45, -0.25], [0, 0.5]].forEach(([dx, dz]) => {        // roots
+    const r = new THREE.Mesh(new THREE.SphereGeometry(0.4, 12, 8), mat(bark)); r.scale.set(1.3, 0.45, 0.8); r.position.set(-2.0 + dx, 0.1, -0.2 + dz); g.add(r);
+  });
+  // the branch reaching out over the swing
+  const br = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 3.1, 12), mat(bark)); br.rotation.z = Math.PI / 2 - 0.12; br.position.set(-0.5, BY + 0.05, 0); br.castShadow = true; g.add(br);
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), mat(bark)); tip.position.set(1.05, BY - 0.15, 0); g.add(tip);
+  // a soft, round pink canopy (above and behind, so the swing stays in view)
+  [[-2.0, BY + 2.4, -0.4, 1.8], [-0.7, BY + 1.6, -0.7, 1.25], [-3.0, BY + 1.5, -0.3, 1.1], [-1.8, BY + 3.4, -0.6, 1.15], [0.4, BY + 1.2, -0.5, 0.8], [-2.5, BY + 1.3, 0.7, 0.95]]
+    .forEach(([x, y, z, r], i) => { const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 2), mat(CHERRY[i % 3])); m.position.set(x, y, z); m.castShadow = true; g.add(m); });
+  const pc = new THREE.Mesh(new THREE.CircleGeometry(2.0, 20), mat(0xfbd3e0)); pc.rotation.x = -Math.PI / 2; pc.position.set(-1.6, 0.02, -0.2); pc.receiveShadow = true; g.add(pc);
+  const pivot = new THREE.Group(); pivot.position.set(0, BY - 0.12, 0); g.add(pivot);
+  const len = BY - 0.12 - 0.56;
+  [-0.72, 0.72].forEach((x) => pivot.add(box(0.04, len, 0.04, rope, x, -len / 2, 0)));
+  const seat = box(1.65, 0.1, 0.5, 0xf6a9bd, 0, -len, 0); pivot.add(seat);
   g.userData.pivot = pivot; g.userData.seat = seat;
   return g;
 }
@@ -1116,6 +1126,21 @@ function create(container, opts) {
   controls.rotateSpeed = 0.7;
   controls.panSpeed = 1.1;
   controls.keyPanSpeed = 22;
+  // phones: one finger moves the map; two fingers pinch to zoom, move to pan and twist to turn it — all at once
+  controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
+  { let ang = null; const twist = new THREE.Vector3();
+    const angleOf = (t) => Math.atan2(t[1].clientY - t[0].clientY, t[1].clientX - t[0].clientX);
+    renderer.domElement.addEventListener('touchstart', (e) => { ang = e.touches.length === 2 ? angleOf(e.touches) : null; }, { passive: true });
+    renderer.domElement.addEventListener('touchmove', (e) => {
+      if (e.touches.length !== 2 || ang == null || !controls.enabled) return;
+      const a = angleOf(e.touches); let d = a - ang; ang = a;
+      if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2;
+      twist.copy(camera.position).sub(controls.target).applyAxisAngle(THREE.Object3D.DEFAULT_UP, d);   // turn round the point we look at
+      camera.position.copy(controls.target).add(twist);
+      controls.update();
+    }, { passive: true });
+    renderer.domElement.addEventListener('touchend', (e) => { ang = e.touches.length === 2 ? angleOf(e.touches) : null; }, { passive: true });
+  }
   renderer.domElement.tabIndex = 0;              // arrow keys move the view once the village is clicked
   renderer.domElement.style.outline = 'none';
   controls.listenToKeyEvents(renderer.domElement);
@@ -1284,7 +1309,7 @@ function create(container, opts) {
     const v = x1 === x2, len = v ? Math.abs(z2 - z1) : Math.abs(x2 - x1);
     const mx = (x1 + x2) / 2, mz = (z1 + z2) / 2;
     if (v && Math.abs(mx - RAMP.x) < 0.2 && Math.min(z1, z2) < RAMP.z1 && Math.max(z1, z2) > RAMP.z0 && groundY(mx, mz) > 0) return;   // the ramp
-    const m = box(v ? 1.8 : len + 1.8, 0.06, v ? len + 1.8 : 1.8, COL.road, mx, groundY(mx, mz) + 0.03, mz);
+    const m = box(v ? ROAD_W : len + ROAD_W, 0.06, v ? len + ROAD_W : ROAD_W, COL.road, mx, groundY(mx, mz) + 0.03, mz);
     m.castShadow = false; world.add(m);
   });
   buildHill(world);
@@ -1298,7 +1323,7 @@ function create(container, opts) {
   for (let i = 0; i < 140; i++) {
     const r = ROADS[Math.floor(R() * ROADS.length)], t = R();
     const v = r[0] === r[2];
-    const sx = lerp(r[0], r[2], t) + (v ? (R() - 0.5) * 1.2 : 0), sz = lerp(r[1], r[3], t) + (v ? 0 : (R() - 0.5) * 1.2);
+    const sx = lerp(r[0], r[2], t) + (v ? (R() - 0.5) * 1.8 : 0), sz = lerp(r[1], r[3], t) + (v ? 0 : (R() - 0.5) * 1.8);
     dummy.position.set(sx, groundY(sx, sz) + 0.07, sz);
     dummy.rotation.y = R() * 0.6; dummy.updateMatrix(); stones.setMatrixAt(i, dummy.matrix);
   }
@@ -1338,7 +1363,7 @@ function create(container, opts) {
   // flowers + grass tufts (instanced)
   const fGeo = new THREE.SphereGeometry(0.13, 10, 8), tGeo = new THREE.ConeGeometry(0.07, 0.38, 6);
   const free = (x, z) => onIsland(x, z, 2.2) && !inPond(x, z, 1.5) && !inLot(x, z, 0.8) && !nearCliff(x, z, 0.6) && riverDist(x, z) > 2.4 && !inPark(x, z) && !onRamp(x, z) &&
-    !ROADS.some(([x1, z1, x2, z2]) => x >= Math.min(x1, x2) - 1.2 && x <= Math.max(x1, x2) + 1.2 && z >= Math.min(z1, z2) - 1.2 && z <= Math.max(z1, z2) + 1.2) &&
+    !ROADS.some(([x1, z1, x2, z2]) => x >= Math.min(x1, x2) - RH - 0.3 && x <= Math.max(x1, x2) + RH + 0.3 && z >= Math.min(z1, z2) - RH - 0.3 && z <= Math.max(z1, z2) + RH + 0.3) &&
     !HOUSE_POS.some(([hx, hz]) => Math.abs(x - hx) < 3.6 && Math.abs(z - hz) < 3.8) &&
     !(Math.abs(x - HALL_POS[0]) < 6 && Math.abs(z - HALL_POS[1]) < 5.4);
   COL.flower.forEach((c, ci) => {
@@ -1410,7 +1435,7 @@ function create(container, opts) {
   // street lamps beside the roads (the first three really light up at night)
   const lampSpots = [];
   ROADS.forEach(([x1, z1, x2, z2]) => [0.3, 0.72].forEach((t) => {
-    const v = x1 === x2, x = lerp(x1, x2, t) + (v ? 1.4 : 0), z = lerp(z1, z2, t) + (v ? 0 : 1.4);
+    const v = x1 === x2, x = lerp(x1, x2, t) + (v ? RH + 0.6 : 0), z = lerp(z1, z2, t) + (v ? 0 : RH + 0.6);
     if (HOUSE_POS.some(([hx, hz]) => Math.abs(x - hx) < 3.6 && Math.abs(z - hz) < 4.2)) return;
     if (Math.abs(x - HALL_POS[0]) < 6.2 && Math.abs(z - HALL_POS[1]) < 6) return;
     if (inPond(x, z, 1.5) || loveYard(x, z) || !onIsland(x, z, 2) || nearCliff(x, z, 0.5) || riverDist(x, z) < 2 || onRamp(x, z) || inPark(x, z)) return;
@@ -1711,15 +1736,16 @@ function create(container, opts) {
     return true;
   }
   // the Love couple's swing: beside their house, on grass, not on a road
-  const onRoad = (x, z, pad) => ROADS.some(([x1, z1, x2, z2]) => x >= Math.min(x1, x2) - 0.9 - pad && x <= Math.max(x1, x2) + 0.9 + pad && z >= Math.min(z1, z2) - 0.9 - pad && z <= Math.max(z1, z2) + 0.9 + pad);
+  const onRoad = (x, z, pad) => ROADS.some(([x1, z1, x2, z2]) => x >= Math.min(x1, x2) - RH - pad && x <= Math.max(x1, x2) + RH + pad && z >= Math.min(z1, z2) - RH - pad && z <= Math.max(z1, z2) + RH + pad);
   let swing = null;
   lot.blocks.forEach((b) => blocks.push(b));
   lot.posts.forEach((q) => posts.push(q));
   if (couple.home != null && LOT && LOT.house === couple.home) {
     const [sx, sz] = LOT.swing, f = FACE[couple.home] || 0;
-    swing = makeSwing(); swing.position.set(sx, 0, sz); swing.rotation.y = f; world.add(swing);
+    swing = makeSwing(); swing.position.set(sx, groundY(sx, sz), sz); swing.rotation.y = f; world.add(swing);
     swing.userData.front = { x: sx + Math.sin(f) * 1.25, z: sz + Math.cos(f) * 1.25 };
     blocks.push({ x: sx, z: sz, hw: 1.55, hd: 1.55 });
+    blocks.push({ x: sx - Math.cos(f) * 2.0, z: sz + Math.sin(f) * 2.0, hw: 0.8, hd: 0.8 });   // the trunk
   } else if (couple.home != null) {
     const [hx, hz] = HOUSE_POS[couple.home];
     // in front of the door first (across the path), then beside the house
@@ -1737,7 +1763,7 @@ function create(container, opts) {
           const k = posts.findIndex((q) => q.x === o.position.x && q.z === o.position.z); if (k >= 0) posts.splice(k, 1);
         }
       });
-      swing = makeSwing(); swing.position.set(x, 0, z); world.add(swing);
+      swing = makeSwing(); swing.position.set(x, groundY(x, z), z); world.add(swing);
       swing.userData.front = { x, z: z + 1.25 };
       blocks.push({ x, z, hw: 1.55, hd: 0.75 });
       break;
@@ -2897,6 +2923,15 @@ function createRoom(container, opts) {
         fm.map = new THREE.CanvasTexture(c); fm.map.colorSpace = THREE.SRGBColorSpace; fm.needsUpdate = true;
       };
       if (!it.img) { fallback(); return; }
+      if (/^data:image\/svg/.test(it.img)) {          // drawn by Claude: paint it on a cream plate
+        const im = new Image();
+        im.onload = () => {
+          const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
+          x.fillStyle = '#fffaf5'; x.fillRect(0, 0, 256, 256); x.drawImage(im, 0, 0, 256, 256);
+          fm.map = new THREE.CanvasTexture(c); fm.map.colorSpace = THREE.SRGBColorSpace; fm.needsUpdate = true;
+        };
+        im.onerror = fallback; im.src = it.img; return;
+      }
       loader.load(it.img, (tx) => {
         tx.colorSpace = THREE.SRGBColorSpace;
         const a = tx.image.width / tx.image.height;     // crop the middle square

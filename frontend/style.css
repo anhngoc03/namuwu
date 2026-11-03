@@ -2440,3 +2440,9 @@ html.booting .mobile-nav-scrim, html.booting .mobile-nav-drawer{ visibility:hidd
 .lf-chip i{ display:block; width:56px; height:56px; margin:0 auto 3px; border-radius:50%; border:3px solid #fff; box-shadow:0 2px 6px rgba(120,80,110,.25); background:#ffe6ee center / cover no-repeat; font-style:normal; font-size:26px; line-height:50px; }
 .lf-chip button{ position:absolute; top:-4px; right:0; width:20px; height:20px; border:0; border-radius:50%; background:#e88fb0; color:#fff; font-size:11px; line-height:20px; padding:0; cursor:pointer; }
 .lf-empty{ font-size:12.5px; font-weight:700; opacity:.55; align-self:center; }
+
+.lf-pic.lf-ai{ background:linear-gradient(135deg, #ffe6ee, #e4f1fb); }
+.lf-pic.lf-ai img{ object-fit:contain; padding:6px; box-sizing:border-box; }
+.lf-pic.busy{ cursor:wait; display:flex; align-items:center; justify-content:center; }
+.lf-spin{ font-style:normal; font-size:30px; animation:lfSpin 1.4s ease-in-out infinite; }
+@keyframes lfSpin{ 0%,100%{ transform:scale(.85) rotate(-10deg); opacity:.6; } 50%{ transform:scale(1.1) rotate(10deg); opacity:1; } }
