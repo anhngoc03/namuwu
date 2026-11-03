@@ -85,11 +85,12 @@
 
   <!-- ===== Personal › the village, full screen (village.js). Body level for the same
        reason as the nav above (position:fixed must cover the real viewport).
-       Locked = picture only; 🛖 = back to Home, ✮⋆˙ = password. ===== -->
+       Locked = picture only; clock, 🛖 = back to Home, ✮⋆˙ = password. ===== -->
   <div class="village" id="village">
-    <canvas id="village-canvas" class="village-canvas"></canvas>
+    <div class="village-stage" id="village-stage"></div>
     <div class="village-labels" id="village-labels"></div>
     <div class="village-corner">
+      <div class="village-clock" id="village-clock"></div>
       <button type="button" class="village-btn" id="village-home">🛖</button>
       <button type="button" class="village-btn village-star" id="village-star">✮⋆˙</button>
     </div>

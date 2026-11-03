@@ -61,6 +61,13 @@ Nguyên tắc: **dữ liệu cũ giữ nguyên**, nhà mới dùng lại bảng 
 5. **Goals**: bảng `goals` (nhiều mục tiêu theo năm + chi phí dự kiến), chi phí thực tế lấy từ Expenses; **chuyển Savings goal cũ sang đây** (giữ nguyên dữ liệu `expense_savings` / `expense_savings_log`).
 6. Các nhà còn lại: Languages → Notes → Food & Gym → Love (ảnh lên Drive) → Skills.
 
+## 5b. Giao diện làng 3D
+
+- `src/village3d.js` (three.js) → đóng gói thành `frontend/village3d.js` bằng `npm run build` (file đã build được commit sẵn, Cloudflare không cần build). Sửa cảnh 3D thì sửa `src/village3d.js` rồi chạy lại `npm run build`.
+- Xoay (kéo), zoom (lăn chuột / 2 ngón), dời (chuột phải / 2 ngón). Máy tính: bố cục ngang; điện thoại dọc: bố cục dọc riêng (xoay máy là đổi).
+- Trời sáng/tối theo **giờ thật** của máy (bình minh ~6h, hoàng hôn ~18h; đêm có sao, đom đóm, đèn đường, cửa sổ sáng). Nút ☼/☾ của web không đổi màu làng nữa. Thử giờ khác: thêm `?hour=22` vào link.
+- Góc phải: đồng hồ + thứ/ngày, 🛖, ✮⋆˙.
+
 ## 6. Đã chốt
 
 1. Agent được tự làm tất cả (hỏi lại trước khi xoá).
