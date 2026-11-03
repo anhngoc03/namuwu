@@ -1166,34 +1166,74 @@ function create(container, opts) {
     controls.update();
   }
 
-  /* walking into a house: the camera flies to the door and the door swings open */
-  let fly = null, flown = false;
-  function enterHouse(id, done) {
+  /* walking into a house: the camera glides to the door, the door swings open and
+     the camera goes on through it. Coming out is the same, backwards: from the
+     doorway the camera drifts back to where you were while the door closes. */
+  const ENTER_MS = 1800, EXIT_MS = 1900;
+  let fly = null, flown = false, lastView = null;
+  const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);   // smooth in & out
+  function doorPose(h) {
+    const dz = h.userData.doorZ - 1.3, z = h.position.z + dz;
+    return {
+      near: new THREE.Vector3(h.position.x, 1.75, z + 3.2), nearT: new THREE.Vector3(h.position.x, 1.45, z - 1),
+      inside: new THREE.Vector3(h.position.x, 1.6, z + 0.35), insideT: new THREE.Vector3(h.position.x, 1.4, z - 2)
+    };
+  }
+  function homeView() {
+    const vfov = camera.fov * Math.PI / 180, hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect);
+    const needW = ISLAND.w * (layoutKey === 'port' ? 0.6 : 0.56), needD = ISLAND.d * 0.6;
+    const dist = Math.max(needW / Math.tan(hfov / 2), needD / Math.tan(vfov / 2)) * 1.02;
+    const polar = layoutKey === 'port' ? 0.78 : 0.88, t = new THREE.Vector3(0, 0, 1.5);
+    return { p: new THREE.Vector3(0, Math.cos(polar) * dist, Math.sin(polar) * dist).add(t), t };
+  }
+  // path through up to 3 points (quadratic-ish blend): start → door → (inside)
+  function along(a, b, c, k) {
+    if (!c) return a.clone().lerp(b, k);
+    const ab = a.clone().lerp(b, k), bc = b.clone().lerp(c, k);
+    return ab.lerp(bc, k);
+  }
+  function enterHouse(id, done, opts) {
     const h = houseObjs.find((o) => o.userData.id === id);
     if (!h) { if (done) done(); return; }
-    const dz = h.userData.doorZ - 1.3;
-    fly = {
-      start: performance.now(), dur: 1000, h, done,
-      p0: camera.position.clone(), t0: controls.target.clone(),
-      p1: new THREE.Vector3(h.position.x, 1.9, h.position.z + dz + 2.6),
-      t1: new THREE.Vector3(h.position.x, 1.5, h.position.z + dz - 1)
-    };
+    const d = doorPose(h);
+    lastView = { p: camera.position.clone(), t: controls.target.clone() };
+    fly = { mode: 'in', start: performance.now(), dur: ENTER_MS, h, done, at: opts && opts.at, atFired: false,
+      p: [lastView.p, d.near, d.inside], t: [lastView.t, d.nearT, d.insideT] };
     controls.enabled = false; flown = true;
   }
-  function flyStep(dt) {
+  function exitHouse(id, done) {
+    const h = houseObjs.find((o) => o.userData.id === id);
+    if (!h) { backOutside(); if (done) done(); return; }
+    const d = doorPose(h), back = lastView || homeView();
+    if (h.userData.hinge) h.userData.hinge.rotation.y = -1.7;
+    camera.position.copy(d.inside); controls.target.copy(d.insideT); camera.lookAt(controls.target);
+    fly = { mode: 'out', start: performance.now(), dur: EXIT_MS, h, done, p: [d.inside, d.near, back.p], t: [d.insideT, d.nearT, back.t] };
+    controls.enabled = false; flown = true;
+  }
+  function flyStep() {
     if (!fly) return;
-    const k = Math.min(1, (performance.now() - fly.start) / fly.dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-    camera.position.lerpVectors(fly.p0, fly.p1, e);
-    controls.target.lerpVectors(fly.t0, fly.t1, e);
+    const k = Math.min(1, (performance.now() - fly.start) / fly.dur), e = ease(k);
+    camera.position.copy(along(fly.p[0], fly.p[1], fly.p[2], e));
+    controls.target.copy(along(fly.t[0], fly.t[1], fly.t[2], e));
     camera.lookAt(controls.target);
-    if (fly.h.userData.hinge) fly.h.userData.hinge.rotation.y = -1.7 * Math.max(0, (k - 0.35) / 0.65);
-    if (k >= 1) { const cb = fly.done; fly = null; if (cb) cb(); }
+    const hinge = fly.h.userData.hinge;
+    if (hinge) {
+      if (fly.mode === 'in') hinge.rotation.y = -1.7 * ease(Math.min(1, Math.max(0, (k - 0.25) / 0.45)));
+      else hinge.rotation.y = -1.7 * (1 - ease(Math.min(1, Math.max(0, (k - 0.2) / 0.5))));
+    }
+    if (fly.at && !fly.atFired && k >= fly.at.k) { fly.atFired = true; fly.at.fn(); }   // e.g. start the fade early
+    if (k >= 1) {
+      const cb = fly.done, mode = fly.mode; fly = null;
+      if (mode === 'out') { flown = false; controls.enabled = true; controls.update(); }
+      if (cb) cb();
+    }
   }
   function backOutside() {
-    if (!flown) return;
+    if (!flown || (fly && fly.mode === 'out')) return;
     flown = false; fly = null; controls.enabled = true;
     houseObjs.forEach((h) => { if (h.userData.hinge) h.userData.hinge.rotation.y = 0; });
-    fitCamera();
+    const v = lastView || homeView();
+    camera.position.copy(v.p); controls.target.copy(v.t); controls.update();
   }
 
   /* tapping a house */
@@ -1248,7 +1288,7 @@ function create(container, opts) {
     const dt = Math.min(0.12, clock.getDelta()), time = clock.elapsedTime;
     if (time - lastTimeApply > 20) { applyTime(); lastTimeApply = time; }
     animate(dt, time);
-    if (fly) flyStep(dt); else controls.update();
+    if (fly) flyStep(); else controls.update();
     renderer.render(scene, camera);
     frameFns.forEach((fn) => fn());
   }
@@ -1281,6 +1321,7 @@ function create(container, opts) {
     setTimeMode(mode) { hourOverride = mode === 'day' ? 11 : mode === 'night' ? 22 : null; applyTime(); },
     show(on) { shown = !!on; if (shown) { backOutside(); resize(); applyTime(); start(); } },
     enterHouse,
+    exitHouse,
     resize,
     recenter: fitCamera,
     layout: layoutKey,
@@ -1551,6 +1592,9 @@ function createRoom(container, opts) {
     if (jump) { camP.copy(goP); camT.copy(goT); }
   }
   setCorner(opts.corner, true);
+  if (opts.walkIn) {                                  // just came through the door: start at the front, drift in
+    camP.set(0, 1.7, ROOM_D / 2 + 3.2); camT.set(0, 1.4, -ROOM_D / 2);
+  }
   function resize() {
     const W = container.clientWidth || innerWidth, H = container.clientHeight || innerHeight;
     renderer.setSize(W, H, false); camera.aspect = W / H;
@@ -1568,7 +1612,7 @@ function createRoom(container, opts) {
     requestAnimationFrame(loop);
     if (document.hidden) return;
     const dt = Math.min(0.1, clock.getDelta()), t = clock.elapsedTime;
-    camP.lerp(goP, Math.min(1, dt * 2.5)); camT.lerp(goT, Math.min(1, dt * 2.5));
+    camP.lerp(goP, Math.min(1, dt * 1.6)); camT.lerp(goT, Math.min(1, dt * 1.6));
     camera.position.copy(camP); camera.lookAt(camT);
     if (R.sofa) sitters.forEach((w, k) => {           // cuddled up on the sofa
       w.parts.armL.rotation.x = w.parts.armR.rotation.x = -0.6;

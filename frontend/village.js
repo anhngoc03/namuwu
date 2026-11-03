@@ -47,7 +47,7 @@
     if (loading) return;
     loading = true;
     var sc = document.createElement('script');
-    sc.src = '/village3d.js?v=8';
+    sc.src = '/village3d.js?v=9';
     sc.onload = function () { loading = false; var w = loadWaiters; loadWaiters = []; w.forEach(function (f) { f(); }); };
     sc.onerror = function () { loading = false; loadWaiters = []; toast("Couldn't load the village ʕ´-ก̀ʔᐝ"); };
     document.head.appendChild(sc);
@@ -134,18 +134,35 @@
     if (!h.open || typeof window[h.open] !== 'function') { toast('Coming soon ✿'); return; }
     if (entering) return;
     entering = true;
-    // walk in: camera to the door, door opens, fade, then the room + the page
+    // walk in: glide to the door, it opens, the fade starts as we go through, then the room + the page
     var fade = document.getElementById('village-fade');
-    fade.style.background = '#' + ('00000' + ((window.Village3D && Village3D.ROOF[h.roof]) || 0xf6a9bd).toString(16)).slice(-6);
+    fade.style.background = roofHex(h.roof);
+    var fadeOn = function () { fade.classList.add('on'); };
     var go = function () {
-      fade.classList.add('on');
+      fadeOn();
       setTimeout(function () {
         entering = false;
+        walkingIn = true;
         requirePersonal(window[h.open]);
-        setTimeout(function () { fade.classList.remove('on'); }, 380);
-      }, 260);
+        walkingIn = false;
+        setTimeout(function () { fade.classList.remove('on'); }, 120);
+      }, 120);
     };
-    if (scene3d) scene3d.enterHouse(id, go); else go();
+    if (scene3d) scene3d.enterHouse(id, go, { at: { k: 0.7, fn: fadeOn } }); else go();
+  }
+  function roofHex(roof) {
+    var n = (window.Village3D && Village3D.ROOF[roof]) || 0xf6a9bd;
+    return '#' + ('00000' + n.toString(16)).slice(-6);
+  }
+  var walkingIn = false, lastLeft = null;
+  // ‹ from inside a house: fade, then the camera backs out of the doorway and the door closes
+  function leaveHouse() {
+    var house = room && room.house, fade = document.getElementById('village-fade');
+    if (!house) { goHome('personal'); return; }
+    var spec = HOUSES.filter(function (x) { return x.id === house; })[0];
+    fade.style.background = roofHex(spec ? spec.roof : 'pink');
+    fade.classList.add('on');
+    setTimeout(function () { goHome('personal'); }, 560);
   }
   var entering = false;
 
@@ -164,7 +181,7 @@
     var house = VIEW_HOUSE[viewId] || null;
     roomWant = house;
     var el = document.getElementById('room-bg');
-    if (!house) { if (room) { room.destroy(); room = null; } el.classList.remove('on'); return; }
+    if (!house) { if (room) { lastLeft = room.house; room.destroy(); room = null; } el.classList.remove('on'); return; }
     if (room && room.house === house) { el.classList.add('on'); room.setCorner(currentCorner(house)); return; }
     if (room) { room.destroy(); room = null; }
     var make = function () {
@@ -176,7 +193,7 @@
         room = Village3D.room(el, {
           house: house, roof: Village3D.ROOF[spec.roof], look: Village3D.LOOKS[idx],
           looks: house === 'love' ? [Village3D.LOVE.her, Village3D.LOVE.him] : null,
-          corner: currentCorner(house), timeMode: timeMode()
+          corner: currentCorner(house), timeMode: timeMode(), walkIn: walkingIn
         });
         if (house === 'love' && roomPhotos.length) room.setPhotos(roomPhotos);
         el.classList.add('on');
@@ -538,7 +555,7 @@
       openPersonalGate(function () { villageRefresh(); });
     };
     document.getElementById('village-home').onclick = function () { goHome('home'); };
-    document.getElementById('personal-back').onclick = function () { goHome('personal'); };
+    document.getElementById('personal-back').onclick = leaveHouse;
     document.getElementById('personal-home').onclick = function () { goHome('home'); };
     labelsEl.addEventListener('click', function (e) {
       var b = e.target.closest('[data-house]');
@@ -561,6 +578,10 @@
     document.body.classList.toggle('village-mode', shown);
     if (scene3d) scene3d.show(shown);
     if (!shown) return;
+    var fade = document.getElementById('village-fade');
+    if (lastLeft && scene3d) { scene3d.exitHouse(lastLeft); }
+    lastLeft = null;
+    setTimeout(function () { fade.classList.remove('on'); }, 200);   // the camera is in the doorway by then
     ensureScene();
     villageRefresh();
   }

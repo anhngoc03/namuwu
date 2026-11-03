@@ -2119,7 +2119,7 @@ body.village-mode :is(#desktop-dock, #mobile-nav-toggle, #footer-credit, #flower
 body.personal-view #flower-field{ display:none; }
 :root[data-theme="dark"] .room-bg::after{ background:linear-gradient(180deg, rgba(20,22,30,.5), rgba(20,22,30,.7)); }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .room-bg::after{ background:linear-gradient(180deg, rgba(20,22,30,.5), rgba(20,22,30,.7)); } }
-.village-fade{ position:fixed; inset:0; z-index:45; opacity:0; pointer-events:none; transition:opacity .26s ease; }
+.village-fade{ position:fixed; inset:0; z-index:45; opacity:0; pointer-events:none; transition:opacity .55s cubic-bezier(.45,0,.25,1); }
 .village-fade.on{ opacity:1; }
 
 /* inside a Personal feature: ‹ back to the village, 🍅 Home (the dock is hidden) */
