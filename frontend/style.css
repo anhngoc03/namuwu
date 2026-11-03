@@ -2111,6 +2111,17 @@ body.village-mode :is(#desktop-dock, #mobile-nav-toggle, #footer-credit, #flower
 .village-btn:active{ transform:scale(.92); }
 .village-unlocked .village-star{ color:#d97a94; }
 
+/* inside a house: the room (3D, behind the page) + a soft veil so text stays easy to read */
+.room-bg{ position:fixed; inset:0; z-index:0; display:none; pointer-events:none; }
+.room-bg.on{ display:block; }
+.room-bg canvas{ display:block; width:100% !important; height:100% !important; }
+.room-bg::after{ content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(255,250,234,.18), rgba(255,250,234,.4)); }
+body.personal-view #flower-field{ display:none; }
+:root[data-theme="dark"] .room-bg::after{ background:linear-gradient(180deg, rgba(20,22,30,.5), rgba(20,22,30,.7)); }
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .room-bg::after{ background:linear-gradient(180deg, rgba(20,22,30,.5), rgba(20,22,30,.7)); } }
+.village-fade{ position:fixed; inset:0; z-index:45; opacity:0; pointer-events:none; transition:opacity .26s ease; }
+.village-fade.on{ opacity:1; }
+
 /* inside a Personal feature: ‹ back to the village, 🍅 Home (the dock is hidden) */
 .personal-bar{
   display:none; position:fixed; z-index:40; gap:6px;

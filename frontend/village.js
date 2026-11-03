@@ -40,15 +40,21 @@
   function unlocked() { return typeof personalUnlocked !== 'undefined' && personalUnlocked; }
 
   /* ---------------- 3D scene (lazy) ---------------- */
-  function ensureScene() {
-    if (scene3d || loading) return;
-    if (window.Village3D) { makeScene(); return; }
+  var loadWaiters = [];
+  function loadScript(cb) {
+    if (window.Village3D) { cb(); return; }
+    loadWaiters.push(cb);
+    if (loading) return;
     loading = true;
     var sc = document.createElement('script');
-    sc.src = '/village3d.js?v=6';
-    sc.onload = function () { loading = false; makeScene(); };
-    sc.onerror = function () { loading = false; toast("Couldn't load the village ʕ´-ก̀ʔᐝ"); };
+    sc.src = '/village3d.js?v=7';
+    sc.onload = function () { loading = false; var w = loadWaiters; loadWaiters = []; w.forEach(function (f) { f(); }); };
+    sc.onerror = function () { loading = false; loadWaiters = []; toast("Couldn't load the village ʕ´-ก̀ʔᐝ"); };
     document.head.appendChild(sc);
+  }
+  function ensureScene() {
+    if (scene3d) return;
+    loadScript(function () { if (!scene3d) makeScene(); });
   }
   function makeScene() {
     try {
@@ -126,8 +132,64 @@
     var h = HOUSES.filter(function (x) { return x.id === id; })[0];
     if (!h) return;
     if (!h.open || typeof window[h.open] !== 'function') { toast('Coming soon ✿'); return; }
-    requirePersonal(window[h.open]);
+    if (entering) return;
+    entering = true;
+    // walk in: camera to the door, door opens, fade, then the room + the page
+    var fade = document.getElementById('village-fade');
+    fade.style.background = '#' + ('00000' + ((window.Village3D && Village3D.ROOF[h.roof]) || 0xf6a9bd).toString(16)).slice(-6);
+    var go = function () {
+      fade.classList.add('on');
+      setTimeout(function () {
+        entering = false;
+        requirePersonal(window[h.open]);
+        setTimeout(function () { fade.classList.remove('on'); }, 380);
+      }, 260);
+    };
+    if (scene3d) scene3d.enterHouse(id, go); else go();
   }
+  var entering = false;
+
+  /* ---------------- inside a house: the room behind a feature page ---------------- */
+  var VIEW_HOUSE = { 'work-view': 'work', 'expense-view': 'money', 'calendar-view': 'calendar', 'accounts-view': 'account' };
+  var room = null, roomWant = null;
+  function currentCorner(house) {
+    if (house === 'work') return typeof workTab !== 'undefined' ? workTab : 'list';
+    if (house === 'money') return typeof expenseActiveTab !== 'undefined' ? expenseActiveTab : 'overview';
+    return 'main';
+  }
+  function villageRoom(viewId) {
+    var house = VIEW_HOUSE[viewId] || null;
+    roomWant = house;
+    var el = document.getElementById('room-bg');
+    if (!house) { if (room) { room.destroy(); room = null; } el.classList.remove('on'); return; }
+    if (room && room.house === house) { el.classList.add('on'); room.setCorner(currentCorner(house)); return; }
+    if (room) { room.destroy(); room = null; }
+    var make = function () {
+      if (roomWant !== house || room) return;
+      var idx = -1;
+      HOUSES.forEach(function (h, i) { if (h.id === house) idx = i; });
+      var spec = HOUSES[idx];
+      try {
+        room = Village3D.room(el, {
+          house: house, roof: Village3D.ROOF[spec.roof], look: Village3D.LOOKS[idx],
+          corner: currentCorner(house), timeMode: timeMode()
+        });
+        el.classList.add('on');
+      } catch (e) { /* no WebGL: plain page */ }
+    };
+    if (window.Village3D) make(); else loadScript(make);
+  }
+  window.villageRoom = villageRoom;
+  // tabs inside a page = turning to another corner of the room
+  [['workSetTab', 'work'], ['expenseSwitchTab', 'money']].forEach(function (w) {
+    var orig = window[w[0]];
+    if (typeof orig !== 'function') return;
+    window[w[0]] = function (tab) {
+      var r = orig.apply(this, arguments);
+      if (room && room.house === w[1]) room.setCorner(tab);
+      return r;
+    };
+  });
 
   function openHall() {
     renderDue();
@@ -294,6 +356,7 @@
     try { localStorage.setItem('village_time', next); } catch (e) {}
     showTimeMode();
     if (scene3d) scene3d.setTimeMode(next);
+    if (room) room.setTimeMode(next);
     tickClock();
     toast({ auto: 'Sky follows the clock ◐', day: 'Always day ☼', night: 'Always night ☾' }[next]);
   }

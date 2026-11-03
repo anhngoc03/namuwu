@@ -131,8 +131,11 @@ function makeHouse(spec, hall) {
   roof.position.y = 0.3 + h; g.add(roof);
   // door + step
   const dw = hall ? 1.9 : 1.05, dh = hall ? 2.8 : 2.15;
-  g.add(box(dw, dh, 0.12, COL.door, 0, 0.3 + dh / 2, d / 2 + 0.02));
-  g.add(box(0.12, 0.12, 0.08, 0xf9e08a, dw / 2 - 0.25, 0.3 + dh / 2, d / 2 + 0.1));
+  const hinge = new THREE.Group(); hinge.position.set(-dw / 2, 0.3, d / 2 + 0.02); g.add(hinge);
+  hinge.add(box(dw, dh, 0.12, COL.door, dw / 2, dh / 2, 0));
+  hinge.add(box(0.12, 0.12, 0.08, 0xf9e08a, dw - 0.25, dh / 2, 0.08));
+  g.add(box(dw - 0.04, dh - 0.04, 0.05, 0x5a4636, 0, 0.3 + dh / 2, d / 2 - 0.02));   // dark doorway behind it
+  g.userData.hinge = hinge;
   g.add(box(dw + 0.8, 0.12, 0.8, COL.road, 0, 0.06, d / 2 + 0.6));
   // windows (front + sides)
   const wm = windowMat();
@@ -687,10 +690,10 @@ function create(container, opts) {
   function realHour() { const d = new Date(); return d.getHours() + d.getMinutes() / 60; }
   function routine(h) {
     if (h >= 23 || h < 6.5) return 'sleep';
-    if (h < 8) return 'morning';
-    if (h < 11.5) return 'work';
-    if (h < 13) return 'lunch';
-    if (h < 17.5) return 'work';
+    if (h < 7) return 'morning';
+    if (h < 11.5) return 'work';                     // 7:00 – 11:30
+    if (h < 13) return 'lunch';                      // 11:30 – 13:00
+    if (h < 16.5) return 'work';                     // 13:00 – 16:30
     if (h < 21) return 'evening';
     return 'home';                                   // 21–23: indoors, lights on
   }
@@ -1163,6 +1166,36 @@ function create(container, opts) {
     controls.update();
   }
 
+  /* walking into a house: the camera flies to the door and the door swings open */
+  let fly = null, flown = false;
+  function enterHouse(id, done) {
+    const h = houseObjs.find((o) => o.userData.id === id);
+    if (!h) { if (done) done(); return; }
+    const dz = h.userData.doorZ - 1.3;
+    fly = {
+      start: performance.now(), dur: 1000, h, done,
+      p0: camera.position.clone(), t0: controls.target.clone(),
+      p1: new THREE.Vector3(h.position.x, 1.9, h.position.z + dz + 2.6),
+      t1: new THREE.Vector3(h.position.x, 1.5, h.position.z + dz - 1)
+    };
+    controls.enabled = false; flown = true;
+  }
+  function flyStep(dt) {
+    if (!fly) return;
+    const k = Math.min(1, (performance.now() - fly.start) / fly.dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    camera.position.lerpVectors(fly.p0, fly.p1, e);
+    controls.target.lerpVectors(fly.t0, fly.t1, e);
+    camera.lookAt(controls.target);
+    if (fly.h.userData.hinge) fly.h.userData.hinge.rotation.y = -1.7 * Math.max(0, (k - 0.35) / 0.65);
+    if (k >= 1) { const cb = fly.done; fly = null; if (cb) cb(); }
+  }
+  function backOutside() {
+    if (!flown) return;
+    flown = false; fly = null; controls.enabled = true;
+    houseObjs.forEach((h) => { if (h.userData.hinge) h.userData.hinge.rotation.y = 0; });
+    fitCamera();
+  }
+
   /* tapping a house */
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   let down = null;
@@ -1215,7 +1248,7 @@ function create(container, opts) {
     const dt = Math.min(0.12, clock.getDelta()), time = clock.elapsedTime;
     if (time - lastTimeApply > 20) { applyTime(); lastTimeApply = time; }
     animate(dt, time);
-    controls.update();
+    if (fly) flyStep(dt); else controls.update();
     renderer.render(scene, camera);
     frameFns.forEach((fn) => fn());
   }
@@ -1246,7 +1279,8 @@ function create(container, opts) {
     onFrame(fn) { frameFns.push(fn); },
     night() { return nightAmt; },
     setTimeMode(mode) { hourOverride = mode === 'day' ? 11 : mode === 'night' ? 22 : null; applyTime(); },
-    show(on) { shown = !!on; if (shown) { resize(); applyTime(); start(); } },
+    show(on) { shown = !!on; if (shown) { backOutside(); resize(); applyTime(); start(); } },
+    enterHouse,
     resize,
     recenter: fitCamera,
     layout: layoutKey,
@@ -1262,4 +1296,280 @@ function create(container, opts) {
   };
 }
 
-window.Village3D = { create };
+
+/* ================================================================
+   INSIDE A HOUSE — the room drawn behind a feature page (Work, Money…).
+   Each tab of the page looks at a different corner of the same room.
+   window.Village3D.room(container, { house, roof, look, corner, timeMode }) → { setCorner, destroy }
+   ================================================================ */
+const ROOM_W = 9, ROOM_D = 7, ROOM_H = 3.4;
+function tint(hex, k) { return new THREE.Color(hex).lerp(new THREE.Color(0xffffff), k).getHex(); }
+
+function rDesk(g, x, z, ry, top) {
+  const d = new THREE.Group(); d.position.set(x, 0, z); d.rotation.y = ry || 0; g.add(d);
+  d.add(box(2.2, 0.08, 1, top || 0xd9b48f, 0, 0.78, 0));
+  [[-1, -0.42], [1, -0.42], [-1, 0.42], [1, 0.42]].forEach(([a, b]) => d.add(box(0.08, 0.78, 0.08, 0xb08a68, a, 0.39, b)));
+  return d;
+}
+function rChair(g, x, z, ry) {
+  const c = new THREE.Group(); c.position.set(x, 0, z); c.rotation.y = ry || 0; g.add(c);
+  c.add(box(0.55, 0.08, 0.55, 0xf6a9bd, 0, 0.5, 0));
+  c.add(box(0.55, 0.6, 0.08, 0xf6a9bd, 0, 0.82, -0.26));
+  [[-0.22, -0.22], [0.22, -0.22], [-0.22, 0.22], [0.22, 0.22]].forEach(([a, b]) => c.add(box(0.06, 0.5, 0.06, 0x8c7a6b, a, 0.25, b)));
+  return c;
+}
+function rLaptop(d, x, z) {
+  d.add(box(0.7, 0.04, 0.48, 0xd8d8e0, x, 0.84, z));
+  const sc = box(0.7, 0.46, 0.04, 0xd8d8e0, x, 1.07, z - 0.24); sc.rotation.x = -0.25; d.add(sc);
+  const glow = box(0.62, 0.38, 0.02, 0, x, 1.07, z - 0.215, new THREE.MeshBasicMaterial({ color: 0xbfe6f2 })); glow.rotation.x = -0.25; d.add(glow);
+}
+function rShelf(g, x, z, ry, n) {
+  const sh = new THREE.Group(); sh.position.set(x, 0, z); sh.rotation.y = ry || 0; g.add(sh);
+  sh.add(box(1.8, 2.4, 0.4, 0xc49674, 0, 1.2, 0));
+  for (let r = 0; r < 4; r++) {
+    sh.add(box(1.7, 0.06, 0.36, 0xe2c9ad, 0, 0.3 + r * 0.55, 0.03));
+    for (let k = 0; k < (n || 6); k++) {
+      const c = COL.flower[(k + r) % COL.flower.length], h = 0.3 + ((k * 7 + r * 3) % 4) * 0.04;
+      sh.add(box(0.16, h, 0.28, c === 0xffffff ? 0xa6d8e8 : c, -0.7 + k * 0.24, 0.33 + r * 0.55 + h / 2, 0.05));
+    }
+  }
+  return sh;
+}
+function rPlant(g, x, z) {
+  g.add(box(0.45, 0.45, 0.45, 0xf9c39c, x, 0.22, z));
+  [[0, 0.75, 0, 0.42], [0.18, 1.05, 0.1, 0.3], [-0.15, 1.0, -0.1, 0.32]].forEach(([a, b, c, r], i) => {
+    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 0), mat(COL.leaf[i], { flatShading: true })); m.position.set(x + a, b, z + c); m.castShadow = true; g.add(m);
+  });
+}
+function rWallBoard(g, x, y, z, ry, w, h, color, dots) {
+  const b = new THREE.Group(); b.position.set(x, y, z); b.rotation.y = ry; g.add(b);
+  b.add(box(w + 0.12, h + 0.12, 0.05, 0xc49674, 0, 0, 0));
+  b.add(box(w, h, 0.06, color, 0, 0, 0.01));
+  (dots || []).forEach(([a, c, col, sz]) => b.add(box(sz || 0.32, sz || 0.32, 0.03, col, a, c, 0.06)));
+  return b;
+}
+function rPoster(g, x, y, z, ry) {             // little bar chart
+  const bars = [[-0.45, 0.25], [-0.15, 0.45], [0.15, 0.35], [0.45, 0.6]];
+  const b = rWallBoard(g, x, y, z, ry, 1.4, 1.1, 0xfffaf0);
+  bars.forEach(([a, h], i) => b.add(box(0.2, h, 0.03, [0xffb6c1, 0xa6d8e8, 0xdde874, 0xd9c9f0][i], a, -0.4 + h / 2, 0.06)));
+  return b;
+}
+function rCalendar(g, x, y, z, ry, big) {
+  const w = big ? 2.2 : 1.1, h = big ? 1.6 : 0.9, b = rWallBoard(g, x, y, z, ry, w, h, 0xffffff);
+  b.add(box(w, h * 0.18, 0.04, 0xff9bb0, 0, h * 0.41, 0.05));
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 7; c++) {
+    const marked = (r * 7 + c) % 9 === 3;
+    b.add(box(w / 9, h / 7, 0.02, marked ? 0xffd6df : 0xf3ece6, -w / 2 + (c + 1) * w / 8, h * 0.2 - r * h / 5.5, 0.06));
+  }
+  return b;
+}
+function rClock(g, x, y, z, ry) {
+  const c = new THREE.Group(); c.position.set(x, y, z); c.rotation.y = ry; g.add(c);
+  const face = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.06, 20), mat(0xfffaf0)); face.rotation.x = Math.PI / 2; c.add(face);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.04, 6, 20), mat(0xf6a9bd)); c.add(rim);
+  const hh = box(0.04, 0.18, 0.02, 0x4a3f3f, 0, 0.08, 0.05), mm = box(0.03, 0.27, 0.02, 0x4a3f3f, 0, 0.12, 0.06);
+  c.add(hh, mm); c.userData.hands = [hh, mm];
+  return c;
+}
+function rPiggy(d, x, z) {
+  const p = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 10), mat(0xffb6c1)); p.scale.set(1.3, 1, 1); p.position.set(x, 1.1, z); d.add(p);
+  d.add(box(0.12, 0.1, 0.1, 0xff9bb0, x + 0.38, 1.1, z));
+  [[-0.15, -0.12], [0.15, -0.12], [-0.15, 0.12], [0.15, 0.12]].forEach(([a, b]) => d.add(box(0.07, 0.12, 0.07, 0xff9bb0, x + a, 0.86, z + b)));
+  d.add(box(0.12, 0.02, 0.03, 0x8c6a6a, x, 1.38, z));
+  for (let k = 0; k < 3; k++) for (let n = 0; n < 2 + k; n++) {
+    const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.03, 12), mat(0xf5d888)); coin.position.set(x - 0.7 + k * 0.22, 0.84 + n * 0.035, z + 0.1); d.add(coin);
+  }
+}
+function rSafe(g, x, z, ry) {
+  const s = new THREE.Group(); s.position.set(x, 0, z); s.rotation.y = ry || 0; g.add(s);
+  s.add(box(1, 1.1, 0.9, 0x9aa7b8, 0, 0.55, 0));
+  const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.05, 14), mat(0xf5d888)); dial.rotation.x = Math.PI / 2; dial.position.set(0.15, 0.6, 0.46); s.add(dial);
+  s.add(box(0.06, 0.3, 0.05, 0xf5d888, -0.3, 0.6, 0.46));
+  return s;
+}
+function rJars(g, x, z, ry) {
+  const sh = new THREE.Group(); sh.position.set(x, 0, z); sh.rotation.y = ry || 0; g.add(sh);
+  sh.add(box(2, 0.08, 0.45, 0xc49674, 0, 1.3, 0)); sh.add(box(2, 0.08, 0.45, 0xc49674, 0, 0.6, 0));
+  [-1, 1].forEach((a) => sh.add(box(0.08, 1.4, 0.45, 0xb08a68, a * 0.96, 0.7, 0)));
+  [0.6, 1.3].forEach((y, r) => [-0.65, -0.2, 0.25, 0.7].forEach((a, k) => {
+    const jar = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.4, 12), new THREE.MeshLambertMaterial({ color: 0xe6f6fb, transparent: true, opacity: 0.7 }));
+    jar.position.set(a, y + 0.24, 0); sh.add(jar);
+    const fill = 0.08 + ((k + r * 2) % 4) * 0.08;
+    const coins = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, fill, 12), mat(0xf5d888)); coins.position.set(a, y + 0.06 + fill / 2, 0); sh.add(coins);
+  }));
+  return sh;
+}
+function rCabinet(g, x, z, ry) {
+  const c = new THREE.Group(); c.position.set(x, 0, z); c.rotation.y = ry || 0; g.add(c);
+  c.add(box(0.9, 1.5, 0.7, 0xa6d8e8, 0, 0.75, 0));
+  [0.35, 0.8, 1.25].forEach((y) => { c.add(box(0.8, 0.38, 0.04, 0xbfe6f2, 0, y, 0.36)); c.add(box(0.25, 0.05, 0.05, 0xfffaf0, 0, y + 0.08, 0.39)); });
+  return c;
+}
+function rTripod(g, x, z) {
+  [0, 2.1, 4.2].forEach((a) => { const l = box(0.04, 1.4, 0.04, 0x6b5a4e, x + Math.cos(a) * 0.25, 0.65, z + Math.sin(a) * 0.25); l.rotation.set(Math.sin(a) * 0.3, 0, -Math.cos(a) * 0.3); g.add(l); });
+  g.add(box(0.4, 0.28, 0.25, 0x4a3f3f, x, 1.45, z));
+  const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.15, 12), mat(0x2e2a36)); lens.rotation.x = Math.PI / 2; lens.position.set(x, 1.45, z + 0.18); g.add(lens);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.05, 6, 24), new THREE.MeshBasicMaterial({ color: 0xfff4cf })); ring.position.set(x - 0.9, 1.7, z - 0.3); g.add(ring);
+  g.add(box(0.04, 1.7, 0.04, 0x6b5a4e, x - 0.9, 0.85, z - 0.3));
+}
+function rKeys(g, x, y, z, ry) {
+  const b = rWallBoard(g, x, y, z, ry, 1.2, 0.7, 0xf0dcc4);
+  [-0.4, -0.13, 0.13, 0.4].forEach((a, i) => {
+    b.add(box(0.05, 0.05, 0.08, 0x8c7a6b, a, 0.18, 0.08));
+    b.add(box(0.1, 0.22, 0.03, [0xf5d888, 0xa6d8e8, 0xffb6c1, 0xa3d9bd][i], a, -0.02, 0.08));
+  });
+}
+
+// furniture + camera spots for each house. corner: [camera x,y,z, look-at x,y,z]
+const ROOMS = {
+  work: { first: 'list', build(g, R) {
+      const d = rDesk(g, -1.6, -2.4); rLaptop(d, 0.2, 0); d.add(box(0.3, 0.2, 0.22, 0xffffff, -0.75, 0.92, 0.1));
+      rChair(g, -1.4, -1.55, Math.PI); R.seat = { x: -1.4, z: -1.6, ry: Math.PI, y: 0.54 };
+      rWallBoard(g, -4.45, 1.8, 0.4, Math.PI / 2, 2.6, 1.4, 0xffffff,
+        [[-0.9, 0.35, 0xfff1a8], [-0.4, 0.4, 0xffb6c1], [0.1, 0.3, 0xa6d8e8], [0.6, 0.38, 0xa3d9bd], [-0.8, -0.2, 0xffb6c1], [-0.2, -0.25, 0xfff1a8], [0.5, -0.2, 0xd9c9f0]]);
+      rShelf(g, 4.25, -0.6, -Math.PI / 2); rPoster(g, 4.44, 2.2, 1.6, -Math.PI / 2);
+      rTripod(g, 3.5, 2.6); rPlant(g, -3.9, -3);
+    },
+    corners: {
+      list: [0.8, 2.9, 5.8, -1.3, 1.0, -2.2], board: [2.4, 2.7, 4.2, -4.3, 1.6, 0.3], stats: [-2.4, 2.7, 4.2, 4.3, 1.5, 0.3], posts: [0.2, 2.6, 6.4, 3.2, 1.3, 2.2]
+    } },
+  money: { first: 'overview', build(g, R) {
+      const d = rDesk(g, 0, -2.3, 0, 0xf9c39c); rPiggy(d, 0.4, 0);
+      d.add(box(0.35, 0.05, 0.45, 0x8fb3d9, -0.5, 0.84, 0.1));
+      rChair(g, 0.2, -1.45, Math.PI); R.seat = { x: 0.2, z: -1.5, ry: Math.PI, y: 0.54 };
+      rCalendar(g, -4.44, 1.9, -0.8, Math.PI / 2, true); rPoster(g, -4.44, 1.9, 2.1, Math.PI / 2);
+      rJars(g, 4.2, -1.2, -Math.PI / 2); rCabinet(g, 3.4, -3, 0); rSafe(g, 3.6, 2, -Math.PI / 2.5); rPlant(g, -3.8, -3);
+    },
+    corners: {
+      overview: [0.6, 2.9, 5.8, 0, 1, -2.3], calendar: [2.6, 2.7, 3.6, -4.3, 1.8, -0.8], stats: [2.6, 2.7, 5.4, -4.3, 1.8, 1.8],
+      budget: [-2.4, 2.7, 3.6, 4.2, 1.1, -1.2], history: [-1.6, 2.7, 3.8, 3.4, 1, -3], categories: [-1.6, 2.5, 6.2, 3.6, 0.7, 2]
+    } },
+  calendar: { first: 'main', build(g, R) {
+      rCalendar(g, 0.6, 1.95, -3.44, 0, true); rClock(g, -2.4, 2.4, -3.44, 0);
+      const d = rDesk(g, -1.2, -1.6); d.add(box(0.5, 0.06, 0.36, 0xfff1a8, 0.3, 0.84, 0)); d.add(box(0.04, 0.04, 0.3, 0xf19bb0, 0.65, 0.88, 0));
+      rChair(g, -1, -0.75, Math.PI); R.seat = { x: -1, z: -0.8, ry: Math.PI, y: 0.54 };
+      rShelf(g, 4.25, -0.6, -Math.PI / 2, 5); rPlant(g, 3.8, 2.6);
+    },
+    corners: { main: [0.4, 2.9, 5.8, 0.2, 1.5, -2.8] } },
+  account: { first: 'main', build(g, R) {
+      rSafe(g, 2.6, -2.7, 0); rKeys(g, -0.5, 1.9, -3.44, 0);
+      const d = rDesk(g, -1.8, -1.8, 0.2); rLaptop(d, 0, 0);
+      rChair(g, -1.75, -0.95, Math.PI + 0.2); R.seat = { x: -1.72, z: -1.0, ry: Math.PI + 0.2, y: 0.54 };
+      rShelf(g, -4.25, 0.6, Math.PI / 2, 5); rPlant(g, 3.9, 1.8);
+    },
+    corners: { main: [0.6, 2.9, 5.8, 0, 1.2, -2.4] } },
+  other: { first: 'main', build(g, R) {
+      const d = rDesk(g, -1, -2.3); rLaptop(d, 0, 0); rChair(g, -0.8, -1.45, Math.PI); R.seat = { x: -0.8, z: -1.5, ry: Math.PI, y: 0.54 };
+      rShelf(g, 4.25, -0.6, -Math.PI / 2); rPlant(g, -3.9, -3);
+    }, corners: { main: [0, 2.9, 5.8, 0, 1.1, -2] } }
+};
+
+function createRoom(container, opts) {
+  opts = opts || {};
+  const spec = ROOMS[opts.house] || ROOMS.other;
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  container.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 100);
+  const wall = tint(opts.roof || 0xf6a9bd, 0.72), wall2 = tint(opts.roof || 0xf6a9bd, 0.55);
+  scene.background = new THREE.Color(tint(opts.roof || 0xf6a9bd, 0.82));
+
+  const g = new THREE.Group(); scene.add(g);
+  // floor planks, walls, skirting
+  for (let i = 0; i < 12; i++) { const pl = box(ROOM_W / 12, 0.1, ROOM_D, i % 2 ? 0xe9cfae : 0xe2c39e, -ROOM_W / 2 + (i + 0.5) * ROOM_W / 12, -0.05, 0); pl.castShadow = false; g.add(pl); }
+  const back = box(ROOM_W, ROOM_H, 0.12, wall, 0, ROOM_H / 2, -ROOM_D / 2); back.castShadow = false; g.add(back);
+  [-1, 1].forEach((sx) => { const w = box(0.12, ROOM_H, ROOM_D, wall2, sx * ROOM_W / 2, ROOM_H / 2, 0); w.castShadow = false; g.add(w); });
+  g.add(box(ROOM_W, 0.14, 0.04, 0xffffff, 0, 0.07, -ROOM_D / 2 + 0.08));
+  [-1, 1].forEach((sx) => g.add(box(0.04, 0.14, ROOM_D, 0xffffff, sx * (ROOM_W / 2 - 0.08), 0.07, 0)));
+  // window with the real sky + curtains
+  const skyMat = new THREE.MeshBasicMaterial({ color: 0xbfe3f5 });
+  g.add(box(1.9, 1.5, 0.08, 0xffffff, 2.2, 2, -ROOM_D / 2 + 0.06));
+  g.add(box(1.7, 1.3, 0.09, 0, 2.2, 2, -ROOM_D / 2 + 0.07, skyMat));
+  g.add(box(0.05, 1.3, 0.1, 0xffffff, 2.2, 2, -ROOM_D / 2 + 0.1)); g.add(box(1.7, 0.05, 0.1, 0xffffff, 2.2, 2, -ROOM_D / 2 + 0.1));
+  [-1, 1].forEach((sx) => g.add(box(0.35, 1.8, 0.06, 0xffb6c1, 2.2 + sx * 1.1, 2, -ROOM_D / 2 + 0.16)));
+  // rug + ceiling lamp
+  const rug = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.03, 32), mat(0xf6d4dc)); rug.scale.set(2, 1, 1.3); rug.position.set(0.3, 0.02, 0.6); rug.receiveShadow = true; g.add(rug);
+  g.add(box(0.04, 0.3, 0.04, 0x8c7a6b, 0.3, ROOM_H - 0.15, 0.3));
+  const shade = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.4, 12, 1, true), new THREE.MeshLambertMaterial({ color: 0xfff1a8, emissive: 0xffd27a, emissiveIntensity: 0, side: THREE.DoubleSide }));
+  shade.position.set(0.3, ROOM_H - 0.45, 0.3); g.add(shade);
+
+  const R = {};
+  spec.build(g, R);
+  let clockHands = []; g.traverse((o) => { if (o.userData.hands) clockHands = o.userData.hands; });
+  // the resident, at the desk
+  let who = null;
+  if (opts.look && R.seat) {
+    who = makePerson(opts.look); g.add(who.g);
+    who.g.position.set(R.seat.x, R.seat.y - 0.47, R.seat.z); who.g.rotation.y = R.seat.ry + Math.PI;
+    who.parts.legL.rotation.x = who.parts.legR.rotation.x = -1.45;
+  }
+
+  const hemi = new THREE.HemisphereLight(0xffffff, 0xe2c39e, 1.4); scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xfff4e6, 1.6); sun.position.set(4, 6, 2); sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024); Object.assign(sun.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6 }); scene.add(sun);
+  const lamp = new THREE.PointLight(0xffd9a0, 0, 10, 1.4); lamp.position.set(0.3, ROOM_H - 1, 0.3); scene.add(lamp);
+  function applyTime() {
+    const d = new Date();
+    const h = opts.timeMode === 'day' ? 11 : opts.timeMode === 'night' ? 22 : d.getHours() + d.getMinutes() / 60;
+    const s = skyAt(h);
+    skyMat.color.copy(s.sky);
+    hemi.intensity = 1.5 - s.night * 0.7; sun.intensity = 1.6 * (1 - s.night) + 0.2;
+    lamp.intensity = s.night * 14; shade.material.emissiveIntensity = s.night;
+    if (clockHands.length) { clockHands[0].rotation.z = -(d.getHours() % 12) / 12 * Math.PI * 2; clockHands[1].rotation.z = -d.getMinutes() / 60 * Math.PI * 2; }
+  }
+
+  // camera moves between corners
+  const camP = new THREE.Vector3(), camT = new THREE.Vector3(), goP = new THREE.Vector3(), goT = new THREE.Vector3();
+  function cornerOf(name) { return spec.corners[name] || spec.corners[spec.first]; }
+  function setCorner(name, jump) {
+    const c = cornerOf(name);
+    goP.set(c[0], c[1], c[2]); goT.set(c[3], c[4], c[5]);
+    if (jump) { camP.copy(goP); camT.copy(goT); }
+  }
+  setCorner(opts.corner, true);
+  function resize() {
+    const W = container.clientWidth || innerWidth, H = container.clientHeight || innerHeight;
+    renderer.setSize(W, H, false); camera.aspect = W / H;
+    camera.fov = W / H < 0.9 ? 62 : 48;            // phones: a bit wider so the room still shows
+    camera.updateProjectionMatrix();
+  }
+  resize();
+  const onResize = () => resize();
+  window.addEventListener('resize', onResize);
+
+  const clock = new THREE.Clock();
+  let running = true, last = 0;
+  function loop() {
+    if (!running) return;
+    requestAnimationFrame(loop);
+    if (document.hidden) return;
+    const dt = Math.min(0.1, clock.getDelta()), t = clock.elapsedTime;
+    camP.lerp(goP, Math.min(1, dt * 2.5)); camT.lerp(goT, Math.min(1, dt * 2.5));
+    camera.position.copy(camP); camera.lookAt(camT);
+    if (who) {                                       // typing away
+      who.parts.armL.rotation.x = -1.2 + Math.sin(t * 9) * 0.12;
+      who.parts.armR.rotation.x = -1.2 + Math.sin(t * 9 + 1.8) * 0.12;
+      who.parts.head.rotation.x = 0.15 + Math.sin(t * 0.6) * 0.05;
+      who.parts.head.rotation.y = Math.sin(t * 0.35) * 0.25;
+    }
+    if (t - last > 20 || last === 0) { applyTime(); last = t || 0.001; }
+    renderer.render(scene, camera);
+  }
+  applyTime();
+  requestAnimationFrame(loop);
+  return {
+    house: opts.house,
+    setCorner(name) { setCorner(name, false); },
+    setTimeMode(m) { opts.timeMode = m; applyTime(); },
+    destroy() {
+      running = false;
+      window.removeEventListener('resize', onResize);
+      scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
+      renderer.dispose(); renderer.domElement.remove();
+    }
+  };
+}
+
+window.Village3D = { create, room: createRoom, LOOKS, ROOF: COL.roof };

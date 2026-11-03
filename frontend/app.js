@@ -580,6 +580,7 @@ function showView(id) {
   // Personal features (Work, Money…) hide the dock and show ‹ (village) + 🛖 (Home) instead
   document.body.classList.toggle('personal-view', NAV_SECTION_MAP_[id] === 'personal');
   if (id !== 'menu-view' && typeof villageShow === 'function') villageShow(false);
+  if (typeof villageRoom === 'function') villageRoom(id);       // the room inside that house, behind the page
   if (id === 'menu-view') {
     showHomeSection(currentHomeSection_);
   } else {
