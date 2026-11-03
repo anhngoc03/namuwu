@@ -358,7 +358,7 @@ function showScreen(id) {
 // Maps each app-view to the navbar section it belongs to, purely for highlighting the active nav link.
 var NAV_SECTION_MAP_ = {
   'menu-view': 'home',
-  'accounts-view': 'personal', 'expense-view': 'personal', 'work-view': 'personal', 'calendar-view': 'personal',
+  'accounts-view': 'personal', 'expense-view': 'personal', 'work-view': 'personal', 'calendar-view': 'personal', 'love-view': 'personal',
   'symbols-view': 'tools', 'datediff-view': 'tools', 'eating-view': 'tools',
   'qr-view': 'tools', 'converter-view': 'tools',
   'memory-view': 'games', 'mochi-view': 'games', 'minesweeper-view': 'games'
@@ -377,6 +377,7 @@ var VIEW_OPENERS_ = {
   'expense-view': function () { requirePersonal(openExpense); },
   'work-view': function () { requirePersonal(openWork); },
   'calendar-view': function () { requirePersonal(openCalendar); },
+  'love-view': function () { requirePersonal(openLove); },
   'memory-view': openMemory,
   'mochi-view': openMochi,
   'minesweeper-view': openMinesweeper
@@ -400,7 +401,8 @@ var VIEW_PATHS_ = {
   'accounts-view': '/personal/account',
   'expense-view': '/personal/expenses',
   'work-view': '/personal/work',
-  'calendar-view': '/personal/calendar'
+  'calendar-view': '/personal/calendar',
+  'love-view': '/personal/love'
 };
 var routing_ = false; // true while applying a URL (load / Back) — don't push it again
 
@@ -418,7 +420,7 @@ function routeFromLocation_() {
     var viewId = Object.keys(VIEW_PATHS_).find(function (k) { return VIEW_PATHS_[k] === path; });
     if (viewId) {
       stopRunningViews_();
-      if (/^(accounts|expense|work|calendar)-view$/.test(viewId)) {
+      if (/^(accounts|expense|work|calendar|love)-view$/.test(viewId)) {
         // Personal: show the (locked) village underneath, then ask for the password first.
         if (!personalUnlocked) { showView('menu-view'); showHomeSection('personal'); }
       }

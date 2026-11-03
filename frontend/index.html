@@ -92,7 +92,7 @@
     <div class="village-corner">
       <div class="village-clock" id="village-clock"></div>
       <button type="button" class="village-btn village-only-open" id="village-theme">◐</button>
-      <button type="button" class="village-btn village-only-open" id="village-gear">⚙</button>
+      <button type="button" class="village-btn village-only-open" id="village-gear">⚙︎</button>
       <button type="button" class="village-btn village-home-btn" id="village-home"><img src="/images/favicon.png" alt="" draggable="false"></button>
       <button type="button" class="village-btn village-star" id="village-star">✮⋆˙</button>
     </div>
@@ -360,6 +360,17 @@
       </div>
 
       <!-- -------- CALENDAR VIEW (Personal) — logic in calendar.js -------- -->
+      <!-- -------- LOVE VIEW (Personal) — album, logic in love.js -------- -->
+      <div id="love-view" class="app-view" style="display:none;">
+        <div class="love-head">
+          <h2 class="page-title">Love ♡</h2>
+          <button class="pill-btn" id="love-add-btn">+ Memory</button>
+        </div>
+        <div id="love-onthisday"></div>
+        <input type="text" class="love-search" id="love-search" placeholder="Search place, note, #tag" autocomplete="off">
+        <div id="love-list" class="love-list"></div>
+      </div>
+
       <div id="calendar-view" class="app-view" style="display:none;">
         <h2 class="page-title">Calendar</h2>
         <div class="work-card cal-list-card">
@@ -1139,6 +1150,48 @@
     </div>
   </div>
 
+  <!-- ================= MODAL: Love › one memory (photos big) ================= -->
+  <div id="love-view-modal" class="modal-overlay">
+    <div class="modal-box love-view-box">
+      <div class="modal-header">
+        <h3><span id="love-view-count"></span></h3>
+        <button id="love-view-close" class="modal-close">✕</button>
+      </div>
+      <div class="love-stage">
+        <button type="button" class="love-nav" id="love-view-prev">‹</button>
+        <img id="love-view-img" alt="">
+        <button type="button" class="love-nav" id="love-view-next">›</button>
+      </div>
+      <div id="love-view-meta" class="love-view-meta"></div>
+      <div class="modal-actions"><button type="button" class="pill-btn secondary" id="love-view-edit">Edit</button></div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: Love › add / edit a memory ================= -->
+  <div id="love-edit-modal" class="modal-overlay">
+    <div class="modal-box love-edit-box">
+      <div class="modal-header">
+        <h3 id="love-edit-title">New memory</h3>
+        <button id="love-edit-close" class="modal-close">✕</button>
+      </div>
+      <label class="love-field"><span>Date</span><input type="date" id="love-f-day"></label>
+      <label class="love-field"><span>Province / city</span><input type="text" id="love-f-province" list="love-provinces" placeholder="Hà Nội" autocomplete="off"></label>
+      <datalist id="love-provinces"></datalist>
+      <label class="love-field"><span>Place</span><input type="text" id="love-f-place" placeholder="Hồ Gươm, a little café…" autocomplete="off"></label>
+      <label class="love-field"><span>Note</span><textarea id="love-f-note" rows="3" placeholder="What happened ♡"></textarea></label>
+      <label class="love-field"><span>Tags</span><input type="text" id="love-f-tags" placeholder="anniversary, trip" autocomplete="off"></label>
+      <div class="love-field"><span>Photos</span>
+        <div class="love-photos-pick" id="love-f-photos"></div>
+        <button type="button" class="pill-btn secondary" id="love-f-add">+ Photos</button>
+        <input type="file" id="love-f-file" accept="image/*" multiple hidden>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="pill-btn secondary" id="love-f-delete">Delete</button>
+        <button type="button" class="pill-btn" id="love-f-save">Save</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= MODAL: Village › settings (⚙, after the password) ================= -->
   <div id="village-settings-modal" class="modal-overlay">
     <div class="modal-box set-box">
@@ -1154,6 +1207,14 @@
           <button type="button" class="pill-btn secondary" id="set-push-test">Test</button>
         </div>
         <div class="set-hint" id="set-push-hint"></div>
+      </div>
+      <div class="set-section">
+        <div class="set-title">Google Drive · Love album</div>
+        <div class="set-push">
+          <span class="set-push-status" id="set-drive-status">…</span>
+          <button type="button" class="pill-btn" id="set-drive-btn">Connect</button>
+        </div>
+        <div class="set-hint" id="set-drive-hint"></div>
       </div>
       <div class="set-section">
         <div class="set-title">Remind me</div>
@@ -1523,6 +1584,7 @@
   <script src="/work.js"></script>
   <script src="/posts.js"></script>
   <script src="/calendar.js"></script>
+  <script src="/love.js"></script>
   <script src="/village.js"></script>
   <script src="/enter-confirm.js"></script>
 </body>

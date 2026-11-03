@@ -1458,6 +1458,25 @@ const ROOMS = {
       rShelf(g, -4.25, 0.6, Math.PI / 2, 5); rPlant(g, 3.9, 1.8);
     },
     corners: { main: [0.6, 2.9, 5.8, 0, 1.2, -2.4] } },
+  love: { first: 'main', build(g, R) {
+      // sofa for two, photo frames on the wall (they show the album's latest photos)
+      const so = new THREE.Group(); so.position.set(-0.4, 0, -2.5); g.add(so);
+      so.add(box(2.6, 0.45, 0.9, 0xf6a9bd, 0, 0.32, 0)); so.add(box(2.6, 0.75, 0.25, 0xf19bb0, 0, 0.8, -0.35));
+      [-1, 1].forEach((sx) => so.add(box(0.25, 0.65, 0.9, 0xf19bb0, sx * 1.3, 0.45, 0)));
+      const pillow = heart(0xff7f9e); pillow.scale.setScalar(0.4); pillow.position.set(1.0, 0.75, -0.15); so.add(pillow);
+      R.seats = [{ x: -0.85, z: -2.35, ry: Math.PI, y: 0.56 }, { x: 0.05, z: -2.35, ry: Math.PI, y: 0.56 }];
+      R.sofa = true;
+      R.frames = [];
+      [[-2.6, 2.3, 1.0, 0.8], [-1.3, 2.45, 0.8, 1.0], [-0.1, 2.3, 1.1, 0.8], [1.2, 2.5, 0.8, 0.8], [-1.95, 1.55, 0.7, 0.55], [0.6, 1.6, 0.7, 0.55]].forEach(([x, y, w, h], i) => {
+        g.add(box(w + 0.12, h + 0.12, 0.05, [0xffffff, 0xf6d4dc, 0xfff1a8][i % 3], x, y, -3.42));
+        const pic = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: [0xffd6df, 0xd9c9f0, 0xbfe6f2][i % 3] }));
+        pic.position.set(x, y, -3.385); g.add(pic); R.frames.push(pic);
+      });
+      // fairy lights along the wall top
+      for (let k = 0; k < 14; k++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), new THREE.MeshBasicMaterial({ color: [0xfff1a8, 0xffb6c1][k % 2] })); b.position.set(-4 + k * 0.62, 3.05 - Math.sin(k * 0.9) * 0.08, -3.38); g.add(b); }
+      rPlant(g, 3.8, -2.8); rShelf(g, 4.25, 0.4, -Math.PI / 2, 4);
+    },
+    corners: { main: [0.2, 2.6, 5.4, -0.4, 1.5, -2.8] } },
   other: { first: 'main', build(g, R) {
       const d = rDesk(g, -1, -2.3); rLaptop(d, 0, 0); rChair(g, -0.8, -1.45, Math.PI); R.seat = { x: -0.8, z: -1.5, ry: Math.PI, y: 0.54 };
       rShelf(g, 4.25, -0.6, -Math.PI / 2); rPlant(g, -3.9, -3);
@@ -1499,12 +1518,15 @@ function createRoom(container, opts) {
   spec.build(g, R);
   let clockHands = []; g.traverse((o) => { if (o.userData.hands) clockHands = o.userData.hands; });
   // the resident, at the desk
-  let who = null;
-  if (opts.look && R.seat) {
-    who = makePerson(opts.look); g.add(who.g);
-    who.g.position.set(R.seat.x, R.seat.y - 0.47, R.seat.z); who.g.rotation.y = R.seat.ry + Math.PI;
-    who.parts.legL.rotation.x = who.parts.legR.rotation.x = -1.45;
-  }
+  const seats = R.seats || (R.seat ? [R.seat] : []);
+  const looks = opts.looks || (opts.look ? [opts.look] : []);
+  const sitters = seats.slice(0, looks.length).map((st, k) => {
+    const w = makePerson(looks[k]); g.add(w.g);
+    w.g.position.set(st.x, st.y - 0.47, st.z); w.g.rotation.y = st.ry + Math.PI;
+    w.parts.legL.rotation.x = w.parts.legR.rotation.x = -1.45;
+    return w;
+  });
+  const who = R.sofa ? null : sitters[0] || null;
 
   const hemi = new THREE.HemisphereLight(0xffffff, 0xe2c39e, 1.4); scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff4e6, 1.6); sun.position.set(4, 6, 2); sun.castShadow = true;
@@ -1548,6 +1570,11 @@ function createRoom(container, opts) {
     const dt = Math.min(0.1, clock.getDelta()), t = clock.elapsedTime;
     camP.lerp(goP, Math.min(1, dt * 2.5)); camT.lerp(goT, Math.min(1, dt * 2.5));
     camera.position.copy(camP); camera.lookAt(camT);
+    if (R.sofa) sitters.forEach((w, k) => {           // cuddled up on the sofa
+      w.parts.armL.rotation.x = w.parts.armR.rotation.x = -0.6;
+      w.parts.head.rotation.z = (k === 0 ? -1 : 1) * (0.18 + Math.sin(t * 0.8) * 0.04);
+      w.parts.head.rotation.y = (k === 0 ? 1 : -1) * 0.25;
+    });
     if (who) {                                       // typing away
       who.parts.armL.rotation.x = -1.2 + Math.sin(t * 9) * 0.12;
       who.parts.armR.rotation.x = -1.2 + Math.sin(t * 9 + 1.8) * 0.12;
@@ -1562,6 +1589,21 @@ function createRoom(container, opts) {
   return {
     house: opts.house,
     setCorner(name) { setCorner(name, false); },
+    setPhotos(urls) {
+      if (!R.frames) return;
+      const loader = new THREE.TextureLoader();
+      R.frames.forEach((f, i) => {
+        if (!urls[i]) return;
+        loader.load(urls[i], (tx) => {
+          tx.colorSpace = THREE.SRGBColorSpace;
+          const img = tx.image, fw = f.geometry.parameters.width, fh = f.geometry.parameters.height;
+          // crop to fill the frame
+          const a = img.width / img.height, b = fw / fh;
+          if (a > b) { tx.repeat.set(b / a, 1); tx.offset.set((1 - b / a) / 2, 0); } else { tx.repeat.set(1, a / b); tx.offset.set(0, (1 - a / b) / 2); }
+          f.material.map = tx; f.material.color.set(0xffffff); f.material.needsUpdate = true;
+        });
+      });
+    },
     setTimeMode(m) { opts.timeMode = m; applyTime(); },
     destroy() {
       running = false;
@@ -1572,4 +1614,4 @@ function createRoom(container, opts) {
   };
 }
 
-window.Village3D = { create, room: createRoom, LOOKS, ROOF: COL.roof };
+window.Village3D = { create, room: createRoom, LOOKS, LOVE: LOVE_LOOKS, ROOF: COL.roof };

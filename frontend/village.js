@@ -28,7 +28,7 @@
     { id: 'law',      label: 'Law',        roof: 'blue',  open: null },
     { id: 'health',   label: 'Food & Gym', roof: 'mint',  open: null },
     { id: 'notes',    label: 'Notes',      roof: 'yellow',open: null },
-    { id: 'love',     label: 'Love',       roof: 'pink',  open: null, heart: true },
+    { id: 'love',     label: 'Love',       roof: 'pink',  open: 'openLove', heart: true },
     { id: 'goals',    label: 'Goals',      roof: 'lav',   open: null }
   ];
 
@@ -47,7 +47,7 @@
     if (loading) return;
     loading = true;
     var sc = document.createElement('script');
-    sc.src = '/village3d.js?v=7';
+    sc.src = '/village3d.js?v=8';
     sc.onload = function () { loading = false; var w = loadWaiters; loadWaiters = []; w.forEach(function (f) { f(); }); };
     sc.onerror = function () { loading = false; loadWaiters = []; toast("Couldn't load the village ʕ´-ก̀ʔᐝ"); };
     document.head.appendChild(sc);
@@ -150,7 +150,10 @@
   var entering = false;
 
   /* ---------------- inside a house: the room behind a feature page ---------------- */
-  var VIEW_HOUSE = { 'work-view': 'work', 'expense-view': 'money', 'calendar-view': 'calendar', 'accounts-view': 'account' };
+  var VIEW_HOUSE = { 'work-view': 'work', 'expense-view': 'money', 'calendar-view': 'calendar', 'accounts-view': 'account', 'love-view': 'love' };
+  var roomPhotos = [];
+  // the Love room's frames show the latest album photos (love.js calls this)
+  window.villageRoomPhotos = function (urls) { roomPhotos = urls || []; if (room && room.setPhotos) room.setPhotos(roomPhotos); };
   var room = null, roomWant = null;
   function currentCorner(house) {
     if (house === 'work') return typeof workTab !== 'undefined' ? workTab : 'list';
@@ -172,8 +175,10 @@
       try {
         room = Village3D.room(el, {
           house: house, roof: Village3D.ROOF[spec.roof], look: Village3D.LOOKS[idx],
+          looks: house === 'love' ? [Village3D.LOVE.her, Village3D.LOVE.him] : null,
           corner: currentCorner(house), timeMode: timeMode()
         });
+        if (house === 'love' && roomPhotos.length) room.setPhotos(roomPhotos);
         el.classList.add('on');
       } catch (e) { /* no WebGL: plain page */ }
     };
@@ -451,10 +456,28 @@
       private: $('set-private').checked
     };
   }
+  var driveOn = false;
+  function renderDrive() {
+    var st = document.getElementById('set-drive-status'), btn = document.getElementById('set-drive-btn'), hint = document.getElementById('set-drive-hint');
+    st.textContent = '…'; hint.textContent = '';
+    return call('getDriveStatus').then(function (d) {
+      driveOn = d.connected;
+      if (!d.configured) {
+        st.textContent = 'Not set up'; btn.style.display = 'none';
+        hint.textContent = 'Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET on Cloudflare first (see docs/PLAN.md).';
+        return;
+      }
+      btn.style.display = '';
+      st.textContent = d.connected ? 'Connected' + (d.folderName ? ' · ' + d.folderName : '') : 'Not connected';
+      btn.textContent = d.connected ? 'Disconnect' : 'Connect';
+      if (d.error) hint.textContent = d.error;
+    }).catch(function (e) { st.textContent = 'Error'; hint.textContent = e.message; });
+  }
   function openSettings() {
     if (!unlocked()) return;
     document.getElementById('village-settings-modal').classList.add('active');
     renderPush();
+    renderDrive();
     call('getReminderSettings').then(fillSettings).catch(function (e) { toast(e.message); });
   }
   function wireSettings() {
@@ -480,7 +503,22 @@
       call('sendTestPush').then(function (r) { toast(r.sent ? 'Sent ✿ (' + r.sent + ' device' + (r.sent === 1 ? '' : 's') + ')' : 'No device has notifications on'); })
         .catch(function (e) { toast(e.message); });
     };
+    document.getElementById('set-drive-btn').onclick = function () {
+      if (driveOn) {
+        if (!confirm('Disconnect Google Drive? Photos stay in Drive; the album can\'t show them until you connect again.')) return;
+        call('disconnectGoogleDrive').then(renderDrive).catch(function (e) { toast(e.message); });
+        return;
+      }
+      call('googleAuthUrl').then(function (u) { location.href = u; }).catch(function (e) { toast(e.message); });
+    };
     showTimeMode();
+    // back from Google's sign-in page
+    var m = /[?&]drive=(\w+)/.exec(location.search);
+    if (m) {
+      toast({ ok: 'Google Drive connected ♡', denied: 'Google Drive was not connected', expired: 'That took too long — try Connect again',
+        norefresh: 'Google didn\'t give long-term access — remove the app at myaccount.google.com/permissions, then Connect again' }[m[1]] || 'Google Drive: ' + m[1]);
+      try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    }
   }
 
   /* ---------------- public ---------------- */

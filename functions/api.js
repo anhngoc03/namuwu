@@ -18,6 +18,7 @@
 
 import { agentChat as runAgentChat } from '../lib/agent.js';
 import { makeVapidKeys, sendPush } from '../lib/push.js';
+import * as drive from '../lib/drive.js';
 
 // ---------- Helper gọi Supabase REST (PostgREST) ----------
 async function sb(env, path, options = {}) {
@@ -64,7 +65,8 @@ function isPersonalAction_(action) {
   if (/Post|Calendar/.test(action)) return true;
   if (action === 'saveHomeProfile') return true;
   if (/^agent/.test(action)) return true;              // Town Hall AI agent (village.js → lib/agent.js)
-  if (/Push|Reminder/.test(action)) return action !== 'runReminders';   // settings + this device; the timer itself is public        // anyone sees the Home photo/name, only you change it
+  if (/Push|Reminder/.test(action)) return action !== 'runReminders';
+  if (/Love|Drive|google/.test(action)) return true;   // Love album + Google Drive link   // settings + this device; the timer itself is public        // anyone sees the Home photo/name, only you change it
   return /Expense/.test(action) && action !== 'getExpenseTodayTotal';
 }
 
@@ -1459,7 +1461,15 @@ const ACTIONS = {
   deletePushSubscription,
   getPushDevices,
   sendTestPush,
-  runReminders
+  runReminders,
+  getDriveStatus,
+  googleAuthUrl,
+  disconnectGoogleDrive,
+  getLoveData,
+  saveLoveMemory,
+  uploadLovePhoto,
+  deleteLovePhoto,
+  deleteLoveMemory
 };
 
 
@@ -1631,6 +1641,152 @@ async function runReminders(env) {
   return { now: now.date + ' ' + now.time, done };
 }
 
+
+/* ============================================================
+ *  LOVE — photo album (supabase/love.sql). Text in Supabase, photos in
+ *  Google Drive (lib/drive.js), named yymmdd_<province>.<ext>.
+ *  Needs GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET on Cloudflare; the refresh
+ *  token from "Connect Google Drive" is kept encrypted in app_settings.
+ * ============================================================ */
+const LOVE_FOLDER_DEFAULT_ = '1fv_aE93vMP3mP31tkIhpdaKV9knYvBjh';
+const LOVE_MAX_BYTES_ = 25 * 1024 * 1024;
+async function googleSaved_(env) {
+  const rows = await sb(env, 'app_settings?key=eq.google&select=value');
+  return rows.length ? rows[0].value || {} : {};
+}
+async function driveToken_(env) {
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) throw new Error('GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set on the server');
+  const g = await googleSaved_(env);
+  if (!g.refresh) throw new Error('Google Drive is not connected yet — ⚙ → Connect Google Drive');
+  return drive.accessToken(env, await decryptField_(env, g.refresh));
+}
+function loveFolder_(g) { return (g && g.folder) || LOVE_FOLDER_DEFAULT_; }
+function googleRedirect_(env) { return (env.__origin || 'https://namuwu.pages.dev') + '/api'; }
+
+async function getDriveStatus(env) {
+  const g = await googleSaved_(env);
+  const out = { configured: !!(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET), connected: !!g.refresh, folder: loveFolder_(g), folderName: '' };
+  if (out.configured && out.connected) {
+    try { out.folderName = (await drive.folderInfo(await driveToken_(env), out.folder)).name || ''; }
+    catch (e) { out.error = String(e.message || e).slice(0, 200); }
+  }
+  return out;
+}
+async function googleAuthUrl(env) {
+  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) throw new Error('Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET on Cloudflare first');
+  const exp = String(Date.now() + 10 * 60 * 1000);
+  return drive.authUrl(env, googleRedirect_(env), exp + '.' + await personalSign_(env, 'gstate.' + exp));
+}
+async function disconnectGoogleDrive(env) {
+  const g = await googleSaved_(env);
+  delete g.refresh;
+  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'google', value: g }]), prefer: 'resolution=merge-duplicates,return=minimal' });
+  return { ok: true };
+}
+// Google sends the browser back to GET /api?code=…&state=…
+async function googleCallback_(env, url) {
+  const state = url.searchParams.get('state') || '', code = url.searchParams.get('code') || '';
+  const dot = state.indexOf('.');
+  const exp = state.slice(0, dot), sig = state.slice(dot + 1);
+  if (dot < 1 || !/^\d+$/.test(exp) || Number(exp) < Date.now() || !sameText_(sig, await personalSign_(env, 'gstate.' + exp))) {
+    return Response.redirect((env.__origin || '') + '/personal?drive=expired', 302);
+  }
+  const tok = await drive.exchangeCode(env, code, googleRedirect_(env));
+  if (!tok.refresh_token) return Response.redirect((env.__origin || '') + '/personal?drive=norefresh', 302);
+  const g = await googleSaved_(env);
+  g.refresh = await encryptField_(env, tok.refresh_token);
+  g.connectedAt = new Date().toISOString();
+  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'google', value: g }]), prefer: 'resolution=merge-duplicates,return=minimal' });
+  return Response.redirect((env.__origin || '') + '/personal?drive=ok', 302);
+}
+
+function loveMemoryOut_(m, photos) {
+  return {
+    id: m.id, day: m.day, province: m.province || '', place: m.place || '', note: m.note || '', tags: m.tags || [],
+    photos: photos.filter((p) => p.memory_id === m.id).map((p) => ({ id: p.id, driveId: p.drive_id, name: p.name }))
+  };
+}
+async function getLoveData(env) {
+  const [mem, ph] = await Promise.all([
+    sb(env, 'love_memories?select=id,day,province,place,note,tags&order=day.desc,id.desc&limit=2000'),
+    sb(env, 'love_photos?select=id,memory_id,drive_id,name&order=id.asc&limit=10000')
+  ]);
+  let him = [];
+  try { him = (await sb(env, 'calendar_notes?kind=eq.him&select=day,note,repeat&order=day.asc')).map((r) => ({ day: r.day, note: r.note || '', repeat: r.repeat || '' })); }
+  catch (e) { him = []; }
+  return { today: vnNow_().date, memories: mem.map((m) => loveMemoryOut_(m, ph)), him };
+}
+async function saveLoveMemory(env, [m]) {
+  m = m || {};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(m.day || '')) throw new Error('Pick a date');
+  const row = {
+    day: m.day, province: String(m.province || '').trim().slice(0, 80), place: String(m.place || '').trim().slice(0, 200),
+    note: String(m.note || '').slice(0, 5000),
+    tags: (Array.isArray(m.tags) ? m.tags : []).map((t) => String(t).trim().slice(0, 30)).filter(Boolean).slice(0, 12)
+  };
+  let id = Number(m.id) || 0;
+  if (id) await sb(env, 'love_memories?id=eq.' + id, { method: 'PATCH', body: JSON.stringify(row), prefer: 'return=minimal' });
+  else id = (await sb(env, 'love_memories', { method: 'POST', body: JSON.stringify([row]) }))[0].id;
+  return { id };
+}
+function loveFileName_(day, province) {
+  const clean = String(province || '').replace(/[\\/:*?"<>|#%]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return day.slice(2, 4) + day.slice(5, 7) + day.slice(8, 10) + (clean ? '_' + clean : '');
+}
+const LOVE_EXT_ = { 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'image/heif': 'heif', 'image/gif': 'gif' };
+async function uploadLovePhoto(env, [memoryId, file]) {
+  file = file || {};
+  const mime = String(file.type || 'image/jpeg').toLowerCase();
+  if (!/^image\//.test(mime)) throw new Error('Only photos can go in the album');
+  const data = String(file.data || '');
+  if (data.length * 0.75 > LOVE_MAX_BYTES_) throw new Error('Photo is over 25MB');
+  const mem = await sb(env, 'love_memories?id=eq.' + Number(memoryId) + '&select=id,day,province');
+  if (!mem.length) throw new Error('Memory not found');
+  const base = loveFileName_(mem[0].day, mem[0].province);
+  // same day + place more than once → _2, _3 …
+  const same = await sb(env, 'love_photos?name=like.' + encodeURIComponent(base.replace(/[%_]/g, (c) => '\\' + c)) + '*&select=name');
+  const taken = new Set(same.map((r) => r.name.replace(/\.[^.]+$/, '')));
+  let name = base, n = 1;
+  while (taken.has(name)) name = base + '_' + (++n);
+  name += '.' + (LOVE_EXT_[mime] || (String(file.name || '').split('.').pop() || 'jpg').toLowerCase());
+  const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+  const token = await driveToken_(env);
+  const up = await drive.uploadFile(token, loveFolder_(await googleSaved_(env)), name, mime, bytes);
+  const row = (await sb(env, 'love_photos', { method: 'POST', body: JSON.stringify([{ memory_id: mem[0].id, drive_id: up.id, name, mime }]) }))[0];
+  return { id: row.id, driveId: up.id, name };
+}
+async function deleteLovePhoto(env, [id]) {
+  const rows = await sb(env, 'love_photos?id=eq.' + Number(id) + '&select=drive_id');
+  if (rows.length) {
+    try { await drive.trashFile(await driveToken_(env), rows[0].drive_id); } catch (e) { /* already gone in Drive */ }
+    await sb(env, 'love_photos?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' });
+  }
+  return { ok: true };
+}
+// Deleting a memory moves its photos to the Drive bin (recoverable for 30 days there).
+async function deleteLoveMemory(env, [id]) {
+  const rows = await sb(env, 'love_photos?memory_id=eq.' + Number(id) + '&select=drive_id');
+  if (rows.length) {
+    const token = await driveToken_(env);
+    for (const r of rows) { try { await drive.trashFile(token, r.drive_id); } catch (e) { /* ignore */ } }
+  }
+  await sb(env, 'love_memories?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' });
+  return { ok: true };
+}
+// <img src="/api?photo=<driveId>&s=600&t=<personal token>"> — only with a valid Personal token
+async function serveLovePhoto_(env, url) {
+  if (!(await personalVerifyToken_(env, url.searchParams.get('t')))) return new Response('Unauthorized', { status: 401 });
+  const id = url.searchParams.get('photo') || '';
+  const known = await sb(env, 'love_photos?drive_id=eq.' + encodeURIComponent(id) + '&select=mime');
+  if (!known.length) return new Response('Not found', { status: 404 });
+  const size = Math.max(0, Math.min(2000, Number(url.searchParams.get('s')) || 0));
+  const res = await drive.fetchImage(await driveToken_(env), id, size);
+  return new Response(res.body, { headers: {
+    'Content-Type': res.headers.get('Content-Type') || known[0].mime || 'image/jpeg',
+    'Cache-Control': 'private, max-age=86400'
+  } });
+}
+
 // Town Hall chat — the agent works through the same functions the app uses.
 async function agentChat(env, args) {
   return runAgentChat(env, args || [], {
@@ -1659,7 +1815,8 @@ async function handle(env, action, args, token) {
 export async function onRequestPost(context) {
   try {
     const body = await context.request.json();
-    const data = await handle(context.env, body.action, body.args, body.token);
+    const env = Object.assign({}, context.env, { __origin: new URL(context.request.url).origin });
+    const data = await handle(env, body.action, body.args, body.token);
     return new Response(JSON.stringify({ ok: true, data }), {
       headers: { 'Content-Type': 'application/json' }
     });
@@ -1675,6 +1832,10 @@ export async function onRequestPost(context) {
 export async function onRequestGet(context) {
   try {
     const url = new URL(context.request.url);
+    const env = Object.assign({}, context.env, { __origin: url.origin });
+    if (url.searchParams.get('photo')) return await serveLovePhoto_(env, url);              // Love album images
+    if (url.searchParams.get('code') && url.searchParams.get('state')) return await googleCallback_(env, url);   // back from Google
+    if (url.searchParams.get('state') && url.searchParams.get('error')) return Response.redirect(url.origin + '/personal?drive=denied', 302);
     const action = url.searchParams.get('action');
     // GET is only for quick public reads; anything Personal or that writes must use POST.
     if (!/^get/.test(action || '') || isPersonalAction_(action)) throw new Error('Use POST for this action');

@@ -77,6 +77,22 @@ Nguyên tắc: **dữ liệu cũ giữ nguyên**, nhà mới dùng lại bảng 
 - ◐ / ☼ / ☾ (sau khi nhập mật khẩu): trời theo giờ thật / luôn ngày / luôn đêm (nhớ trên từng máy).
 - Làng: chó mèo né nhà, cây, hồ; bấm chó/mèo → nằm ngủ ~3 giây; bấm hồ → thả mồi, cá bơi tới ăn. Di chuyển: trackpad vuốt 2 ngón / chuột phải kéo / Shift+kéo / phím mũi tên; điện thoại: 2 ngón.
 
+## 5d. Nhà Love — album ảnh (`supabase/love.sql`, `lib/drive.js`, `frontend/love.js`)
+
+- Chữ (ngày, tỉnh/thành, nơi chốn, ghi chú, nhãn) ở Supabase; ảnh ở Google Drive, thư mục `1fv_aE93vMP3mP31tkIhpdaKV9knYvBjh`, tên file `yymmdd_<tỉnh>.jpg` (trùng thì `_2`, `_3`…).
+- Xoá ảnh / xoá kỷ niệm → ảnh vào Thùng rác của Drive (khôi phục được 30 ngày).
+- "On this day": kỷ niệm cùng ngày năm trước + các ngày "Him" trong Calendar.
+- Phòng nhà Love: khung ảnh trên tường hiện ảnh mới nhất của album.
+
+**Kết nối Google Drive (làm 1 lần):**
+1. https://console.cloud.google.com → tạo project (vd `namuwu`).
+2. APIs & Services → Library → bật **Google Drive API**.
+3. Google Auth Platform → Branding: tên app, email; Audience: **External**, rồi **Publish app** (In production) — để quyền không tự hết hạn sau 7 ngày.
+4. Clients → Create client → **Web application** → Authorized redirect URIs: `https://namuwu.pages.dev/api`.
+5. Copy Client ID + Client secret → Cloudflare → Settings → Variables and Secrets: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (Encrypt) → Deployments → Retry deployment.
+6. Chạy `supabase/love.sql` trong Supabase SQL Editor.
+7. Personal → ⚙︎ → Google Drive → Connect → chọn tài khoản Google có thư mục ảnh → (Google báo "chưa xác minh": Advanced → Go to …) → Allow.
+
 ## 6. Đã chốt
 
 1. Agent được tự làm tất cả (hỏi lại trước khi xoá).
