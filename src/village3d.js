@@ -1343,7 +1343,8 @@ function create(container, opts) {
    Each tab of the page looks at a different corner of the same room.
    window.Village3D.room(container, { house, roof, look, corner, timeMode }) → { setCorner, destroy }
    ================================================================ */
-const ROOM_W = 9, ROOM_D = 7, ROOM_H = 3.4;
+const ROOM_W = 9, ROOM_D = 7, ROOM_H = 4.4;
+const ROOM_FRONT = 7;      // floor, side walls and ceiling run on past the camera, so it's always inside the room
 function tint(hex, k) { return new THREE.Color(hex).lerp(new THREE.Color(0xffffff), k).getHex(); }
 
 function rDesk(g, x, z, ry, top) {
@@ -1469,10 +1470,10 @@ const ROOMS = {
       rWallBoard(g, -4.45, 1.8, 0.4, Math.PI / 2, 2.6, 1.4, 0xffffff,
         [[-0.9, 0.35, 0xfff1a8], [-0.4, 0.4, 0xffb6c1], [0.1, 0.3, 0xa6d8e8], [0.6, 0.38, 0xa3d9bd], [-0.8, -0.2, 0xffb6c1], [-0.2, -0.25, 0xfff1a8], [0.5, -0.2, 0xd9c9f0]]);
       rShelf(g, 4.25, -0.6, -Math.PI / 2); rPoster(g, 4.44, 2.2, 1.6, -Math.PI / 2);
-      rTripod(g, 3.5, 2.6); rPlant(g, -3.9, -3);
+      rTripod(g, 3.4, 4.6); rPlant(g, -3.9, -3);
     },
     corners: {
-      list: [0.8, 2.9, 5.8, -1.3, 1.0, -2.2], board: [2.4, 2.7, 4.2, -4.3, 1.6, 0.3], stats: [-2.4, 2.7, 4.2, 4.3, 1.5, 0.3], posts: [0.2, 2.6, 6.4, 3.2, 1.3, 2.2]
+      list: [0.8, 2.9, 5.8, -1.3, 1.0, -2.2], board: [2.4, 2.7, 4.2, -4.3, 1.6, 0.3], stats: [-2.4, 2.7, 4.2, 4.3, 1.5, 0.3], posts: [-0.6, 2.5, 8.6, 3.2, 1.3, 4.4]
     } },
   money: { first: 'overview', build(g, R) {
       const d = rDesk(g, 0, -2.3, 0, 0xf9c39c); rPiggy(d, 0.4, 0);
@@ -1491,21 +1492,21 @@ const ROOMS = {
       rChair(g, -1, -0.75, Math.PI); R.seat = { x: -1, z: -0.8, ry: Math.PI, y: 0.54 };
       rShelf(g, 4.25, -0.6, -Math.PI / 2, 5); rPlant(g, 3.8, 2.6);
     },
-    corners: { main: [0.4, 2.9, 5.8, 0.2, 1.5, -2.8] } },
+    corners: { main: [-0.2, 2.9, 5.8, -0.4, 1.5, -2.8] } },
   account: { first: 'main', build(g, R) {
       rSafe(g, 2.6, -2.7, 0); rKeys(g, -0.5, 1.9, -3.44, 0);
       const d = rDesk(g, -1.8, -1.8, 0.2); rLaptop(d, 0, 0);
       rChair(g, -1.75, -0.95, Math.PI + 0.2); R.seat = { x: -1.72, z: -1.0, ry: Math.PI + 0.2, y: 0.54 };
       rShelf(g, -4.25, 0.6, Math.PI / 2, 5); rPlant(g, 3.9, 1.8);
     },
-    corners: { main: [0.6, 2.9, 5.8, 0, 1.2, -2.4] } },
+    corners: { main: [-0.2, 2.9, 5.8, -0.9, 1.2, -2.4] } },
   love: { first: 'main', build(g, R) {
       // sofa for two, photo frames on the wall (they show the album's latest photos)
       const so = new THREE.Group(); so.position.set(-0.4, 0, -2.5); g.add(so);
       so.add(box(2.6, 0.45, 0.9, 0xf6a9bd, 0, 0.32, 0)); so.add(box(2.6, 0.75, 0.25, 0xf19bb0, 0, 0.8, -0.35));
       [-1, 1].forEach((sx) => so.add(box(0.25, 0.65, 0.9, 0xf19bb0, sx * 1.3, 0.45, 0)));
       const pillow = heart(0xff7f9e); pillow.scale.setScalar(0.4); pillow.position.set(1.0, 0.75, -0.15); so.add(pillow);
-      R.seats = [{ x: -0.85, z: -2.35, ry: Math.PI, y: 0.56 }, { x: 0.05, z: -2.35, ry: Math.PI, y: 0.56 }];
+      R.seats = [{ x: -0.85, z: -2.35, ry: 0, y: 0.56 }, { x: 0.05, z: -2.35, ry: 0, y: 0.56 }];
       R.sofa = true;
       R.frames = [];
       [[-2.6, 2.3, 1.0, 0.8], [-1.3, 2.45, 0.8, 1.0], [-0.1, 2.3, 1.1, 0.8], [1.2, 2.5, 0.8, 0.8], [-1.95, 1.55, 0.7, 0.55], [0.6, 1.6, 0.7, 0.55]].forEach(([x, y, w, h], i) => {
@@ -1538,11 +1539,18 @@ function createRoom(container, opts) {
 
   const g = new THREE.Group(); scene.add(g);
   // floor planks, walls, skirting
-  for (let i = 0; i < 12; i++) { const pl = box(ROOM_W / 12, 0.1, ROOM_D, i % 2 ? 0xe9cfae : 0xe2c39e, -ROOM_W / 2 + (i + 0.5) * ROOM_W / 12, -0.05, 0); pl.castShadow = false; g.add(pl); }
+  const LEN = ROOM_D + ROOM_FRONT, MID = (ROOM_FRONT) / 2;       // back wall stays at z = -ROOM_D/2
+  for (let i = 0; i < 12; i++) { const pl = box(ROOM_W / 12, 0.1, LEN, i % 2 ? 0xe9cfae : 0xe2c39e, -ROOM_W / 2 + (i + 0.5) * ROOM_W / 12, -0.05, MID); pl.castShadow = false; g.add(pl); }
   const back = box(ROOM_W, ROOM_H, 0.12, wall, 0, ROOM_H / 2, -ROOM_D / 2); back.castShadow = false; g.add(back);
-  [-1, 1].forEach((sx) => { const w = box(0.12, ROOM_H, ROOM_D, wall2, sx * ROOM_W / 2, ROOM_H / 2, 0); w.castShadow = false; g.add(w); });
+  [-1, 1].forEach((sx) => { const w = box(0.12, ROOM_H, LEN, wall2, sx * ROOM_W / 2, ROOM_H / 2, MID); w.castShadow = false; w.receiveShadow = true; g.add(w); });
+  // ceiling: soft and light (it only gets light from below, so it glows a little instead of going dark)
+  const ceilCol = tint(opts.roof || 0xf6a9bd, 0.9);
+  const ceil = box(ROOM_W, 0.12, LEN, 0, 0, ROOM_H + 0.06, MID, new THREE.MeshLambertMaterial({ color: ceilCol, emissive: ceilCol, emissiveIntensity: 0.55 }));
+  ceil.castShadow = false; g.add(ceil);
+  g.add(box(ROOM_W, 0.16, 0.12, 0xffffff, 0, ROOM_H - 0.08, -ROOM_D / 2 + 0.1));                 // cornice
+  [-1, 1].forEach((sx) => g.add(box(0.12, 0.16, LEN, 0xffffff, sx * (ROOM_W / 2 - 0.1), ROOM_H - 0.08, MID)));
   g.add(box(ROOM_W, 0.14, 0.04, 0xffffff, 0, 0.07, -ROOM_D / 2 + 0.08));
-  [-1, 1].forEach((sx) => g.add(box(0.04, 0.14, ROOM_D, 0xffffff, sx * (ROOM_W / 2 - 0.08), 0.07, 0)));
+  [-1, 1].forEach((sx) => g.add(box(0.04, 0.14, LEN, 0xffffff, sx * (ROOM_W / 2 - 0.08), 0.07, MID)));
   // window with the real sky + curtains
   const skyMat = new THREE.MeshBasicMaterial({ color: 0xbfe3f5 });
   g.add(box(1.9, 1.5, 0.08, 0xffffff, 2.2, 2, -ROOM_D / 2 + 0.06));
@@ -1551,9 +1559,9 @@ function createRoom(container, opts) {
   [-1, 1].forEach((sx) => g.add(box(0.35, 1.8, 0.06, 0xffb6c1, 2.2 + sx * 1.1, 2, -ROOM_D / 2 + 0.16)));
   // rug + ceiling lamp
   const rug = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.03, 32), mat(0xf6d4dc)); rug.scale.set(2, 1, 1.3); rug.position.set(0.3, 0.02, 0.6); rug.receiveShadow = true; g.add(rug);
-  g.add(box(0.04, 0.3, 0.04, 0x8c7a6b, 0.3, ROOM_H - 0.15, 0.3));
+  const cord = box(0.04, 1.2, 0.04, 0x8c7a6b, 0.3, ROOM_H - 0.6, 0.3); cord.castShadow = false; g.add(cord);
   const shade = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.4, 12, 1, true), new THREE.MeshLambertMaterial({ color: 0xfff1a8, emissive: 0xffd27a, emissiveIntensity: 0, side: THREE.DoubleSide }));
-  shade.position.set(0.3, ROOM_H - 0.45, 0.3); g.add(shade);
+  shade.position.set(0.3, ROOM_H - 1.35, 0.3); shade.castShadow = false; g.add(shade);
 
   const R = {};
   spec.build(g, R);
@@ -1563,16 +1571,16 @@ function createRoom(container, opts) {
   const looks = opts.looks || (opts.look ? [opts.look] : []);
   const sitters = seats.slice(0, looks.length).map((st, k) => {
     const w = makePerson(looks[k]); g.add(w.g);
-    w.g.position.set(st.x, st.y - 0.47, st.z); w.g.rotation.y = st.ry + Math.PI;
+    w.g.position.set(st.x, st.y - 0.47, st.z); w.g.rotation.y = st.ry;
     w.parts.legL.rotation.x = w.parts.legR.rotation.x = -1.45;
     return w;
   });
   const who = R.sofa ? null : sitters[0] || null;
 
   const hemi = new THREE.HemisphereLight(0xffffff, 0xe2c39e, 1.4); scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xfff4e6, 1.6); sun.position.set(4, 6, 2); sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024); Object.assign(sun.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6 }); scene.add(sun);
-  const lamp = new THREE.PointLight(0xffd9a0, 0, 10, 1.4); lamp.position.set(0.3, ROOM_H - 1, 0.3); scene.add(lamp);
+  const sun = new THREE.DirectionalLight(0xfff4e6, 1.6); sun.position.set(2.5, ROOM_H - 0.3, 8); sun.target.position.set(0, 0, -2); scene.add(sun.target); sun.castShadow = true;   // from the front, under the ceiling
+  sun.shadow.mapSize.set(1024, 1024); Object.assign(sun.shadow.camera, { left: -7, right: 7, top: 7, bottom: -7, near: 0.5, far: 25 }); sun.shadow.bias = -0.001; scene.add(sun);
+  const lamp = new THREE.PointLight(0xffd9a0, 0, 12, 1.3); lamp.position.set(0.3, ROOM_H - 1.7, 0.3); scene.add(lamp);
   function applyTime() {
     const d = new Date();
     const h = opts.timeMode === 'day' ? 11 : opts.timeMode === 'night' ? 22 : d.getHours() + d.getMinutes() / 60;
@@ -1598,14 +1606,15 @@ function createRoom(container, opts) {
   function resize() {
     const W = container.clientWidth || innerWidth, H = container.clientHeight || innerHeight;
     renderer.setSize(W, H, false); camera.aspect = W / H;
-    camera.fov = W / H < 0.9 ? 62 : 48;            // phones: a bit wider so the room still shows
+    camera.fov = W / H < 0.9 ? 64 : 50;            // phones: a bit wider so the room still shows
+    if (W / H < 0.9) camera.setViewOffset(W, H, 0, -H * 0.2, W, H); else camera.clearViewOffset();
     camera.updateProjectionMatrix();
   }
   resize();
   const onResize = () => resize();
   window.addEventListener('resize', onResize);
 
-  const clock = new THREE.Clock();
+  const clock = new THREE.Clock(), rugV = new THREE.Vector3();
   let running = true, last = 0;
   function loop() {
     if (!running) return;
@@ -1627,6 +1636,9 @@ function createRoom(container, opts) {
     }
     if (t - last > 20 || last === 0) { applyTime(); last = t || 0.001; }
     renderer.render(scene, camera);
+    rugV.set(0.3, 0.05, 0.6).project(camera);
+    document.documentElement.style.setProperty('--rug-x', ((rugV.x + 1) / 2 * 100).toFixed(1) + 'vw');
+    document.documentElement.style.setProperty('--rug-y', ((1 - rugV.y) / 2 * 100).toFixed(1) + 'vh');
   }
   applyTime();
   requestAnimationFrame(loop);

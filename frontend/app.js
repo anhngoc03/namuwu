@@ -251,12 +251,11 @@ function staggerIn(rows) {
 }
 
 // Empty screens: every <span class="empty-icon"> that shows up (they're rendered
-// all over app.js) gets the two sleepy cats (images/cats.webp) — Kero in dark mode.
+// all over app.js) gets the two sleepy cats (images/cats.webp). Inside a house they nap on the rug.
 function jellyfy_(root) {
   (root.querySelectorAll ? root.querySelectorAll('.empty-icon:not([data-jelly])') : []).forEach(function (el) {
     el.setAttribute('data-jelly', '1');
-    el.innerHTML = '<img src="/images/cats.webp" alt="" class="empty-cat light-only" draggable="false">' +
-      '<img src="/images/kero.webp" alt="" class="empty-cat dark-only" draggable="false">';
+    el.innerHTML = '<img src="/images/cats.webp" alt="" class="empty-cat" draggable="false">';
   });
 }
 new MutationObserver(function (muts) {

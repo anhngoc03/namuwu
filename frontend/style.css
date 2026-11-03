@@ -2114,6 +2114,11 @@ body.village-mode :is(#desktop-dock, #mobile-nav-toggle, #footer-credit, #flower
 /* inside a house: the room (3D, behind the page) + a soft veil so text stays easy to read */
 .room-bg{ position:fixed; inset:0; z-index:0; display:none; pointer-events:none; }
 .room-bg.on{ display:block; }
+/* empty screens inside a house: the sleepy cats nap on the room's rug instead (village3d sets --rug-x/--rug-y) */
+body.personal-view .room-bg.on ~ * .empty-state .empty-icon, body.personal-view.room-on .empty-state .empty-icon{ display:none; }
+.room-cat{ position:fixed; left:var(--rug-x, 50vw); top:var(--rug-y, 80vh); width:130px; transform:translate(-50%, -72%);
+  z-index:1; pointer-events:none; display:none; }
+body.personal-view.room-on.room-empty .room-cat{ display:block; }
 .room-bg canvas{ display:block; width:100% !important; height:100% !important; }
 .room-bg::after{ content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(255,250,234,.18), rgba(255,250,234,.4)); }
 body.personal-view #flower-field{ display:none; }

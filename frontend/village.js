@@ -181,6 +181,7 @@
     var house = VIEW_HOUSE[viewId] || null;
     roomWant = house;
     var el = document.getElementById('room-bg');
+    document.body.classList.toggle('room-on', !!house);
     if (!house) { if (room) { lastLeft = room.house; room.destroy(); room = null; } el.classList.remove('on'); return; }
     if (room && room.house === house) { el.classList.add('on'); room.setCorner(currentCorner(house)); return; }
     if (room) { room.destroy(); room = null; }
@@ -202,6 +203,12 @@
     if (window.Village3D) make(); else loadScript(make);
   }
   window.villageRoom = villageRoom;
+  // an empty list on the page → the sleepy cats lie on the rug
+  setInterval(function () {
+    if (!document.body.classList.contains('room-on')) return;
+    var empty = Array.prototype.some.call(document.querySelectorAll('#app-screen .empty-state'), function (e) { return e.offsetParent !== null; });
+    document.body.classList.toggle('room-empty', empty);
+  }, 400);
   // tabs inside a page = turning to another corner of the room
   [['workSetTab', 'work'], ['expenseSwitchTab', 'money']].forEach(function (w) {
     var orig = window[w[0]];
