@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#ffb6c1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Fredoka:wght@400;600;700&family=Baloo+2:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Fredoka:wght@400;600;700&family=Baloo+2:wght@500;700&family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
   <script src="/theme.js"></script>
 </head>
@@ -78,6 +78,38 @@
   <div class="room-bg" id="room-bg"></div>
   <img class="room-cat" id="room-cat" src="/images/cats.webp" alt="" draggable="false">
   <div class="village-fade" id="village-fade"></div>
+  <!-- ===== Love › the album book (love.js): cover → pages (info on top, photo below) ===== -->
+  <div class="lb-wrap" id="love-book">
+    <div class="lb-bar">
+      <select id="lb-year" aria-label="Year"></select>
+      <select id="lb-month" aria-label="Month"></select>
+      <select id="lb-prov" aria-label="Province"></select>
+      <button type="button" class="lb-x" id="lb-close">✕</button>
+    </div>
+    <div class="lb-stage" id="lb-stage">
+      <div class="lb-book" id="lb-book">
+        <div class="lb-cover" id="lb-cover">
+          <div class="lb-heart">♥</div>
+          <div class="lb-names">Mai Ánh Ngọc<br>&amp;<br>Nguyễn Tuấn Hùng</div>
+          <div class="lb-day" id="lb-day"></div>
+          <div class="lb-open">tap to open</div>
+        </div>
+        <div class="lb-spread" id="lb-spread">
+          <div class="lb-page lb-top" id="lb-top"></div>
+          <div class="lb-page lb-bottom" id="lb-bottom"></div>
+          <div class="lb-leaf" id="lb-leaf"><div class="lb-face lb-front" id="lb-front"></div><div class="lb-face lb-back" id="lb-back"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="lb-nav"><button type="button" id="lb-prev">‹</button><span id="lb-count"></span><button type="button" id="lb-next">›</button></div>
+  </div>
+  <!-- ===== Love › timeline by year ===== -->
+  <div class="lt-wrap" id="love-tl">
+    <div class="lt-box">
+      <div class="lt-head"><span>Timeline</span><select id="lt-year"></select><button type="button" class="lb-x" id="lt-close">✕</button></div>
+      <div class="lt-list" id="lt-list"></div>
+    </div>
+  </div>
   <div class="love-upload" id="love-upload"><span class="love-upload-text"></span><span class="love-upload-bar"><i></i></span></div>
   <!-- inside a Personal feature (Work, Money…): back to the village / Home -->
   <div class="personal-bar" id="personal-bar">
@@ -342,11 +374,13 @@
       <div id="love-view" class="app-view" style="display:none;">
         <div class="love-head">
           <h2 class="page-title">Love ♡</h2>
-          <button class="pill-btn" id="love-add-btn">+ Memory</button>
+          <div class="love-actions">
+            <button type="button" class="love-tl-btn" id="love-tl-btn"><i></i>Timeline</button>
+            <button class="pill-btn" id="love-add-btn">+ Memory</button>
+          </div>
         </div>
-        <div id="love-onthisday"></div>
-        <input type="text" class="love-search" id="love-search" placeholder="Search place, note, #tag" autocomplete="off">
-        <div id="love-list" class="love-list"></div>
+        <div class="love-hint" id="love-hint">Tap the yellow album on the table ♡ · tap the frame to change its photo</div>
+        <input type="file" id="love-frame-file" accept="image/*" hidden>
       </div>
 
       <div id="calendar-view" class="app-view" style="display:none;">
@@ -600,7 +634,7 @@
           <p class="page-subtitle">Count the days between two dates.</p>
         </div>
 
-        <div id="loveday-line" class="loveday-line"></div>
+
 
         <div class="datediff-panel">
           <div class="datediff-field">
@@ -1155,7 +1189,6 @@
       <label class="love-field"><span>Date</span><input type="date" id="love-f-day"></label>
       <label class="love-field"><span>Province / city</span><input type="text" id="love-f-province" list="love-provinces" placeholder="Hà Nội" autocomplete="off"></label>
       <datalist id="love-provinces"></datalist>
-      <label class="love-field"><span>Place</span><input type="text" id="love-f-place" placeholder="Hồ Gươm, a little café…" autocomplete="off"></label>
       <label class="love-field"><span>Note</span><textarea id="love-f-note" rows="3" placeholder="What happened ♡"></textarea></label>
       <label class="love-field"><span>Tags</span><input type="text" id="love-f-tags" placeholder="anniversary, trip" autocomplete="off"></label>
       <div class="love-field"><span>Photos</span>

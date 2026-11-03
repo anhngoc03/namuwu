@@ -965,8 +965,14 @@ var LOVE_DAY_START = '2026-05-09';
 
 function openDateDiff() {
   showView('datediff-view');
-  renderLoveDay();
   datediffCalc();
+}
+// Love day lives on the cover of the album in the Love house now (love.js)
+function loveDayCount() {
+  var start = new Date(LOVE_DAY_START + 'T00:00:00Z');
+  var now = new Date();
+  var todayUTC = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  return Math.floor((todayUTC - start) / 86400000) + 1;   // the start date itself is Day 1
 }
 
 function renderLoveDay() {

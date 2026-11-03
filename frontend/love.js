@@ -39,62 +39,144 @@ function loveLoad() {
 }
 
 function loveRender() {
-  var q = (document.getElementById('love-search').value || '').trim().toLowerCase();
-  var list = loveData.memories.filter(function (m) {
-    if (!q) return true;
-    return [m.province, m.place, m.note, (m.tags || []).join(' '), loveFmtDay(m.day)].join(' ').toLowerCase().indexOf(q) !== -1;
-  });
-  // On this day: same day & month in earlier years, and "Him" days from the calendar
-  var today = loveData.today || new Date().toISOString().slice(0, 10), md = today.slice(5);
-  var otd = loveData.memories.filter(function (m) { return m.day.slice(5) === md && m.day < today; });
-  var him = (loveData.him || []).filter(function (h) { return h.day.slice(5) === md && h.day < today && (h.repeat === 'yearly' || true); });
-  var otdEl = document.getElementById('love-onthisday');
-  if (!otd.length && !him.length) otdEl.innerHTML = '';
-  else {
-    otdEl.innerHTML = '<div class="love-otd"><div class="love-otd-title">♡ On this day</div>' +
-      otd.map(function (m) {
-        var y = Number(today.slice(0, 4)) - Number(m.day.slice(0, 4));
-        return '<button type="button" class="love-otd-item" data-mem="' + m.id + '">' +
-          (m.photos[0] ? '<img src="' + lovePhotoUrl(m.photos[0].driveId, 160) + '" alt="" loading="lazy">' : '<span class="love-otd-dot">♡</span>') +
-          '<span><b>' + y + ' year' + (y === 1 ? '' : 's') + ' ago</b> · ' + loveEsc(m.place || m.province || '') + '</span></button>';
-      }).join('') +
-      him.map(function (h) {
-        var y = Number(today.slice(0, 4)) - Number(h.day.slice(0, 4));
-        return '<div class="love-otd-item"><span class="love-otd-dot">♡</span><span><b>' + y + ' year' + (y === 1 ? '' : 's') + '</b> · ' + loveEsc(h.note) + '</span></div>';
-      }).join('') + '</div>';
-  }
-  var el = document.getElementById('love-list');
-  if (!list.length) {
-    el.innerHTML = '<div class="love-empty">' + (q ? 'Nothing found' : 'No memories yet ♡<br><small>Tap “+ Memory” to add the first one</small>') + '</div>';
-  } else {
-    var html = '', lastMonth = '';
-    list.forEach(function (m) {
-      var mk = m.day.slice(0, 7);
-      if (mk !== lastMonth) {
-        lastMonth = mk;
-        html += '<div class="love-month">' + LOVE_MONTHS[Number(mk.slice(5, 7)) - 1] + ' ' + mk.slice(0, 4) + '</div>';
-      }
-      var ph = m.photos.slice(0, 4);
-      html += '<button type="button" class="love-card" data-mem="' + m.id + '">' +
-        (ph.length ? '<div class="love-cover n' + ph.length + '">' + ph.map(function (p) {
-          return '<img src="' + lovePhotoUrl(p.driveId, 480) + '" alt="" loading="lazy">';
-        }).join('') + (m.photos.length > 4 ? '<span class="love-more">+' + (m.photos.length - 4) + '</span>' : '') + '</div>' : '') +
-        '<div class="love-card-body">' +
-        '<div class="love-card-top"><span class="love-date">' + loveFmtDay(m.day) + '</span>' +
-        (m.province || m.place ? '<span class="love-place">📍 ' + loveEsc([m.place, m.province].filter(Boolean).join(', ')) + '</span>' : '') + '</div>' +
-        (m.note ? '<div class="love-note">' + loveEsc(m.note) + '</div>' : '') +
-        ((m.tags || []).length ? '<div class="love-tags">' + m.tags.map(function (t) { return '<span>#' + loveEsc(t) + '</span>'; }).join('') + '</div>' : '') +
-        '</div></button>';
-    });
-    el.innerHTML = html;
-  }
-  // the photo frames on the wall of the Love room show the latest photos
-  if (typeof villageRoomPhotos === 'function') {
-    var urls = [];
-    loveData.memories.forEach(function (m) { m.photos.forEach(function (p) { if (urls.length < 6) urls.push(lovePhotoUrl(p.driveId, 400)); }); });
-    villageRoomPhotos(urls);
-  }
+  // the frame on the wall shows the chosen picture
+  if (typeof villageRoomFrame === 'function') villageRoomFrame(loveData.frame ? lovePhotoUrl(loveData.frame, 900) : '');
+  if (document.getElementById('love-book').classList.contains('on')) { lbBuild(); lbShow(); }
+  if (document.getElementById('love-tl').classList.contains('on')) ltRender();
 }
+
+/* ---------- the album book: cover, then one memory per spread (info on top, photo below) ---------- */
+var lb = { pages: [], i: -1, photo: 0, busy: false };   // i = -1 → the cover
+function lbFiltered() {
+  var y = document.getElementById('lb-year').value, mo = document.getElementById('lb-month').value, pr = document.getElementById('lb-prov').value;
+  return loveData.memories.filter(function (m) {
+    return (!y || m.day.slice(0, 4) === y) && (!mo || m.day.slice(5, 7) === mo) && (!pr || m.province === pr);
+  }).slice().sort(function (a, b) { return a.day < b.day ? -1 : a.day > b.day ? 1 : a.id - b.id; });   // like an album: oldest first
+}
+function lbFilters() {
+  var keep = function (id) { return document.getElementById(id).value; };
+  var y = keep('lb-year'), mo = keep('lb-month'), pr = keep('lb-prov');
+  var years = {}, provs = {};
+  loveData.memories.forEach(function (m) { years[m.day.slice(0, 4)] = 1; if (m.province) provs[m.province] = 1; });
+  document.getElementById('lb-year').innerHTML = '<option value="">All years</option>' + Object.keys(years).sort().reverse().map(function (k) { return '<option>' + k + '</option>'; }).join('');
+  document.getElementById('lb-month').innerHTML = '<option value="">All months</option>' + LOVE_MONTHS.map(function (n, k) { var v = ('0' + (k + 1)).slice(-2); return '<option value="' + v + '">' + n + '</option>'; }).join('');
+  document.getElementById('lb-prov').innerHTML = '<option value="">All provinces</option>' + Object.keys(provs).sort().map(function (k) { return '<option>' + loveEsc(k) + '</option>'; }).join('');
+  document.getElementById('lb-year').value = years[y] ? y : ''; document.getElementById('lb-month').value = mo; document.getElementById('lb-prov').value = provs[pr] ? pr : '';
+}
+function lbBuild() { lbFilters(); lb.pages = lbFiltered(); if (lb.i >= lb.pages.length) lb.i = lb.pages.length - 1; }
+function lbInfoHtml(m) {
+  if (!m) return '<div class="lb-info lb-end"><div class="lb-end-heart">♡</div><div>' + (lb.pages.length ? 'The end… for now' : 'No memories here yet') + '</div>' +
+    '<button type="button" class="pill-btn" data-lb="add">+ Memory</button></div>';
+  var d = new Date(m.day + 'T00:00:00');
+  return '<div class="lb-info">' +
+    '<div class="lb-date">' + m.day.slice(8, 10) + '<small>' + LOVE_MONTHS[d.getMonth()] + ' ' + d.getFullYear() + '</small></div>' +
+    (m.province ? '<div class="lb-prov">📍 ' + loveEsc(m.province) + '</div>' : '') +
+    (m.note ? '<div class="lb-note">' + loveEsc(m.note) + '</div>' : '') +
+    ((m.tags || []).length ? '<div class="love-tags">' + m.tags.map(function (t) { return '<span>#' + loveEsc(t) + '</span>'; }).join('') + '</div>' : '') +
+    '<button type="button" class="lb-edit" data-lb="edit" title="">✎</button></div>';
+}
+function lbPhotoHtml(m, k) {
+  if (!m) return '<div class="lb-photo lb-empty">♥</div>';
+  if (!m.photos.length) return '<div class="lb-photo lb-empty">♡<small>no photo</small></div>';
+  k = Math.max(0, Math.min(m.photos.length - 1, k || 0));
+  return '<div class="lb-photo" data-lb="photo"><img src="' + lovePhotoUrl(m.photos[k].driveId, 1200) + '" alt="">' +
+    (m.photos.length > 1 ? '<div class="lb-dots">' + m.photos.map(function (_, n) { return '<i class="' + (n === k ? 'on' : '') + '"></i>'; }).join('') + '</div>' : '') + '</div>';
+}
+function lbShow() {
+  var book = document.getElementById('lb-book');
+  book.classList.toggle('open', lb.i >= 0);
+  document.getElementById('lb-day').innerHTML = 'Love day <b>' + (typeof loveDayCount === 'function' ? formatThousands(loveDayCount()) : '') + '</b>';
+  var m = lb.i >= 0 ? lb.pages[lb.i] : null;
+  if (lb.i >= 0) {
+    document.getElementById('lb-top').innerHTML = lbInfoHtml(m);
+    document.getElementById('lb-bottom').innerHTML = lbPhotoHtml(m, lb.photo);
+  }
+  document.getElementById('lb-count').textContent = lb.i < 0 ? '' : (m ? (lb.i + 1) + ' / ' + lb.pages.length : '');
+  document.getElementById('lb-prev').disabled = lb.i < 0;
+  document.getElementById('lb-next').disabled = lb.i >= lb.pages.length;
+}
+// turning a page: the bottom leaf flips up over the top half (or back down)
+function lbTurn(dir) {
+  if (lb.busy) return;
+  if (lb.i < 0 && dir > 0) {                       // open the cover
+    lb.busy = true; lb.i = 0; lb.photo = 0;
+    var cover = document.getElementById('lb-cover');
+    lbShow(); document.getElementById('lb-book').classList.add('opening');
+    setTimeout(function () { document.getElementById('lb-book').classList.remove('opening'); lb.busy = false; }, 700);
+    return;
+  }
+  if (lb.i === 0 && dir < 0) { lb.i = -1; lbShow(); return; }   // back to the cover
+  var to = lb.i + dir;
+  if (to < 0 || to > lb.pages.length) return;
+  lb.busy = true;
+  var leaf = document.getElementById('lb-leaf'), front = document.getElementById('lb-front'), back = document.getElementById('lb-back');
+  var cur = lb.pages[lb.i], nxt = lb.pages[to];
+  if (dir > 0) {
+    front.innerHTML = lbPhotoHtml(cur, lb.photo); back.innerHTML = lbInfoHtml(nxt);
+    document.getElementById('lb-bottom').innerHTML = lbPhotoHtml(nxt, 0);
+    leaf.className = 'lb-leaf go-up';
+  } else {
+    back.innerHTML = lbInfoHtml(cur); front.innerHTML = lbPhotoHtml(nxt, 0);
+    document.getElementById('lb-top').innerHTML = lbInfoHtml(nxt);
+    leaf.className = 'lb-leaf up go-down';
+  }
+  setTimeout(function () { lb.i = to; lb.photo = 0; leaf.className = 'lb-leaf'; lbShow(); lb.busy = false; }, 720);
+}
+function lbOpen(atId) {
+  lbBuild();
+  lb.i = -1; lb.photo = 0;
+  if (atId) {
+    ['lb-year', 'lb-month', 'lb-prov'].forEach(function (id) { document.getElementById(id).value = ''; });
+    lb.pages = lbFiltered();
+    lb.i = Math.max(0, lb.pages.findIndex(function (m) { return m.id === atId; }));
+  }
+  lbShow();
+  var w = document.getElementById('love-book');
+  w.classList.add('on'); requestAnimationFrame(function () { w.classList.add('in'); });
+}
+function lbClose() { var w = document.getElementById('love-book'); w.classList.remove('in'); setTimeout(function () { w.classList.remove('on'); }, 320); }
+
+/* ---------- timeline by year ---------- */
+function ltRender() {
+  var sel = document.getElementById('lt-year'), cur = String(new Date().getFullYear());
+  var years = {}; years[cur] = 1;
+  loveData.memories.forEach(function (m) { years[m.day.slice(0, 4)] = 1; });
+  var y = sel.value || cur;
+  sel.innerHTML = Object.keys(years).sort().reverse().map(function (k) { return '<option>' + k + '</option>'; }).join('');
+  sel.value = y;
+  var list = loveData.memories.filter(function (m) { return m.day.slice(0, 4) === y; }).slice().sort(function (a, b) { return a.day < b.day ? -1 : 1; });
+  var el = document.getElementById('lt-list');
+  if (!list.length) { el.innerHTML = '<div class="lt-empty">Nothing in ' + y + ' yet ♡</div>'; return; }
+  var html = '', last = '';
+  list.forEach(function (m) {
+    var mk = m.day.slice(5, 7);
+    if (mk !== last) { last = mk; html += '<div class="lt-month">' + LOVE_MONTHS[Number(mk) - 1] + '</div>'; }
+    html += '<button type="button" class="lt-item" data-mem="' + m.id + '"><span class="lt-dot"></span>' +
+      '<span class="lt-date">' + m.day.slice(8, 10) + '/' + mk + '</span>' +
+      '<span class="lt-text"><b>' + loveEsc(m.province || '—') + '</b>' + (m.note ? '<small>' + loveEsc(m.note) + '</small>' : '') + '</span>' +
+      (m.photos[0] ? '<img src="' + lovePhotoUrl(m.photos[0].driveId, 160) + '" alt="" loading="lazy">' : '') + '</button>';
+  });
+  el.innerHTML = html;
+}
+function ltOpen() { document.getElementById('lt-year').value = ''; ltRender(); var w = document.getElementById('love-tl'); w.classList.add('on'); requestAnimationFrame(function () { w.classList.add('in'); }); }
+function ltClose() { var w = document.getElementById('love-tl'); w.classList.remove('in'); setTimeout(function () { w.classList.remove('on'); }, 300); }
+
+/* ---------- tapping things in the Love room ---------- */
+window.loveRoomPick = function (what) {
+  if (what === 'album') lbOpen();
+  else if (what === 'frame') document.getElementById('love-frame-file').click();
+};
+function loveSetFrame(file) {
+  if (!file) return;
+  toast('Putting it in the frame…');
+  lovePromise('startLoveFrameUpload', { name: file.name, type: file.type || 'image/jpeg', size: file.size })
+    .then(function (s) { return fetch(s.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type || 'image/jpeg' }, body: file }); })
+    .then(function (res) { if (!res.ok) throw new Error('Drive ' + res.status); return res.json(); })
+    .then(function (d) { return lovePromise('setLoveFrame', d.id); })
+    .then(function (r) { loveData.frame = r.driveId; loveRender(); toast('New picture on the wall ♡'); })
+    .catch(function (e) { toast((e && e.message) || 'Couldn\'t change the frame'); });
+}
+
 function loveFind(id) { return loveData.memories.filter(function (m) { return m.id === Number(id); })[0]; }
 
 /* ---------- viewer ---------- */
@@ -127,13 +209,12 @@ function loveStep(d) {
 
 /* ---------- editor ---------- */
 function loveOpenEditor(mem) {
-  loveEditing = mem ? JSON.parse(JSON.stringify(mem)) : { id: 0, day: (loveData.today || new Date().toISOString().slice(0, 10)), province: '', place: '', note: '', tags: [], photos: [] };
+  loveEditing = mem ? JSON.parse(JSON.stringify(mem)) : { id: 0, day: (loveData.today || new Date().toISOString().slice(0, 10)), province: '', note: '', tags: [], photos: [] };
   loveNewFiles = [];
   var e = loveEditing;
   document.getElementById('love-edit-title').textContent = e.id ? 'Edit memory' : 'New memory';
   document.getElementById('love-f-day').value = e.day;
   document.getElementById('love-f-province').value = e.province;
-  document.getElementById('love-f-place').value = e.place;
   document.getElementById('love-f-note').value = e.note;
   document.getElementById('love-f-tags').value = (e.tags || []).join(', ');
   document.getElementById('love-f-delete').style.display = e.id ? '' : 'none';
@@ -165,7 +246,7 @@ function loveSave() {
     id: e.id,
     day: document.getElementById('love-f-day').value,
     province: document.getElementById('love-f-province').value,
-    place: document.getElementById('love-f-place').value,
+    place: e.place || '',
     note: document.getElementById('love-f-note').value,
     tags: document.getElementById('love-f-tags').value.split(/[,#]/).map(function (t) { return t.trim(); }).filter(Boolean)
   };
@@ -253,16 +334,44 @@ function loveWire() {
   var dl = document.getElementById('love-provinces');
   dl.innerHTML = LOVE_PROVINCES.map(function (p) { return '<option value="' + p + '">'; }).join('');
   document.getElementById('love-add-btn').onclick = function () { loveOpenEditor(null); };
-  document.getElementById('love-search').oninput = loveRender;
-  var onCard = function (e) {
-    var b = e.target.closest('[data-mem]');
-    if (!b) return;
-    var m = loveFind(b.dataset.mem);
-    if (!m) return;
-    if (m.photos.length) loveOpenViewer(m, 0); else loveOpenEditor(m);
-  };
-  document.getElementById('love-list').addEventListener('click', onCard);
-  document.getElementById('love-onthisday').addEventListener('click', onCard);
+  document.getElementById('love-tl-btn').onclick = ltOpen;
+  document.getElementById('lt-close').onclick = ltClose;
+  document.getElementById('lt-year').onchange = ltRender;
+  document.getElementById('lt-list').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-mem]'); if (!b) return;
+    ltClose(); lbOpen(Number(b.dataset.mem));
+  });
+  document.getElementById('love-frame-file').onchange = function () { var f = this.files && this.files[0]; this.value = ''; loveSetFrame(f); };
+  // the book
+  document.getElementById('lb-close').onclick = lbClose;
+  document.getElementById('lb-prev').onclick = function () { lbTurn(-1); };
+  document.getElementById('lb-next').onclick = function () { lbTurn(1); };
+  ['lb-year', 'lb-month', 'lb-prov'].forEach(function (id) { document.getElementById(id).onchange = function () { lb.pages = lbFiltered(); lb.i = lb.i < 0 ? -1 : 0; lb.photo = 0; lbShow(); }; });
+  document.getElementById('lb-cover').onclick = function () { lbTurn(1); };
+  document.getElementById('lb-spread').addEventListener('click', function (e) {
+    var a = e.target.closest('[data-lb]');
+    if (a && a.dataset.lb === 'edit') { var m = lb.pages[lb.i]; if (m) loveOpenEditor(m); return; }
+    if (a && a.dataset.lb === 'add') { loveOpenEditor(null); return; }
+    if (a && a.dataset.lb === 'photo') {
+      var mm = lb.pages[lb.i];
+      if (mm && mm.photos.length > 1) { lb.photo = (lb.photo + 1) % mm.photos.length; document.getElementById('lb-bottom').innerHTML = lbPhotoHtml(mm, lb.photo); }
+      return;
+    }
+  });
+  // swipe up / left = next page, down / right = back
+  var sx = 0, sy = 0, st = document.getElementById('lb-stage');
+  st.addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+  st.addEventListener('touchend', function (e) {
+    var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 40) return;
+    lbTurn((Math.abs(dy) > Math.abs(dx) ? dy : dx) < 0 ? 1 : -1);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (!document.getElementById('love-book').classList.contains('on') || document.querySelector('.modal-overlay.active')) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') lbTurn(1);
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') lbTurn(-1);
+    else if (e.key === 'Escape') lbClose();
+  });
   document.getElementById('love-view-close').onclick = function () { document.getElementById('love-view-modal').classList.remove('active'); };
   document.getElementById('love-view-prev').onclick = function () { loveStep(-1); };
   document.getElementById('love-view-next').onclick = function () { loveStep(1); };

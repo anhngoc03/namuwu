@@ -56,7 +56,7 @@
     if (loading) return;
     loading = true;
     var sc = document.createElement('script');
-    sc.src = '/village3d.js?v=10';
+    sc.src = '/village3d.js?v=11';
     sc.onload = function () { loading = false; var w = loadWaiters; loadWaiters = []; w.forEach(function (f) { f(); }); };
     sc.onerror = function () { loading = false; loadWaiters = []; toast("Couldn't load the village ʕ´-ก̀ʔᐝ"); };
     document.head.appendChild(sc);
@@ -197,7 +197,9 @@
   var VIEW_HOUSE = { 'work-view': 'work', 'expense-view': 'money', 'calendar-view': 'calendar', 'accounts-view': 'account', 'love-view': 'love',
     'datediff-view': 'daycount', 'converter-view': 'pdf', 'qr-view': 'qr', 'symbols-view': 'symbols', 'eating-view': 'yakult',
     'memory-view': 'memory', 'minesweeper-view': 'mines', 'mochi-view': 'mochi' };
-  var roomPhotos = [];
+  var roomPhotos = [], roomFrame = '';
+  // the picture in the Love room's frame (love.js calls this)
+  window.villageRoomFrame = function (url) { roomFrame = url || ''; if (room && room.house === 'love' && roomFrame) room.setPhotos([roomFrame]); };
   // the Love room's frames show the latest album photos (love.js calls this)
   window.villageRoomPhotos = function (urls) { roomPhotos = urls || []; if (room && room.setPhotos) room.setPhotos(roomPhotos); };
   var room = null, roomWant = null;
@@ -211,6 +213,7 @@
     roomWant = house;
     var el = document.getElementById('room-bg');
     document.body.classList.toggle('room-on', !!house);
+    document.body.classList.toggle('love-room', house === 'love');     // the album and the frame in this room can be tapped
     if (!house) { if (room) { lastLeft = room.house; room.destroy(); room = null; } el.classList.remove('on'); return; }
     if (room && room.house === house) { el.classList.add('on'); room.setCorner(currentCorner(house)); return; }
     if (room) { room.destroy(); room = null; }
@@ -223,9 +226,10 @@
         room = Village3D.room(el, {
           house: house, kind: spec.kind, roof: Village3D.ROOF[spec.roof], look: Village3D.LOOKS[idx],
           looks: house === 'love' ? [Village3D.LOVE.her, Village3D.LOVE.him] : null,
-          corner: currentCorner(house), timeMode: timeMode(), walkIn: walkingIn
+          corner: currentCorner(house), timeMode: timeMode(), walkIn: walkingIn,
+          onPick: house === 'love' ? function (what) { if (typeof loveRoomPick === 'function') loveRoomPick(what); } : null
         });
-        if (house === 'love' && roomPhotos.length) room.setPhotos(roomPhotos);
+        if (house === 'love' && roomFrame) room.setPhotos([roomFrame]);
         el.classList.add('on');
       } catch (e) { /* no WebGL: plain page */ }
     };

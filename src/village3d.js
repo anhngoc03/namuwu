@@ -31,10 +31,12 @@ const LAYOUTS = {
     W: 320, H: 236,
     houses: [[16,20],[52,20],[248,20],[284,20],
              [16,74],[52,74],[248,74],[284,74],
-             [16,130],[88,180],[192,30],
+             [16,130],[76,227],[192,30],
              [52,130],[88,130],[124,130],[160,130],
              [16,180],[52,180],[124,180],[160,180]],
     hall: [140, 40], pond: [254, 186], pondR: [8, 4],
+    faces: { 9: Math.PI },                                                  // Love faces the road (north)
+    lot: { house: 9, x0: 60, y0: 214, x1: 150, y1: 262, garage: [126, 244], car: [126, 224], swing: [141, 246] },
     hill: { x: 164, y: 38, w: 120, h: 62, r: 10, height: 3.2 },          // px box (centre), metres high
     ramp: { x: 164, from: 69, to: 104.5 },
     roads: [[8,46.5,96,46.5],[244,46.5,312,46.5],[8,104.5,312,104.5],[8,156.5,196,156.5],[8,206.5,196,206.5],
@@ -46,20 +48,22 @@ const LAYOUTS = {
   port: {
     W: 200, H: 340,
     houses: [[8,14],[8,66],[8,118],[8,170],[8,222],[8,274],
-             [168,14],[168,66],[168,118],[168,274],                    // #9 = Love (bottom right, room for the swing)
+             [168,14],[168,66],[168,118],[70,329],                     // #9 = Love, its own lot at the bottom
              [118,26],                                                  // #10 = Goals, on the hill
              [168,170],[168,222],
              [56,100],[88,100],[120,100],[56,152],[88,152],[120,152]],
-    hall: [84, 32], pond: [100, 266], pondR: [6.5, 3.6],
+    hall: [84, 32], pond: [100, 256], pondR: [6.5, 3.6],
+    faces: { 9: Math.PI },
+    lot: { house: 9, x0: 58, y0: 318, x1: 148, y1: 368, garage: [124, 346], car: [124, 326], swing: [140, 348] },
     hill: { x: 100, y: 34, w: 104, h: 58, r: 10, height: 3.2 },
     ramp: { x: 100, from: 63, to: 90.5 },
     roads: [[44.5,90.5,155.5,90.5],[44.5,40.5,44.5,318],[155.5,40.5,155.5,300],[44.5,128.5,155.5,128.5],[44.5,180.5,155.5,180.5],
-            [56,58.5,150,58.5],[100,58.5,100,90.5]],
-    river: [[0,26],[-14,120],[-12,230],[0,300],[34,316],[62,296],[78,278]],
+            [56,58.5,150,58.5],[100,58.5,100,90.5],[44.5,312,130,312]],
+    river: [[0,26],[-14,120],[-12,210],[10,248],[46,252],[76,256]],
     mountains: [[-2,-47.5,4.5,11],[9,-48,4.5,9],[-11,-46.5,4,8],[-20,-42,4,7]]
   }
 };
-let LAY, HOUSE_POS, HALL_POS, POND, ROADS, ISLAND, HILL, RAMP, RIVER, MOUNTAINS;
+let LAY, HOUSE_POS, HALL_POS, POND, ROADS, ISLAND, HILL, RAMP, RIVER, MOUNTAINS, FACE, LOT;
 function useLayout(key) {
   LAY = LAYOUTS[key];
   const P = (x, y) => [(x - LAY.W / 2) / 4, (y - LAY.H / 2) / 4];
@@ -73,6 +77,12 @@ function useLayout(key) {
   RAMP = { x: P(LAY.ramp.x, 0)[0], z0: P(0, LAY.ramp.from)[1], z1: P(0, LAY.ramp.to)[1], hw: 1.1 };
   RIVER = LAY.river.map(([x, y]) => { const q = P(x, y); return { x: q[0], z: q[1] }; });
   MOUNTAINS = LAY.mountains;
+  FACE = HOUSE_POS.map((_, i) => (LAY.faces && LAY.faces[i]) || 0);
+  LOT = null;
+  if (LAY.lot) {
+    const L = LAY.lot, a0 = P(L.x0, L.y0), a1 = P(L.x1, L.y1);
+    LOT = { house: L.house, x0: a0[0], z0: a0[1], x1: a1[0], z1: a1[1], garage: P(L.garage[0], L.garage[1]), car: P(L.car[0], L.car[1]), swing: P(L.swing[0], L.swing[1]) };
+  }
   const a = LAY.W / 8 + 11, b = LAY.H / 8 + 11;
   ISLAND = { a, b, n: 2.6, w: a * 2, d: b * 2 };
 }
@@ -100,6 +110,7 @@ function riverDist(x, z) {
   }
   return best;
 }
+const inLot = (x, z, pad) => !!LOT && x > LOT.x0 - (pad || 0) && x < LOT.x1 + (pad || 0) && z > LOT.z0 - (pad || 0) && z < LOT.z1 + (pad || 0);
 const onRoadAt = (x, z, pad) => ROADS.some(([x1, z1, x2, z2]) => x >= Math.min(x1, x2) - 0.9 - pad && x <= Math.max(x1, x2) + 0.9 + pad && z >= Math.min(z1, z2) - 0.9 - pad && z <= Math.max(z1, z2) + 0.9 + pad);
 // distance from the centre to the shore at angle t
 function shoreR(t, scale) {
@@ -190,7 +201,9 @@ function heart(color) {
 
 function makeHouse(spec, hall) {
   const g = new THREE.Group();
-  const w = hall ? 10 : 5.2, d = hall ? 7 : 4.2, h = hall ? 4.6 : 3.2, rh = hall ? 3.6 : 2.6;   // 1 unit ≈ 1 m
+  const two = !!(spec && spec.floors === 2);                         // the Love house: two storeys + a balcony
+  const w = hall ? 10 : (two ? 6 : 5.2), d = hall ? 7 : (two ? 4.8 : 4.2), h = hall ? 4.6 : (two ? 6.2 : 3.2), rh = hall ? 3.6 : 2.6;   // 1 unit ≈ 1 m
+  const winY = two ? 0.3 + 1.95 : 0.3 + h * 0.6;                        // ground-floor windows
   g.add(box(w + 0.6, 0.3, d + 0.6, COL.wall2, 0, 0.15, 0));           // base
   g.add(box(w, h, d, COL.wall, 0, 0.3 + h / 2, 0));                      // walls
   const roof = gableRoof(w, d, rh, hall ? COL.roof.hall : COL.roof[spec.roof]);
@@ -208,18 +221,38 @@ function makeHouse(spec, hall) {
   g.userData.wm = wm;
   const wx = hall ? [-3.6, -2, 2, 3.6] : [-1.6, 1.6];
   wx.forEach((x) => {
-    g.add(box(1.1, 1.1, 0.1, COL.frame, x, 0.3 + h * 0.6, d / 2 + 0.01));
-    g.add(box(0.85, 0.85, 0.12, 0, x, 0.3 + h * 0.6, d / 2 + 0.03, wm));
+    g.add(box(1.1, 1.1, 0.1, COL.frame, x, winY, d / 2 + 0.01));
+    g.add(box(0.85, 0.85, 0.12, 0, x, winY, d / 2 + 0.03, wm));
   });
-  [-1, 1].forEach((sx) => g.add(box(0.12, 0.85, 0.85, 0, sx * (w / 2 + 0.01), 0.3 + h * 0.6, 0, wm)));
+  [-1, 1].forEach((sx) => g.add(box(0.12, 0.85, 0.85, 0, sx * (w / 2 + 0.01), winY, 0, wm)));
+  if (two) {
+    const f2 = 0.3 + 3.3;                                                  // first-floor level
+    g.add(box(w + 0.12, 0.16, d + 0.12, COL.wall2, 0, f2, 0));            // floor line
+    [-1, 1].forEach((sx) => g.add(box(0.12, 0.85, 0.85, 0, sx * (w / 2 + 0.01), f2 + 1.4, 0.6, wm)));
+    // balcony with a railing and little pots
+    g.add(box(w - 0.6, 0.18, 1.3, 0xf0dcc4, 0, f2 + 0.05, d / 2 + 0.65));
+    for (let k = 0; k <= 8; k++) g.add(box(0.06, 0.8, 0.06, 0xffffff, -(w - 0.8) / 2 + k * (w - 0.8) / 8, f2 + 0.5, d / 2 + 1.25));
+    g.add(box(w - 0.6, 0.07, 0.08, 0xffffff, 0, f2 + 0.92, d / 2 + 1.25));
+    [-1, 1].forEach((sx) => g.add(box(0.07, 0.07, 1.25, 0xffffff, sx * (w - 0.7) / 2, f2 + 0.92, d / 2 + 0.65)));
+    [-2.2, -1.75, 1.85, 2.3].forEach((x, k) => {
+      g.add(box(0.32, 0.3, 0.32, [0xf9c39c, 0xf6a9bd][k % 2], x, f2 + 0.3, d / 2 + 0.95));
+      const lf = new THREE.Mesh(new THREE.IcosahedronGeometry(0.24, 0), mat(COL.leaf[k % 3], { flatShading: true })); lf.position.set(x, f2 + 0.6, d / 2 + 0.95); lf.castShadow = true; g.add(lf);
+      g.add(box(0.1, 0.1, 0.1, COL.flower[k % COL.flower.length], x + 0.08, f2 + 0.78, d / 2 + 0.98));
+    });
+    // a big glass door out to the balcony
+    g.add(box(2.3, 2.3, 0.1, 0xffffff, 0, f2 + 1.25, d / 2 + 0.01));
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(2.1, 2.1, 0.06), new THREE.MeshLambertMaterial({ color: 0xbfe6f2, transparent: true, opacity: 0.55, emissive: 0xffd27a, emissiveIntensity: 0 }));
+    glass.position.set(0, f2 + 1.25, d / 2 + 0.05); g.add(glass); windowMats.push(glass.material); g.userData.wm2 = glass.material;
+    g.add(box(0.06, 2.1, 0.1, 0xffffff, 0, f2 + 1.25, d / 2 + 0.07));
+  }
   if (!hall) {
     g.add(box(0.6, 1.4, 0.6, COL.wall2, w / 4, 0.3 + h + rh * 0.55, -d / 5));            // chimney
     g.userData.chimney = new THREE.Vector3(w / 4, 0.3 + h + rh * 0.55 + 1, -d / 5);
     g.add(box(0.8, 0.2, 0.8, 0xe2c9ad, w / 4, 0.3 + h + rh * 0.55 + 0.75, -d / 5));
     // little flower box under the windows
     wx.forEach((x) => {
-      g.add(box(1.2, 0.25, 0.35, COL.door, x, 0.3 + h * 0.6 - 0.75, d / 2 + 0.2));
-      [-0.35, 0, 0.35].forEach((o, k) => g.add(box(0.22, 0.22, 0.22, COL.flower[k], x + o, 0.3 + h * 0.6 - 0.52, d / 2 + 0.22)));
+      g.add(box(1.2, 0.25, 0.35, COL.door, x, winY - 0.75, d / 2 + 0.2));
+      [-0.35, 0, 0.35].forEach((o, k) => g.add(box(0.22, 0.22, 0.22, COL.flower[k], x + o, winY - 0.52, d / 2 + 0.22)));
     });
   }
   if (spec && spec.heart) {
@@ -246,6 +279,69 @@ function makeHouse(spec, hall) {
   g.userData.bell = bell;
   g.userData.doorZ = d / 2 + 1.3;
   return g;
+}
+
+/* ---------------- the Love lot: fence, garage, driveway and a little sports car ---------------- */
+function makeCar() {
+  // a soft, rounded rear-engine coupé — "911-ish"
+  const g = new THREE.Group(), body = 0xe7eaee, dark = 0x2e2a36, glass = 0x6f86a0;
+  g.add(box(1.75, 0.42, 4.1, body, 0, 0.5, 0));                                     // lower body
+  [-1, 1].forEach((sx) => {                                                          // round front fenders
+    const f = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.3, 14, 1, false, 0, Math.PI), mat(body));
+    f.rotation.set(Math.PI / 2, 0, -Math.PI / 2); f.position.set(sx * 0.62, 0.66, 1.25); f.scale.set(1, 1, 0.7); f.castShadow = true; g.add(f);
+    const hl = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.06, 14), mat(0xfff7d6, { emissive: 0xfff2b0, emissiveIntensity: 0.3 }));
+    hl.rotation.x = Math.PI / 2; hl.position.set(sx * 0.62, 0.78, 1.92); g.add(hl);
+    g.add(box(0.3, 0.08, 0.04, 0xe05a4f, sx * 0.55, 0.62, -2.06));                 // tail lights
+  });
+  const roof = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), mat(body));
+  roof.scale.set(0.82, 0.55, 1.55); roof.position.set(0, 0.7, -0.35); roof.castShadow = true; g.add(roof);
+  const win = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), mat(glass));
+  win.scale.set(0.84, 0.47, 1.2); win.position.set(0, 0.72, -0.2); g.add(win);
+  g.add(box(1.5, 0.05, 0.25, dark, 0, 0.92, -2.0));                                // little rear wing
+  [[-0.82, 1.3], [0.82, 1.3], [-0.82, -1.25], [0.82, -1.25]].forEach(([x, z]) => {
+    const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.24, 14), mat(dark)); wh.rotation.z = Math.PI / 2; wh.position.set(x, 0.34, z); wh.castShadow = true; g.add(wh);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.26, 10), mat(0xc9ced6)); hub.rotation.z = Math.PI / 2; hub.position.set(x, 0.34, z); g.add(hub);
+  });
+  g.add(box(0.5, 0.14, 0.03, 0xffffff, 0, 0.45, 2.06));                            // plate
+  return g;
+}
+function buildLot(world, face) {
+  if (!LOT) return { posts: [], blocks: [] };
+  const L = LOT, out = { posts: [], blocks: [] };
+  const hx = HOUSE_POS[L.house][0], [gx, gz] = L.garage, [cx, cz] = L.car;
+  const front = face === Math.PI ? L.z0 : L.z1;                                   // the side facing the road
+  // fence with a gate at the path and an opening for the driveway
+  const gaps = [[hx - 1.3, hx + 1.3], [cx - 2.6, cx + 2.6]];
+  const inGap = (x, z) => Math.abs(z - front) < 0.01 && gaps.some(([a, b]) => x > a && x < b);
+  const side = (x0, z0, x1, z1) => {
+    const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(len / 1.4));
+    for (let k = 0; k <= n; k++) {
+      const x = lerp(x0, x1, k / n), z = lerp(z0, z1, k / n);
+      if (inGap(x, z)) continue;
+      world.add(box(0.14, 0.95, 0.14, 0xffffff, x, 0.47, z)); out.posts.push({ x, z, r: 0.3 });
+      if (k < n) {
+        const mx = lerp(x0, x1, (k + 0.5) / n), mz = lerp(z0, z1, (k + 0.5) / n);
+        if (inGap(mx, mz)) continue;
+        const ang = Math.atan2(x1 - x0, z1 - z0), seg = len / n;
+        [0.35, 0.75].forEach((y) => { const r = box(0.06, 0.08, seg, 0xffffff, mx, y, mz); r.rotation.y = ang; world.add(r); });
+      }
+    }
+  };
+  side(L.x0, L.z0, L.x1, L.z0); side(L.x1, L.z0, L.x1, L.z1); side(L.x1, L.z1, L.x0, L.z1); side(L.x0, L.z1, L.x0, L.z0);
+  // garage: walls, flat roof, roll-up door facing the road
+  const gr = new THREE.Group(); gr.position.set(gx, 0, gz); gr.rotation.y = face; world.add(gr);
+  gr.add(box(4.2, 2.7, 4.6, COL.wall, 0, 1.35, 0)); gr.add(box(4.6, 0.25, 5.0, COL.wall2, 0, 2.8, 0));
+  gr.add(box(3.4, 2.2, 0.08, 0xd9dde3, 0, 1.1, 2.32));
+  for (let k = 0; k < 8; k++) gr.add(box(3.4, 0.04, 0.1, 0xb8bec8, 0, 0.2 + k * 0.27, 2.36));
+  out.blocks.push({ x: gx, z: gz, hw: 2.4, hd: 2.6 });
+  // the driveway out to the road + the car on it, side-on
+  const dz0 = Math.min(front, cz) - 2, dz1 = Math.max(front, cz) + 1;
+  world.add(box(4.8, 0.05, Math.abs(dz1 - dz0), COL.road, cx, 0.025, (dz0 + dz1) / 2));
+  const car = makeCar(); car.position.set(cx, 0, cz); car.rotation.y = Math.PI / 2; world.add(car);
+  out.blocks.push({ x: cx, z: cz, hw: 2.3, hd: 1.1 });
+  // a path from the gate to the door
+  world.add(box(1.4, 0.05, Math.abs(HOUSE_POS[L.house][1] - front), 0xf0dcc4, hx, 0.03, (HOUSE_POS[L.house][1] + front) / 2));
+  return out;
 }
 
 function makeTree(r) {
@@ -347,7 +443,7 @@ function hexCss(n, k) {          // colour → css, k = brightness factor
   if (k) { c.r = Math.min(1, c.r * k); c.g = Math.min(1, c.g * k); c.b = Math.min(1, c.b * k); }
   return '#' + c.getHexString();
 }
-function paintSkin(look) {
+function paintSkin(look, sleeping) {
   const cv = document.createElement('canvas'); cv.width = cv.height = 64;
   const x = cv.getContext('2d');
   let seed = (look.hair ^ look.shirt ^ look.skin) >>> 0;
@@ -371,7 +467,10 @@ function paintSkin(look) {
   fill(8, 8, 8, 2, hair);                               // fringe
   dot(8, 10, hair); dot(15, 10, hair); dot(9, 10, hair);
   if (look.style === 'cap') { fill(8, 0, 8, 8, look.cap); fill(8, 8, 8, 2, look.cap); fill(0, 8, 8, 2, look.cap); fill(16, 8, 8, 2, look.cap); fill(24, 8, 8, 2, look.cap); }
-  [[9, 12], [13, 12]].forEach(([ex, ey]) => { dot(ex, ey, '#ffffff'); dot(ex + 1, ey, '#3a2e33'); dot(ex, ey + 1, '#ffffff'); dot(ex + 1, ey + 1, '#3a2e33'); });
+  [[9, 12], [13, 12]].forEach(([ex, ey]) => {
+    if (sleeping) { dot(ex, ey + 1, '#3a2e33'); dot(ex + 1, ey + 1, '#3a2e33'); return; }     // eyes closed
+    dot(ex, ey, '#ffffff'); dot(ex + 1, ey, '#3a2e33'); dot(ex, ey + 1, '#ffffff'); dot(ex + 1, ey + 1, '#3a2e33');
+  });
   dot(9, 14, '#ffa3b5'); dot(14, 14, '#ffa3b5');        // blush
   dot(11, 14, hexCss(sk, 0.78)); dot(12, 14, hexCss(sk, 0.78));   // nose shadow
   dot(11, 15, '#c9707c'); dot(12, 15, '#c9707c');       // mouth
@@ -423,6 +522,7 @@ function skinBox(pw, ph, pd, u, v) {
 function makePerson(look) {
   const g = new THREE.Group(), parts = {};
   const m = new THREE.MeshLambertMaterial({ map: paintSkin(look) });
+  parts.mat = m; parts.look = look;
   const part = (geo, x, y, z) => { const me = new THREE.Mesh(geo, m); me.position.set(x, y, z); me.castShadow = true; me.receiveShadow = true; return me; };
   const pivot = (x, y, z, mesh) => { const p = new THREE.Group(); p.position.set(x, y, z); p.add(mesh); return p; };
   // legs hang from the hips, arms from the shoulders, the head sits on the neck
@@ -927,7 +1027,7 @@ function create(container, opts) {
     patches.count = k; patches.receiveShadow = true; world.add(patches); dummy.scale.set(1, 1, 1); }
   // flowers + grass tufts (instanced)
   const fGeo = new THREE.BoxGeometry(0.22, 0.22, 0.22), tGeo = new THREE.BoxGeometry(0.08, 0.35, 0.08);
-  const free = (x, z) => onIsland(x, z, 2.2) && !inPond(x, z, 1.5) && !nearCliff(x, z, 0.6) && riverDist(x, z) > 2.4 && !inPark(x, z) && !onRamp(x, z) &&
+  const free = (x, z) => onIsland(x, z, 2.2) && !inPond(x, z, 1.5) && !inLot(x, z, 0.8) && !nearCliff(x, z, 0.6) && riverDist(x, z) > 2.4 && !inPark(x, z) && !onRamp(x, z) &&
     !ROADS.some(([x1, z1, x2, z2]) => x >= Math.min(x1, x2) - 1.2 && x <= Math.max(x1, x2) + 1.2 && z >= Math.min(z1, z2) - 1.2 && z <= Math.max(z1, z2) + 1.2) &&
     !HOUSE_POS.some(([hx, hz]) => Math.abs(x - hx) < 3.6 && Math.abs(z - hz) < 3.8) &&
     !(Math.abs(x - HALL_POS[0]) < 6 && Math.abs(z - HALL_POS[1]) < 5.4);
@@ -953,6 +1053,7 @@ function create(container, opts) {
   // keep the yard around the Love house clear for the swing
   const loveIdx = (opts.houses || []).findIndex((hh) => hh.id === 'love');
   const loveYard = (x, z) => {
+    if (LOT) return inLot(x, z, 1.2);
     if (loveIdx < 0 || !HOUSE_POS[loveIdx]) return false;
     const [lx, lz] = HOUSE_POS[loveIdx];
     return (Math.abs(x - lx) < 7 && z > lz + 2.5 && z < lz + 12) || (Math.abs(z - lz) < 3.5 && Math.abs(x - lx) < 8.5) || (Math.abs(x - lx) < 3.5 && z < lz && z > lz - 8);
@@ -991,10 +1092,14 @@ function create(container, opts) {
   const houseObjs = [], doors = [];
   (opts.houses || []).forEach((spec, i) => {
     if (!HOUSE_POS[i]) return;
-    const h = makeHouse(spec, false); h.position.set(HOUSE_POS[i][0], groundY(HOUSE_POS[i][0], HOUSE_POS[i][1]), HOUSE_POS[i][1]);
+    const h = makeHouse(spec.id === 'love' ? Object.assign({ floors: 2 }, spec) : spec, false);
+    h.position.set(HOUSE_POS[i][0], groundY(HOUSE_POS[i][0], HOUSE_POS[i][1]), HOUSE_POS[i][1]);
+    h.rotation.y = FACE[i] || 0; h.userData.face = FACE[i] || 0;
     h.userData.id = spec.id; world.add(h); houseObjs.push(h);
-    doors.push({ x: HOUSE_POS[i][0], z: HOUSE_POS[i][1] + h.userData.doorZ });
+    const f = h.userData.face;
+    doors.push({ x: HOUSE_POS[i][0] + Math.sin(f) * h.userData.doorZ, z: HOUSE_POS[i][1] + Math.cos(f) * h.userData.doorZ });
   });
+  const lot = buildLot(world, LOT ? FACE[LOT.house] || 0 : 0);
   const hall = makeHouse(null, true); hall.position.set(HALL_POS[0], groundY(HALL_POS[0], HALL_POS[1]), HALL_POS[1]); hall.userData.id = 'hall'; world.add(hall); houseObjs.push(hall);
   const hallDoor = { x: HALL_POS[0], z: HALL_POS[1] + hall.userData.doorZ };
   doors.push(hallDoor);
@@ -1126,12 +1231,14 @@ function create(container, opts) {
       p.path = graph.path(a, b).concat([goal]);
     }
   }
+  // just in front of the door (houses can face any way)
+  function doorStep(i) { const n = homeDoor(i), f = FACE[i] || 0; return { x: n.x - Math.sin(f) * 0.9, z: n.z - Math.cos(f) * 0.9, f }; }
   function comeOut(p) {
-    const n = homeDoor(p.home);
+    const d = doorStep(p.home);
     p.inside = false; p.g.visible = true;
-    p.g.position.set(n.x + rnd(-0.3, 0.3), 0, n.z - 0.9); p.g.rotation.set(0, 0, 0);
+    p.g.position.set(d.x + rnd(-0.3, 0.3), 0, d.z); p.g.rotation.set(0, d.f, 0);
   }
-  function goInside(p, stay) { const n = homeDoor(p.home); goTo(p, { x: n.x, z: n.z - 0.9 }, 'in'); p.stay = stay; }
+  function goInside(p, stay) { const d = doorStep(p.home); goTo(p, { x: d.x, z: d.z }, 'in'); p.stay = stay; }
   let workSpots = null, pondSpots = null;
   function spotsReady() {
     if (workSpots) return;
@@ -1213,7 +1320,7 @@ function create(container, opts) {
     const her = couple.her;
     if (her.inside) {
       if (him.inside) return false;
-      const n = homeDoor(him.home), dx = n.x - him.g.position.x, dz = n.z - 0.9 - him.g.position.z, d = Math.hypot(dx, dz);
+      const n = doorStep(him.home), dx = n.x - him.g.position.x, dz = n.z - him.g.position.z, d = Math.hypot(dx, dz);
       if (d < 0.15) { him.inside = true; him.g.visible = false; return false; }
       const st = Math.min(d, her.speed * 1.2 * dt); him.g.position.x += dx / d * st; him.g.position.z += dz / d * st;
       him.g.rotation.y = Math.atan2(dx, dz); him.v = her.speed;
@@ -1259,7 +1366,14 @@ function create(container, opts) {
   // the Love couple's swing: beside their house, on grass, not on a road
   const onRoad = (x, z, pad) => ROADS.some(([x1, z1, x2, z2]) => x >= Math.min(x1, x2) - 0.9 - pad && x <= Math.max(x1, x2) + 0.9 + pad && z >= Math.min(z1, z2) - 0.9 - pad && z <= Math.max(z1, z2) + 0.9 + pad);
   let swing = null;
-  if (couple.home != null) {
+  lot.blocks.forEach((b) => blocks.push(b));
+  lot.posts.forEach((q) => posts.push(q));
+  if (couple.home != null && LOT && LOT.house === couple.home) {
+    const [sx, sz] = LOT.swing, f = FACE[couple.home] || 0;
+    swing = makeSwing(); swing.position.set(sx, 0, sz); swing.rotation.y = f; world.add(swing);
+    swing.userData.front = { x: sx + Math.sin(f) * 1.25, z: sz + Math.cos(f) * 1.25 };
+    blocks.push({ x: sx, z: sz, hw: 1.55, hd: 1.55 });
+  } else if (couple.home != null) {
     const [hx, hz] = HOUSE_POS[couple.home];
     // in front of the door first (across the path), then beside the house
     const tries = [[0, 7.2], [0, 6.4], [-2.2, 7.2], [2.2, 7.2], [0, 8.4], [4.6, 0.8], [-4.6, 0.8], [0, -5.2]];
@@ -1632,11 +1746,9 @@ function create(container, opts) {
   let fly = null, flown = false, lastView = null;
   const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);   // smooth in & out
   function doorPose(h) {
-    const dz = h.userData.doorZ - 1.3, z = h.position.z + dz;
-    return {
-      near: new THREE.Vector3(h.position.x, 1.75, z + 3.2), nearT: new THREE.Vector3(h.position.x, 1.45, z - 1),
-      inside: new THREE.Vector3(h.position.x, 1.6, z + 0.35), insideT: new THREE.Vector3(h.position.x, 1.4, z - 2)
-    };
+    const f = h.userData.face || 0, sx = Math.sin(f), sz = Math.cos(f), dd = h.userData.doorZ - 1.3, y = h.position.y;
+    const at = (k, hy) => new THREE.Vector3(h.position.x + sx * (dd + k), y + hy, h.position.z + sz * (dd + k));
+    return { near: at(3.2, 1.75), nearT: at(-1, 1.45), inside: at(0.35, 1.6), insideT: at(-2, 1.4) };
   }
   // path through up to 3 points (quadratic-ish blend): start → door → (inside)
   function along(a, b, c, k) {
@@ -1956,24 +2068,78 @@ const ROOMS = {
     },
     corners: { main: [-0.2, 2.9, 5.8, -0.9, 1.2, -2.4] } },
   love: { first: 'main', build(g, R) {
-      // sofa for two, photo frames on the wall (they show the album's latest photos)
+      const W = -3.44;                                   // back wall
+      // sofa for two
       const so = new THREE.Group(); so.position.set(-0.4, 0, -2.5); g.add(so);
       so.add(box(2.6, 0.45, 0.9, 0xf6a9bd, 0, 0.32, 0)); so.add(box(2.6, 0.75, 0.25, 0xf19bb0, 0, 0.8, -0.35));
       [-1, 1].forEach((sx) => so.add(box(0.25, 0.65, 0.9, 0xf19bb0, sx * 1.3, 0.45, 0)));
       const pillow = heart(0xff7f9e); pillow.scale.setScalar(0.4); pillow.position.set(1.0, 0.75, -0.15); so.add(pillow);
       R.seats = [{ x: -0.85, z: -2.35, ry: 0, y: 0.56 }, { x: 0.05, z: -2.35, ry: 0, y: 0.56 }];
-      R.sofa = true;
-      R.frames = [];
-      [[-3.3, 2.45, 1.0, 0.8], [-2.0, 2.6, 0.8, 1.0], [-0.8, 2.45, 1.0, 0.8], [0.3, 2.55, 0.7, 0.9], [-2.75, 1.62, 0.7, 0.55], [-1.25, 1.66, 0.6, 0.5]].forEach(([x, y, w, h], i) => {
-        g.add(box(w + 0.12, h + 0.12, 0.05, [0xffffff, 0xf6d4dc, 0xfff1a8][i % 3], x, y, -3.42));
-        const pic = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: [0xffd6df, 0xd9c9f0, 0xbfe6f2][i % 3] }));
-        pic.position.set(x, y, -3.385); g.add(pic); R.frames.push(pic);
+      R.sofa = true; R.couple = true;
+      // two badminton rackets, crossed, and the Yonex bag on a hook
+      [[-1.95, 2.35, 0.55, 0x2f3d6b], [-1.65, 2.35, -0.55, 0xe8652b]].forEach(([x, y, rz, c]) => {
+        const rk = new THREE.Group(); rk.position.set(x, y, W + 0.06); rk.rotation.z = rz; g.add(rk);
+        rk.add(box(0.06, 0.34, 0.05, 0xffffff, 0, -0.5, 0));                  // grip
+        rk.add(box(0.025, 0.34, 0.025, 0x9aa7b8, 0, -0.17, 0));                // shaft
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.02, 6, 22), mat(c)); ring.scale.y = 1.3; ring.position.y = 0.2; rk.add(ring);
+        for (let k = -3; k <= 3; k++) { rk.add(box(0.004, 0.42, 0.004, 0xffffff, k * 0.045, 0.2, 0)); rk.add(box(0.32, 0.004, 0.004, 0xffffff, 0, 0.2 + k * 0.055, 0)); }
       });
+      { const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64; const x = cv.getContext('2d');
+        x.fillStyle = '#ffffff'; x.fillRect(0, 0, 128, 64);
+        x.fillStyle = '#e8652b'; x.fillRect(0, 8, 128, 16);
+        x.fillStyle = '#26305a'; x.beginPath(); x.moveTo(0, 64); x.lineTo(0, 24); x.lineTo(14, 24); x.lineTo(30, 64); x.fill();
+        x.fillStyle = '#26305a'; x.fillRect(0, 6, 128, 2); x.fillRect(26, 28, 102, 2);
+        x.font = 'bold 13px sans-serif'; x.fillText('YONEX', 74, 54);
+        x.beginPath(); x.arc(60, 49, 3, 0, 7); x.arc(67, 49, 3, 0, 7); x.lineWidth = 2; x.strokeStyle = '#26305a'; x.stroke();
+        const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace;
+        const white = mat(0xffffff), front = new THREE.MeshLambertMaterial({ map: tx });
+        const bag = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.58, 0.36), [white, white, mat(0xe8652b), white, front, front]);
+        bag.position.set(1.25, 1.62, W + 0.22); bag.castShadow = true; g.add(bag);
+        [-0.28, 0.28].forEach((dx) => { g.add(box(0.06, 0.5, 0.03, 0xffffff, 1.25 + dx * 0.9, 2.02, W + 0.2)); });
+        g.add(box(0.5, 0.06, 0.06, 0x26305a, 1.25, 2.28, W + 0.2));          // handle top
+        g.add(box(0.06, 0.06, 0.16, 0x8c7a6b, 1.25, 2.32, W + 0.1)); }      // hook
+      // one picture frame — tap it to change the photo
+      g.add(box(1.42, 1.08, 0.06, 0xc49674, -0.4, 2.55, W + 0.02));
+      g.add(box(1.28, 0.94, 0.07, 0xfffaf0, -0.4, 2.55, W + 0.03));
+      const pic = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.78), new THREE.MeshBasicMaterial({ color: 0xffd6df }));
+      pic.position.set(-0.4, 2.55, W + 0.075); pic.userData.pick = 'frame'; g.add(pic);
+      R.frames = [pic];
       // fairy lights along the wall top
       for (let k = 0; k < 14; k++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), new THREE.MeshBasicMaterial({ color: [0xfff1a8, 0xffb6c1][k % 2] })); b.position.set(-4 + k * 0.62, 3.45 - Math.sin(k * 0.9) * 0.08, -3.38); g.add(b); }
-      rPlant(g, 3.9, -1.7); rShelf(g, 4.25, 0.6, -Math.PI / 2, 4);
+      // a little table beside the sofa with the yellow album (a heart on the cover) — tap it
+      const st = new THREE.Group(); st.position.set(1.65, 0, -2.3); g.add(st);
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.06, 18), mat(0xe2c39e)); top.position.y = 0.6; st.add(top);
+      st.add(box(0.07, 0.6, 0.07, 0xb08a68, 0, 0.3, 0));
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 0.04, 14), mat(0xb08a68)); base.position.y = 0.02; st.add(base);
+      const album = new THREE.Group(); album.position.set(0, 0.67, 0); album.rotation.y = -0.35; album.userData.pick = 'album'; st.add(album);
+      album.add(box(0.5, 0.08, 0.38, 0xf2c14e, 0, 0, 0));
+      album.add(box(0.04, 0.085, 0.38, 0xd9a62e, -0.25, 0, 0));
+      const ah = heart(0xe0485f); ah.scale.setScalar(0.15); ah.rotation.x = -Math.PI / 2; ah.position.set(0.02, 0.045, 0.06); album.add(ah);
+      R.album = album;
+      // the dining table (bún chả at lunchtime)
+      const dt = new THREE.Group(); dt.position.set(1.3, 0, 1.25); g.add(dt);
+      dt.add(box(1.5, 0.06, 0.95, 0xe2c39e, 0, 0.76, 0));
+      [[-0.65, -0.38], [0.65, -0.38], [-0.65, 0.38], [0.65, 0.38]].forEach(([a, b]) => dt.add(box(0.06, 0.76, 0.06, 0xb08a68, a, 0.38, b)));
+      [-1, 1].forEach((sx) => {
+        const bowl = (bx, bz, fill) => {
+          const bw = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.1, 0.1, 12), mat(0xffffff)); bw.position.set(bx, 0.84, bz); dt.add(bw);
+          const f = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.135, 0.02, 12), mat(fill)); f.position.set(bx, 0.88, bz); dt.add(f);
+        };
+        bowl(sx * 0.4 - 0.16, -0.18, 0xf6efe0);                               // bún
+        bowl(sx * 0.4 + 0.16, -0.18, 0xd98c4a);                               // nước chấm with chả
+        [[-0.05, -0.2], [0.05, -0.14], [0.0, -0.24]].forEach(([a, b]) => dt.add(box(0.07, 0.03, 0.05, 0x8a5233, sx * 0.4 + 0.16 + a, 0.9, b)));
+        dt.add(box(0.32, 0.012, 0.012, 0xc49674, sx * 0.4, 0.8, 0.05));      // chopsticks
+        dt.add(box(0.32, 0.012, 0.012, 0xc49674, sx * 0.4, 0.8, 0.08));
+      });
+      const herbs = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.03, 12), mat(0xffffff)); herbs.position.set(0, 0.8, -0.05); dt.add(herbs);
+      for (let k = 0; k < 7; k++) dt.add(box(0.07, 0.04, 0.05, [0x6fb85a, 0x8fcc7c][k % 2], (k % 3 - 1) * 0.08, 0.83, (Math.floor(k / 3) - 1) * 0.07 - 0.05));
+      // side by side behind the table, facing the room
+      rChair(g, 1.3 - 0.4, 1.25 - 0.85, 0); rChair(g, 1.3 + 0.4, 1.25 - 0.85, 0);
+      R.dining = [{ x: 1.3 - 0.4, z: 1.25 - 0.8, ry: 0, y: 0.54 }, { x: 1.3 + 0.4, z: 1.25 - 0.8, ry: 0, y: 0.54 }];
+      R.windowX = 3.1;
+      rPlant(g, 3.95, -2.9);
     },
-    corners: { main: [0.2, 2.6, 5.4, -0.4, 1.5, -2.8] } },
+    corners: { main: [0.2, 2.8, 6.6, 0.0, 1.3, -1.9] } },
   game: { first: 'main', build(g, R) {
       // TV on a low cabinet, a console, a bean bag to sit on, posters
       g.add(box(2.6, 0.6, 0.6, 0xc49674, 0, 0.3, -3.05));
@@ -2052,6 +2218,24 @@ function createRoom(container, opts) {
     return w;
   });
   const who = R.sofa || R.gamer ? null : sitters[0] || null;
+  let coupleMode = '';
+  const zzz = textSprite('z Z z', '#7a6a9a', 0.9, 0.45); g.add(zzz);
+  // tapping things in the room (the Love album and the frame)
+  if (opts.onPick) {
+    const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(); let down = null;
+    renderer.domElement.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
+    renderer.domElement.addEventListener('pointerup', (e) => {
+      if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) { down = null; return; }
+      down = null;
+      const r = renderer.domElement.getBoundingClientRect();
+      ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      ray.setFromCamera(ndc, camera);
+      const hit = ray.intersectObjects(g.children, true).find((h) => { let o = h.object; while (o && !o.userData.pick) o = o.parent; return !!o; });
+      if (!hit) return;
+      let o = hit.object; while (o && !o.userData.pick) o = o.parent;
+      opts.onPick(o.userData.pick);
+    });
+  }
   const gamer = R.gamer ? sitters[0] : null;
 
   const hemi = new THREE.HemisphereLight(0xffffff, 0xe2c39e, 1.4); scene.add(hemi);
@@ -2100,7 +2284,36 @@ function createRoom(container, opts) {
     const dt = Math.min(0.1, clock.getDelta()), t = clock.elapsedTime;
     camP.lerp(goP, Math.min(1, dt * 1.6)); camT.lerp(goT, Math.min(1, dt * 1.6));
     camera.position.copy(camP); camera.lookAt(camT);
-    if (R.sofa) sitters.forEach((w, k) => {           // cuddled up on the sofa
+    if (R.couple) {                                   // by the real clock: sofa · sleeping heads together · bún chả
+      const d = new Date(), hr = d.getHours() + d.getMinutes() / 60;
+      const want = hr >= 22 || hr < 6.5 ? 'sleep' : (hr >= 11.5 && hr < 13 ? 'lunch' : 'sofa');
+      if (want !== coupleMode) {
+        coupleMode = want;
+        const ss = want === 'lunch' ? R.dining : R.seats;
+        sitters.forEach((w, k) => {
+          w.g.position.set(ss[k].x, ss[k].y - HIP, ss[k].z); w.g.rotation.y = ss[k].ry;
+          if (!w.sleepMap) w.sleepMap = paintSkin(w.parts.look, true);
+          if (!w.awakeMap) w.awakeMap = w.parts.mat.map;
+          w.parts.mat.map = want === 'sleep' ? w.sleepMap : w.awakeMap; w.parts.mat.needsUpdate = true;
+        });
+        zzz.visible = want === 'sleep';
+      }
+      sitters.forEach((w, k) => {
+        const side = k === 0 ? -1 : 1;
+        if (coupleMode === 'lunch') {               // chopsticks up to the mouth, a little nod
+          w.parts.armL.rotation.x = -0.9;
+          w.parts.armR.rotation.x = -1.35 + Math.sin(t * 2.6 + k * 1.7) * 0.45;
+          w.parts.head.rotation.set(0.12 + Math.max(0, Math.sin(t * 2.6 + k * 1.7)) * 0.12, 0, 0);
+        } else if (coupleMode === 'sleep') {        // asleep, heads leaning on each other
+          w.parts.armL.rotation.x = w.parts.armR.rotation.x = -0.5;
+          w.parts.head.rotation.set(0.1, -side * 0.2, -side * (0.45 + Math.sin(t * 0.9) * 0.02));
+        } else {
+          w.parts.armL.rotation.x = w.parts.armR.rotation.x = -0.6;
+          w.parts.head.rotation.set(0, -side * 0.25, -side * (0.18 + Math.sin(t * 0.8) * 0.04));
+        }
+      });
+      if (zzz.visible) { zzz.position.set(-0.4, 2.05 + (t * 0.25) % 0.4, -2.35); zzz.material.opacity = 0.9 - ((t * 0.25) % 0.4) * 1.5; }
+    } else if (R.sofa) sitters.forEach((w, k) => {           // cuddled up on the sofa
       w.parts.armL.rotation.x = w.parts.armR.rotation.x = -0.6;
       w.parts.head.rotation.z = (k === 0 ? -1 : 1) * (0.18 + Math.sin(t * 0.8) * 0.04);
       w.parts.head.rotation.y = (k === 0 ? 1 : -1) * 0.25;

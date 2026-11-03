@@ -1471,6 +1471,8 @@ const ACTIONS = {
   startLovePhotoUpload,
   finishLovePhotoUpload,
   cancelLovePhotoUpload,
+  startLoveFrameUpload,
+  setLoveFrame,
   deleteLovePhoto,
   deleteLoveMemory
 };
@@ -1719,7 +1721,8 @@ async function getLoveData(env) {
   let him = [];
   try { him = (await sb(env, 'calendar_notes?kind=eq.him&select=day,note,repeat&order=day.asc')).map((r) => ({ day: r.day, note: r.note || '', repeat: r.repeat || '' })); }
   catch (e) { him = []; }
-  return { today: vnNow_().date, memories: mem.map((m) => loveMemoryOut_(m, ph)), him };
+  const g = await googleSaved_(env).catch(() => ({}));
+  return { today: vnNow_().date, memories: mem.map((m) => loveMemoryOut_(m, ph)), him, frame: g.loveFrame || '' };
 }
 async function saveLoveMemory(env, [m]) {
   m = m || {};
@@ -1793,6 +1796,24 @@ async function finishLovePhotoUpload(env, [photoId, driveId]) {
   await sb(env, 'love_photos?id=eq.' + Number(photoId), { method: 'PATCH', body: JSON.stringify({ drive_id: info.id }), prefer: 'return=minimal' });
   return { id: Number(photoId), driveId: info.id, name: rows[0].name };
 }
+// The picture in the frame on the Love room's wall: one photo, also kept in Drive.
+async function startLoveFrameUpload(env, [file]) {
+  file = file || {};
+  const mime = String(file.type || 'image/jpeg').toLowerCase();
+  if (!/^image\//.test(mime)) throw new Error('Only photos can go in the frame');
+  const d = vnNow_().date;
+  const name = 'frame_' + d.slice(2, 4) + d.slice(5, 7) + d.slice(8, 10) + '.' + (LOVE_EXT_[mime] || 'jpg');
+  const url = await drive.startUpload(await driveToken_(env), loveFolder_(await googleSaved_(env)), name, mime, Number(file.size) || 0, env.__origin);
+  return { uploadUrl: url, name };
+}
+async function setLoveFrame(env, [driveId]) {
+  const g = await googleSaved_(env);
+  const info = await drive.fileInfo(await driveToken_(env), String(driveId || ''));
+  if (!info || info.trashed || !(info.parents || []).includes(loveFolder_(g))) throw new Error('That file is not in the album folder');
+  g.loveFrame = info.id;
+  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'google', value: g }]), prefer: 'resolution=merge-duplicates,return=minimal' });
+  return { driveId: info.id };
+}
 async function cancelLovePhotoUpload(env, [photoId]) {
   await sb(env, 'love_photos?id=eq.' + Number(photoId) + '&drive_id=like.pending:*', { method: 'DELETE', prefer: 'return=minimal' });
   return { ok: true };
@@ -1819,7 +1840,8 @@ async function deleteLoveMemory(env, [id]) {
 async function serveLovePhoto_(env, url) {
   if (!(await personalVerifyToken_(env, url.searchParams.get('t')))) return new Response('Unauthorized', { status: 401 });
   const id = url.searchParams.get('photo') || '';
-  const known = await sb(env, 'love_photos?drive_id=eq.' + encodeURIComponent(id) + '&select=mime');
+  let known = await sb(env, 'love_photos?drive_id=eq.' + encodeURIComponent(id) + '&select=mime');
+  if (!known.length && id && id === ((await googleSaved_(env)).loveFrame || '')) known = [{ mime: 'image/jpeg' }];   // the wall frame
   if (!known.length) return new Response('Not found', { status: 404 });
   const size = Math.max(0, Math.min(2000, Number(url.searchParams.get('s')) || 0));
   const res = await drive.fetchImage(await driveToken_(env), id, size);

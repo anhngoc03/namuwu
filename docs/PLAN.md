@@ -107,6 +107,15 @@ Nguyên tắc: **dữ liệu cũ giữ nguyên**, nhà mới dùng lại bảng 
 - Người kiểu Minecraft: mỗi người một "skin" 64×64 điểm ảnh (vẽ bằng canvas), dán lên các khối đầu/thân/tay/chân.
 - Đồi phía sau (Town Hall + nhà Goals) có đường dốc lên; núi tuyết phía sau, thác nước → sông chảy xuống hồ, cầu gỗ chỗ sông cắt đường; công viên quanh hồ (đường dạo, ghế, bồn hoa, vịt). Bầu trời chuyển màu, cỏ loang lổ.
 
+## 5g. Nhà Love (bản mới)
+
+- Bên ngoài: nhà 2 tầng, ban công có chậu cây, cửa kính lớn; mảnh đất riêng có hàng rào, gara, đường xe và xe kiểu 911; xích đu trong sân.
+- Trong phòng: vợt cầu lông + túi Yonex, 1 khung tranh (bấm để đổi ảnh, ảnh lưu Drive), bàn nhỏ cạnh sofa với quyển album vàng có tim.
+  Theo giờ thật: 11:30–13:00 hai người ăn bún chả ở bàn ăn; 22:00–6:30 ngủ dựa đầu vào nhau trên sofa; còn lại ngồi sofa.
+- Bấm album → sách phóng to: bìa có tim, "Mai Ánh Ngọc & Nguyễn Tuấn Hùng" (Dancing Script, nâu) và Love day (từ 09/05/2026, chuyển từ Day Counter sang).
+  Mở ra: trang trên = ngày + tỉnh + ghi chú, trang dưới = ảnh (bấm ảnh để xem ảnh khác). Lật trang bằng ‹ ›, vuốt, hoặc phím mũi tên. Bộ lọc năm / tháng / tỉnh ở trên. Đã bỏ ô Place.
+- Nút đỏ Timeline: xem theo năm (mặc định năm nay), bấm một kỷ niệm để mở đúng trang đó.
+
 ## 6. Đã chốt
 
 1. Agent được tự làm tất cả (hỏi lại trước khi xoá).
