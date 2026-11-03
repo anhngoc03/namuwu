@@ -95,8 +95,7 @@
           <div class="lb-open">tap to open</div>
         </div>
         <div class="lb-spread" id="lb-spread">
-          <div class="lb-page lb-top" id="lb-top"></div>
-          <div class="lb-page lb-bottom" id="lb-bottom"></div>
+          <div class="lb-page" id="lb-cur"></div>
           <div class="lb-leaf" id="lb-leaf"><div class="lb-face lb-front" id="lb-front"></div><div class="lb-face lb-back" id="lb-back"></div></div>
         </div>
       </div>
@@ -1199,6 +1198,21 @@
       <div class="modal-actions">
         <button type="button" class="pill-btn secondary" id="love-f-delete">Delete</button>
         <button type="button" class="pill-btn" id="love-f-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: Game Center (three games in one building) ================= -->
+  <div id="game-center-modal" class="modal-overlay">
+    <div class="modal-box gc-box">
+      <div class="modal-header">
+        <h3>Game Center</h3>
+        <button class="modal-close" id="gc-close">✕</button>
+      </div>
+      <div class="gc-list">
+        <button type="button" class="gc-game" data-game="openMemory"><span class="gc-ico">🃏</span><b>Memory Match</b><small>flip and find the pairs</small></button>
+        <button type="button" class="gc-game" data-game="openMinesweeper"><span class="gc-ico">💣</span><b>Minesweeper</b><small>easy · normal · hard</small></button>
+        <button type="button" class="gc-game" data-game="openMochi"><span class="gc-ico">🍡</span><b>Mochi Fly</b><small>tap to fly</small></button>
       </div>
     </div>
   </div>

@@ -36,10 +36,13 @@
     { id: 'qr',       label: 'QR',          roof: 'mint',   open: 'openQrCollection', pub: true, kind: 'tool' },
     { id: 'symbols',  label: 'Symbols',     roof: 'lav',    open: 'loadSymbols',      pub: true, kind: 'tool' },
     { id: 'yakult',   label: 'Yakult',      roof: 'peach',  open: 'openEating',       pub: true, kind: 'tool' },
-    { id: 'memory',   label: 'Memory',      roof: 'pink',   open: 'openMemory',       pub: true, kind: 'game' },
-    { id: 'mines',    label: 'Minesweeper', roof: 'mint',   open: 'openMinesweeper',  pub: true, kind: 'game' },
-    { id: 'mochi',    label: 'Mochi Fly',   roof: 'yellow', open: 'openMochi',        pub: true, kind: 'game' }
+    { id: 'games',    label: 'Game Center', roof: 'pink',   open: 'openGameCenter',   pub: true, kind: 'game', special: 'arcade' },
+    { id: 'store',    label: '7-Eleven',    roof: 'mint',   open: 'openStore',        pub: true, kind: 'store', special: 'store' }
   ];
+  // Game Center: one building, three games inside
+  window.openGameCenter = function () { document.getElementById('game-center-modal').classList.add('active'); };
+  // the corner shop is where the villagers eat and shop (nothing to open)
+  window.openStore = function () { toast('🍙 The villagers come here for lunch and snacks'); };
 
   var root, stage, labelsEl, starBtn, clockEl;
   var scene3d = null, loading = false, shown = false, built = false;
@@ -159,6 +162,8 @@
     if (id === 'hall') { openHall(); return; }
     if (!h) return;
     if (!h.open || typeof window[h.open] !== 'function') { toast('Coming soon ✿'); return; }
+    if (h.id === 'store') { window.openStore(); return; }
+    if (h.id === 'games') { window.openGameCenter(); return; }
     if (entering) return;
     entering = true;
     // walk in: glide to the door, it opens, the fade starts as we go through, then the room + the page
@@ -196,7 +201,7 @@
   /* ---------------- inside a house: the room behind a feature page ---------------- */
   var VIEW_HOUSE = { 'work-view': 'work', 'expense-view': 'money', 'calendar-view': 'calendar', 'accounts-view': 'account', 'love-view': 'love',
     'datediff-view': 'daycount', 'converter-view': 'pdf', 'qr-view': 'qr', 'symbols-view': 'symbols', 'eating-view': 'yakult',
-    'memory-view': 'memory', 'minesweeper-view': 'mines', 'mochi-view': 'mochi' };
+    'memory-view': 'games', 'minesweeper-view': 'games', 'mochi-view': 'games' };
   var roomPhotos = [], roomFrame = '';
   // the picture in the Love room's frame (love.js calls this)
   window.villageRoomFrame = function (url) { roomFrame = url || ''; if (room && room.house === 'love' && roomFrame) room.setPhotos([roomFrame]); };
@@ -612,6 +617,22 @@
     document.getElementById('village-hall-work').onclick = function () { closeHall(); requirePersonal(openWork); };
     wireChat();
     wireSettings();
+    document.getElementById('gc-close').onclick = function () { document.getElementById('game-center-modal').classList.remove('active'); };
+    document.querySelectorAll('.gc-game').forEach(function (b) {
+      b.onclick = function () {
+        document.getElementById('game-center-modal').classList.remove('active');
+        var fn = window[b.dataset.game], h = HOUSES.filter(function (x) { return x.id === 'games'; })[0];
+        if (typeof fn !== 'function') return;
+        // walk in through the Game Center's door, then start the game
+        var fade = document.getElementById('village-fade');
+        fade.style.background = roofHex(h.roof);
+        var go = function () {
+          fade.classList.add('on');
+          setTimeout(function () { walkingIn = true; fn(); walkingIn = false; setTimeout(function () { fade.classList.remove('on'); }, 120); }, 120);
+        };
+        if (scene3d && shown) scene3d.enterHouse('games', go, { at: { k: 0.7, fn: function () { fade.classList.add('on'); } } }); else go();
+      };
+    });
     // locked again (button, idle timer, expired session) → forget the chat
     window.addEventListener('personal-unauthorized', forgetChat);
     built = true;

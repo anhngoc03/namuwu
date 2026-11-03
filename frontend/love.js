@@ -64,63 +64,59 @@ function lbFilters() {
   document.getElementById('lb-year').value = years[y] ? y : ''; document.getElementById('lb-month').value = mo; document.getElementById('lb-prov').value = provs[pr] ? pr : '';
 }
 function lbBuild() { lbFilters(); lb.pages = lbFiltered(); if (lb.i >= lb.pages.length) lb.i = lb.pages.length - 1; }
-function lbInfoHtml(m) {
-  if (!m) return '<div class="lb-info lb-end"><div class="lb-end-heart">♡</div><div>' + (lb.pages.length ? 'The end… for now' : 'No memories here yet') + '</div>' +
+// one memory = one page: date, province and note at the top, its photos laid out in frames below
+function lbPageHtml(m) {
+  if (!m) return '<div class="lb-pg lb-end"><div class="lb-end-heart">♡</div><div>' + (lb.pages.length ? 'The end… for now' : 'No memories here yet') + '</div>' +
     '<button type="button" class="pill-btn" data-lb="add">+ Memory</button></div>';
-  var d = new Date(m.day + 'T00:00:00');
-  return '<div class="lb-info">' +
-    '<div class="lb-date">' + m.day.slice(8, 10) + '<small>' + LOVE_MONTHS[d.getMonth()] + ' ' + d.getFullYear() + '</small></div>' +
-    (m.province ? '<div class="lb-prov">📍 ' + loveEsc(m.province) + '</div>' : '') +
+  var d = new Date(m.day + 'T00:00:00'), ph = m.photos || [];
+  var shown = ph.slice(0, 6), more = ph.length - shown.length;
+  var collage = !ph.length ? '<div class="lb-col lb-none">♡<small>no photos</small></div>' :
+    '<div class="lb-col n' + shown.length + '">' + shown.map(function (p, k) {
+      return '<button type="button" class="lb-cell" data-lb="photo" data-k="' + k + '"><img src="' + lovePhotoUrl(p.driveId, shown.length === 1 ? 1200 : 700) + '" alt="" loading="lazy">' +
+        (k === shown.length - 1 && more > 0 ? '<span class="lb-more">+' + more + '</span>' : '') + '</button>';
+    }).join('') + '</div>';
+  return '<div class="lb-pg">' +
+    '<div class="lb-head"><div class="lb-date">' + m.day.slice(8, 10) + '<small>' + LOVE_MONTHS[d.getMonth()] + ' ' + d.getFullYear() + '</small></div>' +
+    '<div class="lb-meta">' + (m.province ? '<div class="lb-prov">📍 ' + loveEsc(m.province) + '</div>' : '') +
     (m.note ? '<div class="lb-note">' + loveEsc(m.note) + '</div>' : '') +
-    ((m.tags || []).length ? '<div class="love-tags">' + m.tags.map(function (t) { return '<span>#' + loveEsc(t) + '</span>'; }).join('') + '</div>' : '') +
-    '<button type="button" class="lb-edit" data-lb="edit" title="">✎</button></div>';
-}
-function lbPhotoHtml(m, k) {
-  if (!m) return '<div class="lb-photo lb-empty">♥</div>';
-  if (!m.photos.length) return '<div class="lb-photo lb-empty">♡<small>no photo</small></div>';
-  k = Math.max(0, Math.min(m.photos.length - 1, k || 0));
-  return '<div class="lb-photo" data-lb="photo"><img src="' + lovePhotoUrl(m.photos[k].driveId, 1200) + '" alt="">' +
-    (m.photos.length > 1 ? '<div class="lb-dots">' + m.photos.map(function (_, n) { return '<i class="' + (n === k ? 'on' : '') + '"></i>'; }).join('') + '</div>' : '') + '</div>';
+    ((m.tags || []).length ? '<div class="love-tags">' + m.tags.map(function (t) { return '<span>#' + loveEsc(t) + '</span>'; }).join('') + '</div>' : '') + '</div>' +
+    '<button type="button" class="lb-edit" data-lb="edit">✎</button></div>' + collage +
+    '<div class="lb-pno">' + (lb.i + 1) + '</div></div>';
 }
 function lbShow() {
   var book = document.getElementById('lb-book');
   book.classList.toggle('open', lb.i >= 0);
   document.getElementById('lb-day').innerHTML = 'Love day <b>' + (typeof loveDayCount === 'function' ? formatThousands(loveDayCount()) : '') + '</b>';
   var m = lb.i >= 0 ? lb.pages[lb.i] : null;
-  if (lb.i >= 0) {
-    document.getElementById('lb-top').innerHTML = lbInfoHtml(m);
-    document.getElementById('lb-bottom').innerHTML = lbPhotoHtml(m, lb.photo);
-  }
+  if (lb.i >= 0) document.getElementById('lb-cur').innerHTML = lbPageHtml(m);
   document.getElementById('lb-count').textContent = lb.i < 0 ? '' : (m ? (lb.i + 1) + ' / ' + lb.pages.length : '');
   document.getElementById('lb-prev').disabled = lb.i < 0;
   document.getElementById('lb-next').disabled = lb.i >= lb.pages.length;
 }
-// turning a page: the bottom leaf flips up over the top half (or back down)
+// turning a page, right to left: the page lifts from its right edge and turns over the spine on the left
 function lbTurn(dir) {
   if (lb.busy) return;
-  if (lb.i < 0 && dir > 0) {                       // open the cover
-    lb.busy = true; lb.i = 0; lb.photo = 0;
-    var cover = document.getElementById('lb-cover');
+  if (lb.i < 0 && dir > 0) {                        // open the cover
+    lb.busy = true; lb.i = 0;
     lbShow(); document.getElementById('lb-book').classList.add('opening');
-    setTimeout(function () { document.getElementById('lb-book').classList.remove('opening'); lb.busy = false; }, 700);
+    setTimeout(function () { document.getElementById('lb-book').classList.remove('opening'); lb.busy = false; }, 800);
     return;
   }
   if (lb.i === 0 && dir < 0) { lb.i = -1; lbShow(); return; }   // back to the cover
   var to = lb.i + dir;
   if (to < 0 || to > lb.pages.length) return;
   lb.busy = true;
-  var leaf = document.getElementById('lb-leaf'), front = document.getElementById('lb-front'), back = document.getElementById('lb-back');
-  var cur = lb.pages[lb.i], nxt = lb.pages[to];
-  if (dir > 0) {
-    front.innerHTML = lbPhotoHtml(cur, lb.photo); back.innerHTML = lbInfoHtml(nxt);
-    document.getElementById('lb-bottom').innerHTML = lbPhotoHtml(nxt, 0);
-    leaf.className = 'lb-leaf go-up';
-  } else {
-    back.innerHTML = lbInfoHtml(cur); front.innerHTML = lbPhotoHtml(nxt, 0);
-    document.getElementById('lb-top').innerHTML = lbInfoHtml(nxt);
-    leaf.className = 'lb-leaf up go-down';
+  var leaf = document.getElementById('lb-leaf'), front = document.getElementById('lb-front'), cur = document.getElementById('lb-cur');
+  var keep = lb.i;
+  if (dir > 0) {                                    // this page turns away, the next one is underneath
+    front.innerHTML = lbPageHtml(lb.pages[keep]);
+    lb.i = to; cur.innerHTML = lbPageHtml(lb.pages[to]); lb.i = keep;
+    leaf.className = 'lb-leaf go-left';
+  } else {                                          // the previous page comes back over
+    lb.i = to; front.innerHTML = lbPageHtml(lb.pages[to]); lb.i = keep;
+    leaf.className = 'lb-leaf turned go-right';
   }
-  setTimeout(function () { lb.i = to; lb.photo = 0; leaf.className = 'lb-leaf'; lbShow(); lb.busy = false; }, 720);
+  setTimeout(function () { lb.i = to; leaf.className = 'lb-leaf'; lbShow(); lb.busy = false; }, 760);
 }
 function lbOpen(atId) {
   lbBuild();
@@ -346,7 +342,7 @@ function loveWire() {
   document.getElementById('lb-close').onclick = lbClose;
   document.getElementById('lb-prev').onclick = function () { lbTurn(-1); };
   document.getElementById('lb-next').onclick = function () { lbTurn(1); };
-  ['lb-year', 'lb-month', 'lb-prov'].forEach(function (id) { document.getElementById(id).onchange = function () { lb.pages = lbFiltered(); lb.i = lb.i < 0 ? -1 : 0; lb.photo = 0; lbShow(); }; });
+  ['lb-year', 'lb-month', 'lb-prov'].forEach(function (id) { document.getElementById(id).onchange = function () { lb.pages = lbFiltered(); lb.i = lb.i < 0 ? -1 : 0; lbShow(); }; });
   document.getElementById('lb-cover').onclick = function () { lbTurn(1); };
   document.getElementById('lb-spread').addEventListener('click', function (e) {
     var a = e.target.closest('[data-lb]');
@@ -354,7 +350,7 @@ function loveWire() {
     if (a && a.dataset.lb === 'add') { loveOpenEditor(null); return; }
     if (a && a.dataset.lb === 'photo') {
       var mm = lb.pages[lb.i];
-      if (mm && mm.photos.length > 1) { lb.photo = (lb.photo + 1) % mm.photos.length; document.getElementById('lb-bottom').innerHTML = lbPhotoHtml(mm, lb.photo); }
+      if (mm) loveOpenViewer(mm, Number(a.dataset.k) || 0);
       return;
     }
   });
@@ -364,12 +360,13 @@ function loveWire() {
   st.addEventListener('touchend', function (e) {
     var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < 40) return;
-    lbTurn((Math.abs(dy) > Math.abs(dx) ? dy : dx) < 0 ? 1 : -1);
+    if (Math.abs(dx) < Math.abs(dy)) return;          // a page turns sideways
+    lbTurn(dx < 0 ? 1 : -1);
   });
   document.addEventListener('keydown', function (e) {
     if (!document.getElementById('love-book').classList.contains('on') || document.querySelector('.modal-overlay.active')) return;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') lbTurn(1);
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') lbTurn(-1);
+    if (e.key === 'ArrowRight') lbTurn(1);
+    else if (e.key === 'ArrowLeft') lbTurn(-1);
     else if (e.key === 'Escape') lbClose();
   });
   document.getElementById('love-view-close').onclick = function () { document.getElementById('love-view-modal').classList.remove('active'); };
