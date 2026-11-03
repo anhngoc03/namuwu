@@ -3,7 +3,7 @@
  * frontend/village3d.js (built from src/village3d.js, three.js bundled in),
  * loaded the first time Personal opens.
  * ------------------------------------------------------------------
- * Full screen. Top-right: clock + date, 🛖 = back to Home (the only way out),
+ * Full screen. Top-right: clock + date, 🍅 (tomato favicon) = back to Home (the only way out),
  * ✮⋆˙ = password (again = lock). Locked: only the scene (people, cat, dog, fish,
  * pond) — no text, tapping a house does nothing; you can still turn / zoom.
  * Unlocked: name tags over every house; tapping a house or its tag opens it.
@@ -79,7 +79,7 @@
     }, 250);
   });
 
-  /* ---------------- clock + date (next to 🛖) ---------------- */
+  /* ---------------- clock + date (next to the 🍅 Home button) ---------------- */
   var DAYS = ['CN', 'Th 2', 'Th 3', 'Th 4', 'Th 5', 'Th 6', 'Th 7'];
   function two(n) { return (n < 10 ? '0' : '') + n; }
   function tickClock() {

@@ -2079,7 +2079,7 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
 
 /* ============================================================
    PERSONAL › VILLAGE (village.js) — full-screen pixel scene on a canvas.
-   Locked: picture only + 🛖 / ✮⋆˙. Unlocked: house name tags.
+   Locked: picture only + 🍅 (Home) / ✮⋆˙. Unlocked: house name tags.
    ============================================================ */
 .content-section.personal .nav-card-grid{ display:none !important; }
 .village{
@@ -2106,10 +2106,12 @@ body.village-mode :is(#desktop-dock, #mobile-nav-toggle, #footer-credit, #flower
   transition:background var(--dur-component), transform var(--dur-component);
 }
 .village-btn:hover{ background:rgba(255,255,255,.75); }
+.village-home-btn{ padding:2px 6px; display:flex; align-items:center; justify-content:center; }
+.village-home-btn img{ width:22px; height:22px; object-fit:contain; display:block; pointer-events:none; }
 .village-btn:active{ transform:scale(.92); }
 .village-unlocked .village-star{ color:#d97a94; }
 
-/* inside a Personal feature: ‹ back to the village, 🛖 Home (the dock is hidden) */
+/* inside a Personal feature: ‹ back to the village, 🍅 Home (the dock is hidden) */
 .personal-bar{
   display:none; position:fixed; z-index:40; gap:6px;
   top:calc(10px + env(safe-area-inset-top)); left:calc(10px + env(safe-area-inset-left));
