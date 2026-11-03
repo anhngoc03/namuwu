@@ -1480,21 +1480,24 @@ const ROOMS = {
       d.add(box(0.35, 0.05, 0.45, 0x8fb3d9, -0.5, 0.84, 0.1));
       rChair(g, 0.2, -1.45, Math.PI); R.seat = { x: 0.2, z: -1.5, ry: Math.PI, y: 0.54 };
       rCalendar(g, -4.44, 1.9, -0.8, Math.PI / 2, true); rPoster(g, -4.44, 1.9, 2.1, Math.PI / 2);
-      rJars(g, 4.2, -1.2, -Math.PI / 2); rCabinet(g, 3.4, -3, 0); rSafe(g, 3.6, 2, -Math.PI / 2.5); rPlant(g, -3.8, -3);
+      rJars(g, 4.2, -1.0, -Math.PI / 2); rCabinet(g, 3.6, -3, 0); rSafe(g, 3.6, 2, -Math.PI / 2.5); rPlant(g, -3.9, -3);
+      R.windowX = -1.9;
     },
     corners: {
       overview: [0.6, 2.9, 5.8, 0, 1, -2.3], calendar: [2.6, 2.7, 3.6, -4.3, 1.8, -0.8], stats: [2.6, 2.7, 5.4, -4.3, 1.8, 1.8],
       budget: [-2.4, 2.7, 3.6, 4.2, 1.1, -1.2], history: [-1.6, 2.7, 3.8, 3.4, 1, -3], categories: [-1.6, 2.5, 6.2, 3.6, 0.7, 2]
     } },
   calendar: { first: 'main', build(g, R) {
-      rCalendar(g, 0.6, 1.95, -3.44, 0, true); rClock(g, -2.4, 2.4, -3.44, 0);
+      rCalendar(g, -0.1, 2.05, -3.44, 0, true); rClock(g, -2.6, 2.5, -3.44, 0);
+      R.windowX = 2.9;
       const d = rDesk(g, -1.2, -1.6); d.add(box(0.5, 0.06, 0.36, 0xfff1a8, 0.3, 0.84, 0)); d.add(box(0.04, 0.04, 0.3, 0xf19bb0, 0.65, 0.88, 0));
       rChair(g, -1, -0.75, Math.PI); R.seat = { x: -1, z: -0.8, ry: Math.PI, y: 0.54 };
-      rShelf(g, 4.25, -0.6, -Math.PI / 2, 5); rPlant(g, 3.8, 2.6);
+      rShelf(g, 4.25, 0.2, -Math.PI / 2, 5); rPlant(g, 3.8, 2.6);
     },
     corners: { main: [-0.2, 2.9, 5.8, -0.4, 1.5, -2.8] } },
   account: { first: 'main', build(g, R) {
-      rSafe(g, 2.6, -2.7, 0); rKeys(g, -0.5, 1.9, -3.44, 0);
+      rSafe(g, 3.7, -2.6, -0.3); rKeys(g, -0.5, 2.0, -3.44, 0);
+      R.windowX = 1.7;
       const d = rDesk(g, -1.8, -1.8, 0.2); rLaptop(d, 0, 0);
       rChair(g, -1.75, -0.95, Math.PI + 0.2); R.seat = { x: -1.72, z: -1.0, ry: Math.PI + 0.2, y: 0.54 };
       rShelf(g, -4.25, 0.6, Math.PI / 2, 5); rPlant(g, 3.9, 1.8);
@@ -1509,14 +1512,14 @@ const ROOMS = {
       R.seats = [{ x: -0.85, z: -2.35, ry: 0, y: 0.56 }, { x: 0.05, z: -2.35, ry: 0, y: 0.56 }];
       R.sofa = true;
       R.frames = [];
-      [[-2.6, 2.3, 1.0, 0.8], [-1.3, 2.45, 0.8, 1.0], [-0.1, 2.3, 1.1, 0.8], [1.2, 2.5, 0.8, 0.8], [-1.95, 1.55, 0.7, 0.55], [0.6, 1.6, 0.7, 0.55]].forEach(([x, y, w, h], i) => {
+      [[-3.3, 2.45, 1.0, 0.8], [-2.0, 2.6, 0.8, 1.0], [-0.8, 2.45, 1.0, 0.8], [0.3, 2.55, 0.7, 0.9], [-2.75, 1.62, 0.7, 0.55], [-1.25, 1.66, 0.6, 0.5]].forEach(([x, y, w, h], i) => {
         g.add(box(w + 0.12, h + 0.12, 0.05, [0xffffff, 0xf6d4dc, 0xfff1a8][i % 3], x, y, -3.42));
         const pic = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: [0xffd6df, 0xd9c9f0, 0xbfe6f2][i % 3] }));
         pic.position.set(x, y, -3.385); g.add(pic); R.frames.push(pic);
       });
       // fairy lights along the wall top
-      for (let k = 0; k < 14; k++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), new THREE.MeshBasicMaterial({ color: [0xfff1a8, 0xffb6c1][k % 2] })); b.position.set(-4 + k * 0.62, 3.05 - Math.sin(k * 0.9) * 0.08, -3.38); g.add(b); }
-      rPlant(g, 3.8, -2.8); rShelf(g, 4.25, 0.4, -Math.PI / 2, 4);
+      for (let k = 0; k < 14; k++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), new THREE.MeshBasicMaterial({ color: [0xfff1a8, 0xffb6c1][k % 2] })); b.position.set(-4 + k * 0.62, 3.45 - Math.sin(k * 0.9) * 0.08, -3.38); g.add(b); }
+      rPlant(g, 3.9, -1.7); rShelf(g, 4.25, 0.6, -Math.PI / 2, 4);
     },
     corners: { main: [0.2, 2.6, 5.4, -0.4, 1.5, -2.8] } },
   other: { first: 'main', build(g, R) {
@@ -1545,26 +1548,33 @@ function createRoom(container, opts) {
   [-1, 1].forEach((sx) => { const w = box(0.12, ROOM_H, LEN, wall2, sx * ROOM_W / 2, ROOM_H / 2, MID); w.castShadow = false; w.receiveShadow = true; g.add(w); });
   // ceiling: soft and light (it only gets light from below, so it glows a little instead of going dark)
   const ceilCol = tint(opts.roof || 0xf6a9bd, 0.9);
-  const ceil = box(ROOM_W, 0.12, LEN, 0, 0, ROOM_H + 0.06, MID, new THREE.MeshLambertMaterial({ color: ceilCol, emissive: ceilCol, emissiveIntensity: 0.55 }));
+  const ceil = box(ROOM_W, 0.12, LEN, 0, 0, ROOM_H + 0.06, MID, new THREE.MeshLambertMaterial({ color: ceilCol, emissive: ceilCol, emissiveIntensity: 0.3 }));
   ceil.castShadow = false; g.add(ceil);
-  g.add(box(ROOM_W, 0.16, 0.12, 0xffffff, 0, ROOM_H - 0.08, -ROOM_D / 2 + 0.1));                 // cornice
-  [-1, 1].forEach((sx) => g.add(box(0.12, 0.16, LEN, 0xffffff, sx * (ROOM_W / 2 - 0.1), ROOM_H - 0.08, MID)));
-  g.add(box(ROOM_W, 0.14, 0.04, 0xffffff, 0, 0.07, -ROOM_D / 2 + 0.08));
-  [-1, 1].forEach((sx) => g.add(box(0.04, 0.14, LEN, 0xffffff, sx * (ROOM_W / 2 - 0.08), 0.07, MID)));
-  // window with the real sky + curtains
+  // cornice + skirting (trim only: they don't throw shadows, which drew thin lines across the room)
+  const trim = (m) => { m.castShadow = false; g.add(m); };
+  trim(box(ROOM_W, 0.16, 0.12, 0xffffff, 0, ROOM_H - 0.08, -ROOM_D / 2 + 0.1));
+  [-1, 1].forEach((sx) => trim(box(0.12, 0.16, LEN, 0xffffff, sx * (ROOM_W / 2 - 0.1), ROOM_H - 0.08, MID)));
+  trim(box(ROOM_W, 0.14, 0.04, 0xffffff, 0, 0.07, -ROOM_D / 2 + 0.08));
+  [-1, 1].forEach((sx) => trim(box(0.04, 0.14, LEN, 0xffffff, sx * (ROOM_W / 2 - 0.08), 0.07, MID)));
   const skyMat = new THREE.MeshBasicMaterial({ color: 0xbfe3f5 });
-  g.add(box(1.9, 1.5, 0.08, 0xffffff, 2.2, 2, -ROOM_D / 2 + 0.06));
-  g.add(box(1.7, 1.3, 0.09, 0, 2.2, 2, -ROOM_D / 2 + 0.07, skyMat));
-  g.add(box(0.05, 1.3, 0.1, 0xffffff, 2.2, 2, -ROOM_D / 2 + 0.1)); g.add(box(1.7, 0.05, 0.1, 0xffffff, 2.2, 2, -ROOM_D / 2 + 0.1));
-  [-1, 1].forEach((sx) => g.add(box(0.35, 1.8, 0.06, 0xffb6c1, 2.2 + sx * 1.1, 2, -ROOM_D / 2 + 0.16)));
   // rug + ceiling lamp
   const rug = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.03, 32), mat(0xf6d4dc)); rug.scale.set(2, 1, 1.3); rug.position.set(0.3, 0.02, 0.6); rug.receiveShadow = true; g.add(rug);
-  const cord = box(0.04, 1.2, 0.04, 0x8c7a6b, 0.3, ROOM_H - 0.6, 0.3); cord.castShadow = false; g.add(cord);
+  const cord = box(0.03, 0.55, 0.03, 0x8c7a6b, 0.3, ROOM_H - 0.27, 0.3); cord.castShadow = false; g.add(cord);
   const shade = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.4, 12, 1, true), new THREE.MeshLambertMaterial({ color: 0xfff1a8, emissive: 0xffd27a, emissiveIntensity: 0, side: THREE.DoubleSide }));
-  shade.position.set(0.3, ROOM_H - 1.35, 0.3); shade.castShadow = false; g.add(shade);
+  shade.position.set(0.3, ROOM_H - 0.72, 0.3); shade.castShadow = false; g.add(shade);
 
   const R = {};
   spec.build(g, R);
+  // window with the real sky; curtains hang from a rod, tied back at the sides
+  { const wx = R.windowX != null ? R.windowX : 2.2, wy = 2.1, z = -ROOM_D / 2;
+    g.add(box(1.9, 1.5, 0.08, 0xffffff, wx, wy, z + 0.06));
+    g.add(box(1.7, 1.3, 0.09, 0, wx, wy, z + 0.07, skyMat));
+    g.add(box(0.05, 1.3, 0.1, 0xffffff, wx, wy, z + 0.1)); g.add(box(1.7, 0.05, 0.1, 0xffffff, wx, wy, z + 0.1));
+    const rod = box(2.5, 0.05, 0.05, 0xc49674, wx, wy + 0.9, z + 0.2); rod.castShadow = false; g.add(rod);
+    [-1, 1].forEach((sx) => {
+      const c = box(0.24, 1.75, 0.05, 0xffc4cf, wx + sx * 1.08, wy + 0.0, z + 0.2); c.castShadow = false; g.add(c);
+      const tie = box(0.28, 0.06, 0.07, 0xf6a9bd, wx + sx * 1.08, wy - 0.25, z + 0.22); tie.castShadow = false; g.add(tie);
+    }); }
   let clockHands = []; g.traverse((o) => { if (o.userData.hands) clockHands = o.userData.hands; });
   // the resident, at the desk
   const seats = R.seats || (R.seat ? [R.seat] : []);
@@ -1580,14 +1590,14 @@ function createRoom(container, opts) {
   const hemi = new THREE.HemisphereLight(0xffffff, 0xe2c39e, 1.4); scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff4e6, 1.6); sun.position.set(2.5, ROOM_H - 0.3, 8); sun.target.position.set(0, 0, -2); scene.add(sun.target); sun.castShadow = true;   // from the front, under the ceiling
   sun.shadow.mapSize.set(1024, 1024); Object.assign(sun.shadow.camera, { left: -7, right: 7, top: 7, bottom: -7, near: 0.5, far: 25 }); sun.shadow.bias = -0.001; scene.add(sun);
-  const lamp = new THREE.PointLight(0xffd9a0, 0, 12, 1.3); lamp.position.set(0.3, ROOM_H - 1.7, 0.3); scene.add(lamp);
+  const lamp = new THREE.PointLight(0xffd9a0, 0, 12, 1.3); lamp.position.set(0.3, ROOM_H - 1.1, 0.3); scene.add(lamp);
   function applyTime() {
     const d = new Date();
     const h = opts.timeMode === 'day' ? 11 : opts.timeMode === 'night' ? 22 : d.getHours() + d.getMinutes() / 60;
     const s = skyAt(h);
     skyMat.color.copy(s.sky);
     hemi.intensity = 1.5 - s.night * 0.7; sun.intensity = 1.6 * (1 - s.night) + 0.2;
-    lamp.intensity = s.night * 14; shade.material.emissiveIntensity = s.night;
+    lamp.intensity = s.night * 8; shade.material.emissiveIntensity = s.night;
     if (clockHands.length) { clockHands[0].rotation.z = -(d.getHours() % 12) / 12 * Math.PI * 2; clockHands[1].rotation.z = -d.getMinutes() / 60 * Math.PI * 2; }
   }
 
