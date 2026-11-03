@@ -88,6 +88,11 @@
     </div>
     <div class="lb-stage" id="lb-stage">
       <div class="lb-book" id="lb-book">
+        <div class="lb-spread" id="lb-spread">
+          <div class="lb-page lb-left" id="lb-left"></div>
+          <div class="lb-page lb-right" id="lb-right"></div>
+          <div class="lb-leaf" id="lb-leaf"><div class="lb-face lb-front" id="lb-front"></div><div class="lb-face lb-back" id="lb-back"></div></div>
+        </div>
         <div class="lb-cover" id="lb-cover">
           <svg class="lb-heart" viewBox="0 0 120 110" aria-hidden="true">
             <defs><linearGradient id="lbHg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc6d9"/><stop offset="1" stop-color="#f48fb1"/></linearGradient></defs>
@@ -96,14 +101,10 @@
             <circle cx="22" cy="47" r="3.5" fill="#fff" opacity=".85"/>
             <path d="M100 8 l3 7 7 1 -5 5 1 7 -6 -4 -6 4 1 -7 -5 -5 7 -1z" fill="#fff3a6" stroke="#fff" stroke-width="1.5"/>
           </svg>
-          <div class="lb-title">Love you to the<br>moon and back</div>
+          <div class="lb-title">Love you<br>to the moon and back</div>
           <div class="lb-names">Mai Ánh Ngọc <span class="lb-sym">𑣲⋆</span> Nguyễn Tuấn Hùng</div>
           <div class="lb-day" id="lb-day"></div>
           <div class="lb-open">tap to open</div>
-        </div>
-        <div class="lb-spread" id="lb-spread">
-          <div class="lb-page" id="lb-cur"></div>
-          <div class="lb-leaf" id="lb-leaf"><div class="lb-face lb-front" id="lb-front"></div><div class="lb-face lb-back" id="lb-back"></div></div>
         </div>
       </div>
     </div>
@@ -385,7 +386,7 @@
             <button class="pill-btn" id="love-add-btn">+ Memory</button>
           </div>
         </div>
-        <div class="love-hint" id="love-hint">Tap the yellow album on the table ♡ · tap the frame to change its photo</div>
+        <div class="love-hint" id="love-hint">Tap the stairs ⬆ to the bedroom · the album is on the bedside table ♡ · tap them for a kiss, hold (or double-click) for more</div>
         <input type="file" id="love-frame-file" accept="image/*" hidden>
       </div>
 
@@ -873,6 +874,32 @@
 
   <!-- ================= MODAL: Home reset confirmation ================= -->
   <!-- ================= MODAL: Home profile (photo + name, saved on this device) ================= -->
+  <!-- ===== Love › the little chat bubble over the couple (hold / double-click them) ===== -->
+  <div class="love-bubble" id="love-bubble" role="menu">
+    <button type="button" data-lv="drive">🚗 Go for a drive</button>
+    <button type="button" data-lv="food">🍜 Order food</button>
+  </div>
+  <!-- ===== Love › order food: type a dish, pick a picture, up to 4 dishes ===== -->
+  <div id="love-food-modal" class="modal-overlay">
+    <div class="modal-box love-food-box">
+      <div class="modal-header">
+        <h3>Order food ♡</h3>
+        <button id="love-food-close" class="modal-close">✕</button>
+      </div>
+      <form class="love-food-search" id="love-food-form">
+        <input type="text" id="love-food-q" maxlength="60" placeholder="Type a dish… e.g. phở, sushi, pizza" autocomplete="off">
+        <button type="submit" class="pill-btn">Find</button>
+      </form>
+      <div class="love-food-results" id="love-food-results"></div>
+      <div class="expense-field-caption">On the table <span id="love-food-n">0</span>/4</div>
+      <div class="love-food-picked" id="love-food-picked"></div>
+      <div class="modal-actions">
+        <button class="pill-btn secondary" id="love-food-clear">Clear</button>
+        <button class="pill-btn" id="love-food-save">Order</button>
+      </div>
+    </div>
+  </div>
+
   <div id="profile-modal" class="modal-overlay">
     <div class="modal-box profile-box">
       <div class="modal-header">

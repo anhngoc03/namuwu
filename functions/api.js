@@ -1473,6 +1473,8 @@ const ACTIONS = {
   cancelLovePhotoUpload,
   startLoveFrameUpload,
   setLoveFrame,
+  saveLoveFood,
+  findLoveFoodImages,
   deleteLovePhoto,
   deleteLoveMemory
 };
@@ -1722,7 +1724,41 @@ async function getLoveData(env) {
   try { him = (await sb(env, 'calendar_notes?kind=eq.him&select=day,note,repeat&order=day.asc')).map((r) => ({ day: r.day, note: r.note || '', repeat: r.repeat || '' })); }
   catch (e) { him = []; }
   const g = await googleSaved_(env).catch(() => ({}));
-  return { today: vnNow_().date, memories: mem.map((m) => loveMemoryOut_(m, ph)), him, frame: g.loveFrame || '' };
+  let food = [];
+  try { const fr = await sb(env, 'app_settings?key=eq.love_food&select=value'); food = (fr[0] && fr[0].value && fr[0].value.items) || []; } catch (e) { food = []; }
+  return { today: vnNow_().date, memories: mem.map((m) => loveMemoryOut_(m, ph)), him, frame: g.loveFrame || '', food };
+}
+
+/* ---- Love: food they "order" — shows on the table at their meals (up to 4 dishes) ---- */
+async function saveLoveFood(env, [items]) {
+  const clean = (Array.isArray(items) ? items : []).slice(0, 4).map((it) => ({
+    name: String((it && it.name) || '').trim().slice(0, 60),
+    img: /^https:\/\/upload\.wikimedia\.org\/[^\s"'<>]+$/.test(String((it && it.img) || '')) ? String(it.img) : ''
+  })).filter((it) => it.name);
+  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'love_food', value: { items: clean } }]), prefer: 'resolution=merge-duplicates,return=minimal' });
+  return { food: clean };
+}
+// pictures for a dish name, from Wikipedia (vi, en) and Wikimedia Commons — free photos, CORS-friendly
+async function findLoveFoodImages(env, [query]) {
+  const q = String(query || '').trim().slice(0, 60);
+  if (!q) return { images: [] };
+  const UA = { 'User-Agent': 'namuwu-village/1.0 (personal site; food pictures)' };
+  const get = (url) => fetch(url, { headers: UA }).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+  const wiki = (lang) => get('https://' + lang + '.wikipedia.org/w/api.php?action=query&format=json&generator=search&gsrlimit=6&prop=pageimages&piprop=thumbnail&pithumbsize=360&gsrsearch=' + encodeURIComponent(q));
+  const commons = get('https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit=10&prop=imageinfo&iiprop=url|mime&iiurlwidth=360&gsrsearch=' + encodeURIComponent(q + ' food'));
+  const [vi, en, cm] = await Promise.all([wiki('vi'), wiki('en'), commons]);
+  const out = [], seen = new Set();
+  const add = (title, url) => {
+    if (!url || seen.has(url) || !/^https:\/\/upload\.wikimedia\.org\//.test(url) || /\.svg/i.test(url)) return;
+    seen.add(url); out.push({ title: String(title || q).replace(/^File:/, '').replace(/\.[a-z]+$/i, ''), img: url });
+  };
+  [vi, en].forEach((j) => Object.values((j.query && j.query.pages) || {}).sort((a, b) => (a.index || 0) - (b.index || 0))
+    .forEach((pg) => pg.thumbnail && add(pg.title, pg.thumbnail.source)));
+  Object.values((cm.query && cm.query.pages) || {}).sort((a, b) => (a.index || 0) - (b.index || 0)).forEach((pg) => {
+    const ii = pg.imageinfo && pg.imageinfo[0];
+    if (ii && /^image\/(jpeg|png|webp)/.test(ii.mime || '')) add(pg.title, ii.thumburl);
+  });
+  return { images: out.slice(0, 9) };
 }
 async function saveLoveMemory(env, [m]) {
   m = m || {};

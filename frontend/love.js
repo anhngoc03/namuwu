@@ -41,6 +41,7 @@ function loveLoad() {
 function loveRender() {
   // the frame on the wall shows the chosen picture
   if (typeof villageRoomFrame === 'function') villageRoomFrame(loveData.frame ? lovePhotoUrl(loveData.frame, 900) : '');
+  if (typeof villageRoomFood === 'function') villageRoomFood(loveData.food || []);
   if (document.getElementById('love-book').classList.contains('on')) { lbBuild(); lbShow(); }
   if (document.getElementById('love-tl').classList.contains('on')) ltRender();
 }
@@ -65,72 +66,101 @@ function lbFilters() {
 }
 function lbBuild() { lbFilters(); lb.pages = lbFiltered(); if (lb.i >= lb.pages.length) lb.i = lb.pages.length - 1; }
 // one memory = one page: date, province and note at the top, its photos laid out in frames below
-function lbPageHtml(m) {
-  if (!m) return '<div class="lb-pg lb-end"><div class="lb-end-heart">♡</div><div>' + (lb.pages.length ? 'The end… for now' : 'No memories here yet') + '</div>' +
+function lbPageHtml(k) {
+  var m = lb.pages[k];
+  if (k === lb.pages.length) return '<div class="lb-pg lb-end"><div class="lb-end-heart">♡</div><div>' + (lb.pages.length ? 'The end… for now' : 'No memories here yet') + '</div>' +
     '<button type="button" class="pill-btn" data-lb="add">+ Memory</button></div>';
+  if (!m) return '<div class="lb-blank"></div>';
   var d = new Date(m.day + 'T00:00:00'), ph = m.photos || [];
   var shown = ph.slice(0, 6), more = ph.length - shown.length;
   var collage = !ph.length ? '<div class="lb-col lb-none">♡<small>no photos</small></div>' :
-    '<div class="lb-col n' + shown.length + '">' + shown.map(function (p, k) {
-      return '<button type="button" class="lb-cell" data-lb="photo" data-k="' + k + '"><img src="' + lovePhotoUrl(p.driveId, shown.length === 1 ? 1200 : 700) + '" alt="" loading="lazy">' +
-        (k === shown.length - 1 && more > 0 ? '<span class="lb-more">+' + more + '</span>' : '') + '</button>';
+    '<div class="lb-col n' + shown.length + '">' + shown.map(function (p, j) {
+      return '<button type="button" class="lb-cell" data-lb="photo" data-p="' + k + '" data-k="' + j + '"><img src="' + lovePhotoUrl(p.driveId, shown.length === 1 ? 1000 : 600) + '" alt="" loading="lazy">' +
+        (j === shown.length - 1 && more > 0 ? '<span class="lb-more">+' + more + '</span>' : '') + '</button>';
     }).join('') + '</div>';
   return '<div class="lb-pg">' +
     '<div class="lb-head"><div class="lb-date">' + m.day.slice(8, 10) + '<small>' + LOVE_MONTHS[d.getMonth()] + ' ' + d.getFullYear() + '</small></div>' +
     '<div class="lb-meta">' + (m.province ? '<div class="lb-prov">📍 ' + loveEsc(m.province) + '</div>' : '') +
     (m.note ? '<div class="lb-note">' + loveEsc(m.note) + '</div>' : '') +
     ((m.tags || []).length ? '<div class="love-tags">' + m.tags.map(function (t) { return '<span>#' + loveEsc(t) + '</span>'; }).join('') + '</div>' : '') + '</div>' +
-    '<button type="button" class="lb-edit" data-lb="edit">✎</button></div>' + collage +
-    '<div class="lb-pno">' + (lb.i + 1) + '</div></div>';
+    '<button type="button" class="lb-edit" data-lb="edit" data-p="' + k + '">✎</button></div>' + collage +
+    '<div class="lb-pno">' + (k + 1) + '</div></div>';
+}
+// two pages open at once. The pages turn over from the left to the right, so spread s
+// has page 2s on the right and page 2s+1 on the left; the last page is "The end".
+function lbSpreads() { return Math.ceil((lb.pages.length + 1) / 2); }
+function lbFit() {
+  var s = Math.min((innerWidth - 20) / 600, (innerHeight - 170) / 420, 1.4);
+  document.getElementById('lb-stage').style.setProperty('--lbs', Math.max(0.3, s).toFixed(3));
+  document.getElementById('lb-book').style.setProperty('--lbs', Math.max(0.3, s).toFixed(3));
 }
 function lbShow() {
   var book = document.getElementById('lb-book');
   book.classList.toggle('open', lb.i >= 0);
   document.getElementById('lb-day').innerHTML = 'Love day <b>' + (typeof loveDayCount === 'function' ? formatThousands(loveDayCount()) : '') + '</b>';
-  var m = lb.i >= 0 ? lb.pages[lb.i] : null;
-  if (lb.i >= 0) document.getElementById('lb-cur').innerHTML = lbPageHtml(m);
-  document.getElementById('lb-count').textContent = lb.i < 0 ? '' : (m ? (lb.i + 1) + ' / ' + lb.pages.length : '');
+  if (lb.i >= 0) {
+    document.getElementById('lb-right').innerHTML = lbPageHtml(lb.i * 2);
+    document.getElementById('lb-left').innerHTML = lbPageHtml(lb.i * 2 + 1);
+  }
+  document.getElementById('lb-count').textContent = lb.i < 0 ? '' : (lb.i + 1) + ' / ' + lbSpreads();
   document.getElementById('lb-prev').disabled = lb.i < 0;
-  document.getElementById('lb-next').disabled = lb.i >= lb.pages.length;
+  document.getElementById('lb-next').disabled = false;
 }
-// turning a page, right to left: the page lifts from its right edge and turns over the spine on the left
 function lbTurn(dir) {
   if (lb.busy) return;
-  if (lb.i < 0 && dir > 0) {                        // open the cover
-    lb.busy = true; lb.i = 0;
-    lbShow(); document.getElementById('lb-book').classList.add('opening');
-    setTimeout(function () { document.getElementById('lb-book').classList.remove('opening'); lb.busy = false; }, 800);
+  var book = document.getElementById('lb-book');
+  if (lb.i < 0) {                                   // the cover swings open to the right
+    if (dir < 0) return;
+    lb.busy = true; lb.i = 0; lbShow();
+    setTimeout(function () { lb.busy = false; }, 820);
     return;
   }
-  if (lb.i === 0 && dir < 0) { lb.i = -1; lbShow(); return; }   // back to the cover
-  var to = lb.i + dir;
-  if (to < 0 || to > lb.pages.length) return;
+  if (dir > 0 && lb.i >= lbSpreads() - 1) { lbCloseBook(true); return; }   // past the last page: close the album
+  if (dir < 0 && lb.i === 0) { lbCloseBook(false); return; }               // back to the cover
   lb.busy = true;
-  var leaf = document.getElementById('lb-leaf'), front = document.getElementById('lb-front'), cur = document.getElementById('lb-cur');
-  var keep = lb.i;
-  if (dir > 0) {                                    // this page turns away, the next one is underneath
-    front.innerHTML = lbPageHtml(lb.pages[keep]);
-    lb.i = to; cur.innerHTML = lbPageHtml(lb.pages[to]); lb.i = keep;
-    leaf.className = 'lb-leaf go-left';
-  } else {                                          // the previous page comes back over
-    lb.i = to; front.innerHTML = lbPageHtml(lb.pages[to]); lb.i = keep;
-    leaf.className = 'lb-leaf turned go-right';
+  var leaf = document.getElementById('lb-leaf'), front = document.getElementById('lb-front'), back = document.getElementById('lb-back');
+  var L = document.getElementById('lb-left'), Rt = document.getElementById('lb-right'), s0 = lb.i;
+  if (dir > 0) {                                    // the left page lifts and turns over onto the right
+    front.innerHTML = lbPageHtml(s0 * 2 + 1); back.innerHTML = lbPageHtml(s0 * 2 + 2);
+    L.innerHTML = lbPageHtml(s0 * 2 + 3);
+    leaf.className = 'lb-leaf on-left go-next';
+  } else {                                          // the right page turns back over onto the left
+    front.innerHTML = lbPageHtml(s0 * 2); back.innerHTML = lbPageHtml(s0 * 2 - 1);
+    Rt.innerHTML = lbPageHtml(s0 * 2 - 2);
+    leaf.className = 'lb-leaf on-right go-prev';
   }
-  setTimeout(function () { lb.i = to; leaf.className = 'lb-leaf'; lbShow(); lb.busy = false; }, 760);
+  setTimeout(function () { lb.i = s0 + dir; lbShow(); leaf.className = 'lb-leaf'; lb.busy = false; }, 800);
+}
+// close the book back to its cover; after the last page it then goes away, back into the room
+function lbCloseBook(thenLeave) {
+  if (lb.busy) return;
+  lb.busy = true;
+  var book = document.getElementById('lb-book');
+  book.classList.add('closing'); lb.i = -1; lbShow();
+  setTimeout(function () {
+    book.classList.remove('closing'); lb.busy = false;
+    if (thenLeave) setTimeout(lbClose, 350);
+  }, 850);
 }
 function lbOpen(atId) {
-  lbBuild();
+  lbBuild(); lbFit();
   lb.i = -1; lb.photo = 0;
   if (atId) {
     ['lb-year', 'lb-month', 'lb-prov'].forEach(function (id) { document.getElementById(id).value = ''; });
     lb.pages = lbFiltered();
-    lb.i = Math.max(0, lb.pages.findIndex(function (m) { return m.id === atId; }));
+    lb.i = Math.floor(Math.max(0, lb.pages.findIndex(function (m) { return m.id === atId; })) / 2);
   }
   lbShow();
   var w = document.getElementById('love-book');
   w.classList.add('on'); requestAnimationFrame(function () { w.classList.add('in'); });
 }
-function lbClose() { var w = document.getElementById('love-book'); w.classList.remove('in'); setTimeout(function () { w.classList.remove('on'); }, 320); }
+function lbClose() {
+  var w = document.getElementById('love-book');
+  if (!w.classList.contains('on')) return;
+  w.classList.remove('in');
+  setTimeout(function () { w.classList.remove('on'); }, 320);
+  if (typeof villageRoomBack === 'function') villageRoomBack();     // the camera zooms back out into the room
+}
 
 /* ---------- timeline by year ---------- */
 function ltRender() {
@@ -158,10 +188,87 @@ function ltOpen() { document.getElementById('lt-year').value = ''; ltRender(); v
 function ltClose() { var w = document.getElementById('love-tl'); w.classList.remove('in'); setTimeout(function () { w.classList.remove('on'); }, 300); }
 
 /* ---------- tapping things in the Love room ---------- */
-window.loveRoomPick = function (what) {
+window.loveRoomPick = function (what, at) {
   if (what === 'album') lbOpen();
   else if (what === 'frame') document.getElementById('love-frame-file').click();
+  else if (what === 'couple-menu') loveBubble(at);
 };
+// the little chat bubble over their heads: go for a drive, or order food
+function loveBubble(at) {
+  var b = document.getElementById('love-bubble');
+  if (!at) return;
+  b.style.left = Math.max(110, Math.min(innerWidth - 110, at.x)) + 'px';
+  b.style.top = Math.max(70, at.y) + 'px';
+  b.classList.remove('on'); void b.offsetWidth; b.classList.add('on');
+  if (navigator.vibrate) try { navigator.vibrate(12); } catch (e) {}
+}
+function loveBubbleClose() { document.getElementById('love-bubble').classList.remove('on'); }
+
+/* ---------- order food: what's on their table at mealtimes (up to 4 dishes) ---------- */
+var loveFood = { picked: [], results: [] };
+function loveFoodOpen() {
+  loveFood.picked = (loveData.food || []).slice(0, 4);
+  loveFood.results = [];
+  document.getElementById('love-food-q').value = '';
+  document.getElementById('love-food-results').innerHTML = '';
+  loveFoodPicked();
+  document.getElementById('love-food-modal').classList.add('active');
+  setTimeout(function () { document.getElementById('love-food-q').focus(); }, 200);
+}
+function loveFoodPicked() {
+  var el = document.getElementById('love-food-picked');
+  document.getElementById('love-food-n').textContent = loveFood.picked.length;
+  el.innerHTML = loveFood.picked.length ? loveFood.picked.map(function (f, i) {
+    return '<div class="lf-chip"><i' + (f.img ? ' style="background-image:url(\'' + f.img.replace(/'/g, '%27') + '\')">' : '>🍲') + '</i>' + loveEsc(f.name) +
+      '<button type="button" data-lfx="' + i + '" aria-label="Remove">✕</button></div>';
+  }).join('') : '<div class="lf-empty">Nothing yet — find a dish and tap its picture</div>';
+}
+function loveFoodSearch(q) {
+  q = String(q || '').trim(); if (!q) return;
+  var box = document.getElementById('love-food-results');
+  box.innerHTML = '<div class="lf-wait">Looking for pictures of “' + loveEsc(q) + '”…</div>';
+  lovePromise('findLoveFoodImages', q).then(function (r) {
+    var imgs = (r && r.images) || [];
+    loveFood.results = [{ title: q, img: '' }].concat(imgs.map(function (x) { return { title: q, img: x.img, alt: x.title }; }));
+    box.innerHTML = loveFood.results.map(function (x, i) {
+      return x.img ? '<button type="button" class="lf-pic" data-lfp="' + i + '"><img src="' + loveEsc(x.img) + '" alt="" loading="lazy" referrerpolicy="no-referrer"><span>' + loveEsc(x.alt || q) + '</span></button>'
+        : '<button type="button" class="lf-pic emoji" data-lfp="' + i + '">🍲<span>' + loveEsc(q) + '</span></button>';
+    }).join('') + (imgs.length ? '' : '<div class="lf-wait">No pictures found — the little 🍲 works too</div>');
+  }).catch(function (e) { box.innerHTML = '<div class="lf-wait">' + loveEsc((e && e.message) || 'Could not search') + '</div>'; });
+}
+function loveFoodSave() {
+  var btn = document.getElementById('love-food-save'); btn.disabled = true;
+  lovePromise('saveLoveFood', loveFood.picked).then(function (r) {
+    loveData.food = (r && r.food) || [];
+    if (typeof villageRoomFood === 'function') villageRoomFood(loveData.food);
+    document.getElementById('love-food-modal').classList.remove('active');
+    toast(loveData.food.length ? 'Ordered ♡ it’s on the table' : 'Back to bún chả ♡');
+  }).catch(function (e) { toast((e && e.message) || 'Could not order'); }).then(function () { btn.disabled = false; });
+}
+function loveFoodWire() {
+  document.getElementById('love-bubble').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-lv]'); if (!b) return;
+    loveBubbleClose();
+    if (b.dataset.lv === 'drive') { if (typeof villageDrive === 'function') villageDrive(); }
+    else loveFoodOpen();
+  });
+  document.addEventListener('pointerdown', function (e) { if (!e.target.closest('#love-bubble')) loveBubbleClose(); }, true);
+  document.getElementById('love-food-close').onclick = function () { document.getElementById('love-food-modal').classList.remove('active'); };
+  document.getElementById('love-food-form').onsubmit = function (e) { e.preventDefault(); loveFoodSearch(document.getElementById('love-food-q').value); };
+  document.getElementById('love-food-results').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-lfp]'); if (!b) return;
+    if (loveFood.picked.length >= 4) { toast('Up to 4 dishes ♡ remove one first'); return; }
+    var x = loveFood.results[Number(b.dataset.lfp)];
+    loveFood.picked.push({ name: x.title, img: x.img || '' });
+    loveFoodPicked();
+  });
+  document.getElementById('love-food-picked').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-lfx]'); if (!b) return;
+    loveFood.picked.splice(Number(b.dataset.lfx), 1); loveFoodPicked();
+  });
+  document.getElementById('love-food-clear').onclick = function () { loveFood.picked = []; loveFoodPicked(); };
+  document.getElementById('love-food-save').onclick = loveFoodSave;
+}
 function loveSetFrame(file) {
   if (!file) return;
   toast('Putting it in the frame…');
@@ -330,6 +437,7 @@ function loveWire() {
   var dl = document.getElementById('love-provinces');
   dl.innerHTML = LOVE_PROVINCES.map(function (p) { return '<option value="' + p + '">'; }).join('');
   document.getElementById('love-add-btn').onclick = function () { loveOpenEditor(null); };
+  loveFoodWire();
   document.getElementById('love-tl-btn').onclick = ltOpen;
   document.getElementById('lt-close').onclick = ltClose;
   document.getElementById('lt-year').onchange = ltRender;
@@ -345,23 +453,28 @@ function loveWire() {
   ['lb-year', 'lb-month', 'lb-prov'].forEach(function (id) { document.getElementById(id).onchange = function () { lb.pages = lbFiltered(); lb.i = lb.i < 0 ? -1 : 0; lbShow(); }; });
   document.getElementById('lb-cover').onclick = function () { lbTurn(1); };
   document.getElementById('lb-spread').addEventListener('click', function (e) {
+    if (lb.busy) return;
     var a = e.target.closest('[data-lb]');
-    if (a && a.dataset.lb === 'edit') { var m = lb.pages[lb.i]; if (m) loveOpenEditor(m); return; }
+    if (a && a.dataset.lb === 'edit') { var m = lb.pages[Number(a.dataset.p)]; if (m) loveOpenEditor(m); return; }
     if (a && a.dataset.lb === 'add') { loveOpenEditor(null); return; }
-    if (a && a.dataset.lb === 'photo') {
-      var mm = lb.pages[lb.i];
-      if (mm) loveOpenViewer(mm, Number(a.dataset.k) || 0);
-      return;
-    }
+    if (a && a.dataset.lb === 'photo') { var mm = lb.pages[Number(a.dataset.p)]; if (mm) loveOpenViewer(mm, Number(a.dataset.k) || 0); return; }
+    // a tap on the paper turns that page: the left one forward, the right one back
+    var pg = e.target.closest('.lb-page');
+    if (pg) lbTurn(pg.id === 'lb-left' ? 1 : -1);
   });
-  // swipe up / left = next page, down / right = back
+  // a tap outside the book puts it away (and the camera zooms back out)
+  document.getElementById('love-book').addEventListener('click', function (e) {
+    if (e.target === this || e.target.id === 'lb-stage' && !e.target.closest('.lb-book')) lbClose();
+  });
+  window.addEventListener('resize', function () { if (document.getElementById('love-book').classList.contains('on')) lbFit(); });
+  // swipe: finger to the right = next (the pages travel left → right), to the left = back
   var sx = 0, sy = 0, st = document.getElementById('lb-stage');
   st.addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
   st.addEventListener('touchend', function (e) {
     var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < 40) return;
-    if (Math.abs(dx) < Math.abs(dy)) return;          // a page turns sideways
-    lbTurn(dx < 0 ? 1 : -1);
+    if (Math.abs(dx) < Math.abs(dy)) return;
+    lbTurn(dx > 0 ? 1 : -1);
   });
   document.addEventListener('keydown', function (e) {
     if (!document.getElementById('love-book').classList.contains('on') || document.querySelector('.modal-overlay.active')) return;
