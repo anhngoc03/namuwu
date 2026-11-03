@@ -247,7 +247,7 @@ function makeCat() {
   head.add(box(0.3, 0.16, 0.06, wh, 0, -0.1, 0.21));
   [-0.15, 0.15].forEach((x) => {
     const ear = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.2, 4), mat(dk)); ear.position.set(x, 0.29, -0.02); ear.rotation.y = Math.PI / 4; head.add(ear);
-    head.add(box(0.08, 0.1, 0.03, 0x3d3030, x * 0.8, 0.04, 0.215));
+    const eye = box(0.08, 0.1, 0.03, 0x3d3030, x * 0.8, 0.04, 0.215); head.add(eye); (parts.eyes = parts.eyes || []).push(eye);
   });
   head.add(box(0.07, 0.05, 0.03, 0xff9db0, 0, -0.04, 0.23));
   const tail = new THREE.Group(); tail.position.set(0, 0.62, -0.38); g.add(tail); parts.tail = tail;
@@ -270,7 +270,7 @@ function makeDog() {
   head.add(box(0.1, 0.12, 0.06, 0xff8fa3, 0.05, -0.24, 0.42));
   [-0.3, 0.3].forEach((x) => {
     const e = limb(0.12, 0.42, 0.26, br, x, 0.2, -0.02); e.rotation.z = x > 0 ? -0.15 : 0.15; head.add(e);
-    head.add(box(0.08, 0.11, 0.03, 0x3d3030, x * 0.45, 0.08, 0.26));
+    const eye = box(0.08, 0.11, 0.03, 0x3d3030, x * 0.45, 0.08, 0.26); head.add(eye); (parts.eyes = parts.eyes || []).push(eye);
   });
   const tail = limb(0.12, 0.42, 0.12, br, 0, 0.82, -0.47); tail.rotation.x = -0.9; g.add(tail); parts.tail = tail;
   g.scale.setScalar(1.3);
@@ -381,7 +381,9 @@ function create(container, opts) {
   const layoutKey = (container.clientWidth || innerWidth) < (container.clientHeight || innerHeight) * 0.9 ? 'port' : 'land';
   useLayout(layoutKey);
   windowMats = [];
-  const hourOverride = (() => { const m = /[?&]hour=([\d.]+)/.exec(location.search); return m ? Number(m[1]) : null; })();
+  let hourOverride = (() => { const m = /[?&]hour=([\d.]+)/.exec(location.search); return m ? Number(m[1]) : null; })();
+  if (hourOverride == null && opts.timeMode === 'day') hourOverride = 11;
+  if (hourOverride == null && opts.timeMode === 'night') hourOverride = 22;
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.shadowMap.enabled = true;
@@ -397,8 +399,36 @@ function create(container, opts) {
   controls.minDistance = 14; controls.maxDistance = 170;
   controls.minPolarAngle = 0.15; controls.maxPolarAngle = 1.32;
   controls.target.set(0, 0, 1.5);
-  controls.screenSpacePanning = false;
+  controls.screenSpacePanning = false;          // move along the ground
   controls.rotateSpeed = 0.7;
+  controls.panSpeed = 1.1;
+  controls.keyPanSpeed = 22;
+  renderer.domElement.tabIndex = 0;              // arrow keys move the view once the village is clicked
+  renderer.domElement.style.outline = 'none';
+  controls.listenToKeyEvents(renderer.domElement);
+  // Trackpad: two-finger scroll moves the view, pinch zooms. Mouse wheel still zooms.
+  const panOffset = new THREE.Vector3(), camRight = new THREE.Vector3(), camFwd = new THREE.Vector3();
+  function panBy(dx, dz) {
+    camera.getWorldDirection(camFwd); camFwd.y = 0; camFwd.normalize();
+    camRight.crossVectors(camFwd, camera.up).normalize();
+    const k = camera.position.distanceTo(controls.target) * 0.0016;
+    panOffset.copy(camRight).multiplyScalar(dx * k).addScaledVector(camFwd, -dz * k);
+    controls.target.add(panOffset); camera.position.add(panOffset);
+  }
+  renderer.domElement.addEventListener('wheel', (e) => {
+    const trackpad = !e.ctrlKey && e.deltaMode === 0 && (Math.abs(e.deltaX) > 0.01 || Math.abs(e.deltaY) < 40);
+    if (!trackpad) return;                         // OrbitControls zooms (mouse wheel / pinch)
+    e.preventDefault(); e.stopImmediatePropagation();
+    panBy(e.deltaX, e.deltaY);
+  }, { capture: true, passive: false });
+  function clampTarget() {                       // never lose the island
+    const t = controls.target, lx = ISLAND.w / 2, lz = ISLAND.d / 2;
+    const cx = Math.max(-lx, Math.min(lx, t.x)), cz = Math.max(-lz, Math.min(lz, t.z));
+    if (cx !== t.x || cz !== t.z || t.y !== 0) {
+      panOffset.set(cx - t.x, -t.y, cz - t.z); t.add(panOffset); camera.position.add(panOffset);
+    }
+  }
+  controls.addEventListener('change', clampTarget);
 
   /* lights */
   const hemi = new THREE.HemisphereLight(0xffffff, 0xb7d7a0, 1); scene.add(hemi);
@@ -503,11 +533,11 @@ function create(container, opts) {
   world.add(tufts);
 
   // trees, fences, lamps
-  TREE_POS.forEach(([x, z]) => { if (!free(x, z)) return; const t = makeTree(R); t.position.set(x, 0, z); world.add(t); });
+  TREE_POS.forEach(([x, z]) => { if (!free(x, z)) return; const t = makeTree(R); t.position.set(x, 0, z); t.userData.post = 0.9; world.add(t); });
   for (let i = 0; i < 14; i++) {   // a ring of trees near the edge
     const a = i / 14 * Math.PI * 2 + 0.2, x = Math.cos(a) * (ISLAND.w / 2 - 3), z = Math.sin(a) * (ISLAND.d / 2 - 3);
     if (!free(x, z)) continue;
-    const t = makeTree(R); t.position.set(x, 0, z); world.add(t);
+    const t = makeTree(R); t.position.set(x, 0, z); t.userData.post = 0.9; world.add(t);
   }
   // street lamps beside the roads (the first three really light up at night)
   const lampSpots = [];
@@ -519,7 +549,7 @@ function create(container, opts) {
     lampSpots.push([x, z]);
   }));
   lampSpots.slice(0, 7).forEach(([x, z], k) => {
-    const l = makeLamp(); l.position.set(x, 0, z); world.add(l);
+    const l = makeLamp(); l.position.set(x, 0, z); l.userData.post = 0.3; world.add(l);
     if (k % 2 === 0 && lampLights.length < 3) {
       const pl = new THREE.PointLight(0xffc977, 0, 12, 1.6); pl.position.set(x, 2.7, z); world.add(pl); lampLights.push(pl);
     }
@@ -548,9 +578,37 @@ function create(container, opts) {
   });
   const cat = Object.assign(makeCat(), { kind: 'cat', path: [], speed: 1.6, wait: 2, t: 0, sit: true });
   const dog = Object.assign(makeDog(), { kind: 'dog', path: [], speed: 3.6, wait: 1, t: 0, buddy: 0 });
-  cat.g.position.set(-14, 0, 7); dog.g.position.set(4, 0, 9);
+  { const a = graph.nodes[graph.doorNodes[2]], b = graph.nodes[graph.doorNodes[graph.doorNodes.length - 1]];
+    cat.g.position.set(a.x + 1.5, 0, a.z + 0.6); dog.g.position.set(b.x + 3, 0, b.z + 0.8); }
   world.add(cat.g, dog.g);
   const fish = [0, 1, 2, 3].map((i) => { const f = makeFish(i); world.add(f); return { g: f, a: rnd(0, 6.28), r: rnd(0.3, 0.75), sp: rnd(0.25, 0.5) * (i % 2 ? 1 : -1), jump: 0, jx: 0, jz: 0 }; });
+  function zzzSprite() {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 64;
+    const x = c.getContext('2d');
+    x.font = 'bold 34px sans-serif'; x.fillStyle = '#7a6a9a';
+    x.fillText('z', 18, 52); x.font = 'bold 26px sans-serif'; x.fillText('z', 52, 36); x.font = 'bold 20px sans-serif'; x.fillText('z', 82, 22);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
+    sp.scale.set(1.6, 0.8, 1); sp.visible = false; world.add(sp);
+    return sp;
+  }
+  cat.zzz = zzzSprite(); dog.zzz = zzzSprite();
+  const food = [];
+  const foodGeo = new THREE.SphereGeometry(0.09, 6, 5);
+  function feed(x, z) {
+    for (let i = 0; i < 7; i++) {
+      const a = Math.random() * 6.28, r = Math.random() * 0.8;
+      const px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r * 0.7;
+      if (!inPond(px, pz, -0.8)) continue;
+      const m = new THREE.Mesh(foodGeo, mat(i % 2 ? 0xc98b5a : 0xe0a96d));
+      m.position.set(px, 1.6 + Math.random() * 0.6, pz); world.add(m);
+      food.push({ m, vy: 0, life: 25 });
+    }
+  }
+  const splashes = [];
+  function splash(x, z, size) {
+    const r = new THREE.Mesh(new THREE.RingGeometry(0.15, 0.25, 18), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, side: THREE.DoubleSide }));
+    r.rotation.x = -Math.PI / 2; r.position.set(x, 0.245, z); r.userData.size = size; world.add(r); splashes.push(r);
+  }
   const ripple = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.45, 20), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide }));
   ripple.rotation.x = -Math.PI / 2; world.add(ripple);
   const flies = [0xffb6c1, 0xd9c9f0, 0xf9e08a, 0xb0e0e6].map((c, i) => { const b = makeButterfly(c); world.add(b); return { g: b, ph: i * 1.7, cx: rnd(-25, 25), cz: rnd(-15, 15) }; });
@@ -578,24 +636,55 @@ function create(container, opts) {
     p.path = graph.path(here, to).slice(1);
     p.goal = 'wander';
   }
+  /* things nobody walks through: houses, the hall, trees, lamps, the pond */
+  const blocks = HOUSE_POS.map(([x, z]) => ({ x, z, hw: 3.3, hd: 2.6 }))
+    .concat([{ x: HALL_POS[0], z: HALL_POS[1], hw: 5.8, hd: 4.1 }]);
+  const posts = [];
+  world.children.forEach((o) => { if (o.userData.post) posts.push({ x: o.position.x, z: o.position.z, r: o.userData.post }); });
+  function blocked(x, z, pad) {
+    pad = pad || 0.5;
+    if (Math.abs(x) > ISLAND.w / 2 - 2.5 || Math.abs(z) > ISLAND.d / 2 - 2.5) return true;
+    if (inPond(x, z, 0.9 + pad)) return true;
+    if (blocks.some((b) => Math.abs(x - b.x) < b.hw + pad && Math.abs(z - b.z) < b.hd + pad)) return true;
+    return posts.some((p) => Math.hypot(x - p.x, z - p.z) < p.r + pad * 0.6);
+  }
+  function clearLine(a, b) {
+    const n = Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.4);
+    for (let i = 1; i <= n; i++) { const t = i / n; if (blocked(lerp(a.x, b.x, t), lerp(a.z, b.z, t), 0.45)) return false; }
+    return true;
+  }
+  // straight line when it's clear, otherwise along the roads
+  function routeTo(m, goal) {
+    const from = { x: m.g.position.x, z: m.g.position.z };
+    if (clearLine(from, goal)) return [goal];
+    const a = graph.nearest(from.x, from.z), b = graph.nearest(goal.x, goal.z);
+    const pts = graph.path(a, b);
+    if (!clearLine(from, pts[0])) return [];
+    const last = pts[pts.length - 1];
+    if (clearLine(last, goal)) pts.push(goal);
+    return pts;
+  }
   function planPet(m) {
     if (m.kind === 'dog' && Math.random() < 0.65) {
       const b = people[m.buddy % people.length].g.position;
-      m.path = [{ x: b.x + rnd(-1.5, 1.5), z: b.z + rnd(0.8, 1.6) }];
+      const g = { x: b.x + rnd(-1.5, 1.5), z: b.z + rnd(0.8, 1.6) };
       if (Math.random() < 0.15) m.buddy++;
-      return;
+      if (!blocked(g.x, g.z)) { m.path = routeTo(m, g); if (m.path.length) return; }
     }
-    for (let n = 0; n < 20; n++) {
-      const x = m.g.position.x + rnd(-8, 8), z = m.g.position.z + rnd(-6, 6);
-      if (Math.abs(x) > ISLAND.w / 2 - 4 || Math.abs(z) > ISLAND.d / 2 - 4) continue;
-      if (inPond(x, z, 1) || HOUSE_POS.some(([hx, hz]) => Math.abs(x - hx) < 3.4 && Math.abs(z - hz) < 3)) continue;
-      if (Math.abs(x - HALL_POS[0]) < 5.8 && Math.abs(z - HALL_POS[1]) < 4.4) continue;
-      m.path = [{ x, z }]; return;
+    for (let n = 0; n < 30; n++) {
+      const g = { x: m.g.position.x + rnd(-9, 9), z: m.g.position.z + rnd(-7, 7) };
+      if (blocked(g.x, g.z, 0.8)) continue;
+      if (clearLine(m.g.position, g)) { m.path = [g]; return; }
     }
+    // stuck somewhere tight → walk to a road
+    const n = graph.nodes[graph.nearest(m.g.position.x, m.g.position.z)];
+    m.path = [{ x: n.x, z: n.z }];
   }
   function step(m, dt) {
     const pos = m.g.position;
+    if (m.sleep > 0) { m.v = 0; return false; }
     if (!m.path.length) {
+      m.v = 0;
       m.wait -= dt;
       if (m.wait <= 0) {
         if (m.kind === 'person') planPerson(m); else planPet(m);
@@ -606,18 +695,24 @@ function create(container, opts) {
     }
     const tgt = m.path[0], dx = tgt.x - pos.x, dz = tgt.z - pos.z, dist = Math.hypot(dx, dz);
     if (dist < 0.08) { m.path.shift(); return true; }
-    const s = Math.min(dist, m.speed * dt);
-    pos.x += dx / dist * s; pos.z += dz / dist * s;
+    // turn towards where we're going first, then speed up gently; slow down at the end
     const want = Math.atan2(dx, dz);
     let diff = want - m.g.rotation.y; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-    m.g.rotation.y += diff * Math.min(1, dt * 10);
+    m.g.rotation.y += diff * Math.min(1, dt * 7);
+    const left = dist + (m.path.length > 1 ? 99 : 0);
+    const top = Math.abs(diff) > 1.1 ? m.speed * 0.15 : m.speed * Math.min(1, left / 1.2 + 0.25);
+    m.v = (m.v || 0) + (top - (m.v || 0)) * Math.min(1, dt * 4);
+    const s = Math.min(dist, m.v * dt);
+    pos.x += Math.sin(m.g.rotation.y) * s * 0.35 + dx / dist * s * 0.65;
+    pos.z += Math.cos(m.g.rotation.y) * s * 0.35 + dz / dist * s * 0.65;
     return true;
   }
   function animate(dt, time) {
     people.forEach((p) => {
       const moving = step(p, dt);
-      p.t += dt * (moving ? 9 : 2);
-      const sw = moving ? Math.sin(p.t) * 0.7 : 0;
+      const pace = Math.min(1, (p.v || 0) / p.speed);
+      p.t += dt * (moving ? 3 + 7 * pace : 2);
+      const sw = moving ? Math.sin(p.t) * 0.75 * pace : 0;
       p.parts.legL.rotation.x = sw; p.parts.legR.rotation.x = -sw;
       p.parts.armL.rotation.x = -sw * 0.8; p.parts.armR.rotation.x = sw * 0.8;
       p.g.position.y = (moving ? Math.abs(Math.sin(p.t)) * 0.08 : 0);
@@ -631,9 +726,25 @@ function create(container, opts) {
       } else p.parts.head.rotation.y = 0;
     });
     [cat, dog].forEach((m) => {
+      if (m.sleep > 0) {                          // tapped: lie down, close eyes, Zzz… for ~3 s
+        m.sleep -= dt;
+        const k = Math.min(1, m.sleepIn += dt * 3);
+        m.parts.legs.forEach((l, i) => { l.rotation.x = (i < 2 ? -1.45 : 1.45) * k; });
+        m.g.position.y = -0.22 * k * m.g.scale.y;
+        m.parts.head.rotation.x = 0.35 * k;
+        m.parts.head.rotation.y = 0;
+        m.parts.eyes.forEach((e) => { e.scale.y = 1 - 0.8 * k; });
+        m.parts.tail.rotation.z = Math.sin(time * 0.8) * 0.15;
+        m.zzz.visible = true;
+        m.zzz.position.set(m.g.position.x, 1.9 + ((time * 0.6) % 1) * 0.6, m.g.position.z);
+        m.zzz.material.opacity = 0.9 - ((time * 0.6) % 1) * 0.6;
+        if (m.sleep <= 0) { m.zzz.visible = false; m.parts.eyes.forEach((e) => { e.scale.y = 1; }); m.parts.head.rotation.x = 0; m.wait = rnd(0.3, 1); }
+        return;
+      }
       const moving = step(m, dt);
-      m.t += dt * (moving ? 10 : 2);
-      const sw = moving ? Math.sin(m.t) * 0.6 : 0;
+      const pace = Math.min(1, (m.v || 0) / m.speed);
+      m.t += dt * (moving ? 4 + 8 * pace : 2);
+      const sw = moving ? Math.sin(m.t) * 0.6 * pace : 0;
       m.parts.legs.forEach((l, k) => { l.rotation.x = (k === 0 || k === 3) ? sw : -sw; });
       if (m.kind === 'cat') {
         m.parts.tail.rotation.z = Math.sin(time * 2) * 0.35;
@@ -647,9 +758,32 @@ function create(container, opts) {
         m.g.position.y = (moving ? Math.abs(Math.sin(m.t)) * 0.07 : 0);
       }
     });
+    // food pellets: fall, float, get eaten
+    for (let i = food.length - 1; i >= 0; i--) {
+      const p = food[i];
+      if (p.m.position.y > 0.24) { p.vy -= dt * 9; p.m.position.y = Math.max(0.24, p.m.position.y + p.vy * dt); if (p.m.position.y === 0.24) splash(p.m.position.x, p.m.position.z, 0.5); }
+      else p.m.position.y = 0.24 + Math.sin(time * 3 + i) * 0.015;
+      p.life -= dt;
+      if (p.life <= 0) { world.remove(p.m); food.splice(i, 1); }
+    }
     fish.forEach((f) => {
       f.a += f.sp * dt;
-      const nx = POND.x + Math.cos(f.a) * (POND.rx - 1.6) * f.r, nz = POND.z + Math.sin(f.a) * (POND.rz - 1) * f.r;
+      let nx = POND.x + Math.cos(f.a) * (POND.rx - 1.6) * f.r, nz = POND.z + Math.sin(f.a) * (POND.rz - 1) * f.r;
+      // hungry: swim to the nearest floating pellet and gulp it
+      let best = null, bd = 1e9;
+      food.forEach((p) => { if (p.m.position.y <= 0.3) { const d = Math.hypot(p.m.position.x - f.g.position.x, p.m.position.z - f.g.position.z); if (d < bd) { bd = d; best = p; } } });
+      if (best && !f.jump) {
+        const dx = best.m.position.x - f.g.position.x, dz = best.m.position.z - f.g.position.z, d = Math.hypot(dx, dz);
+        const sp = Math.min(d, 2.6 * dt);
+        f.g.position.x += dx / (d || 1) * sp; f.g.position.z += dz / (d || 1) * sp; f.g.position.y = 0.16;
+        f.g.rotation.y = Math.atan2(dx, dz);
+        if (d < 0.25) { world.remove(best.m); food.splice(food.indexOf(best), 1); splash(best.m.position.x, best.m.position.z, 0.6); }
+        // keep the circle in step so the fish glides back afterwards
+        f.a = Math.atan2((f.g.position.z - POND.z) / (POND.rz - 1), (f.g.position.x - POND.x) / (POND.rx - 1.6));
+        f.r = Math.min(0.85, Math.max(0.2, Math.hypot((f.g.position.x - POND.x) / (POND.rx - 1.6), (f.g.position.z - POND.z) / (POND.rz - 1))));
+        f.g.userData.tail.rotation.y = Math.sin(time * 16 + f.a) * 0.6;
+        return;
+      }
       if (f.jump > 0) {
         f.jump += dt * 0.9;
         const h = Math.sin(f.jump * Math.PI) * 1.8;
@@ -658,12 +792,16 @@ function create(container, opts) {
         if (f.jump >= 1) { f.jump = 0; f.g.rotation.x = 0; ripple.position.set(nx, 0.24, nz); ripple.material.opacity = 0.8; ripple.scale.setScalar(1); }
       } else {
         const dx = nx - f.g.position.x, dz = nz - f.g.position.z;
-        f.g.position.set(nx, 0.12, nz);
+        f.g.position.set(lerp(f.g.position.x, nx, Math.min(1, dt * 6)), 0.12, lerp(f.g.position.z, nz, Math.min(1, dt * 6)));
         if (dx || dz) f.g.rotation.y = Math.atan2(dx, dz);
         if (Math.random() < dt * 0.05) { f.jump = 0.001; f.jx = nx; f.jz = nz; ripple.position.set(nx, 0.24, nz); ripple.material.opacity = 0.8; ripple.scale.setScalar(1); }
       }
       f.g.userData.tail.rotation.y = Math.sin(time * 8 + f.a) * 0.5;
     });
+    for (let i = splashes.length - 1; i >= 0; i--) {
+      const r = splashes[i]; r.material.opacity -= dt * 1.2; r.scale.multiplyScalar(1 + dt * 2.5 * r.userData.size);
+      if (r.material.opacity <= 0) { world.remove(r); r.geometry.dispose(); splashes.splice(i, 1); }
+    }
     if (ripple.material.opacity > 0) { ripple.material.opacity = Math.max(0, ripple.material.opacity - dt * 0.8); ripple.scale.multiplyScalar(1 + dt * 1.8); }
     flies.forEach((b) => {
       b.ph += dt;
@@ -737,10 +875,17 @@ function create(container, opts) {
   renderer.domElement.addEventListener('pointerup', (e) => {
     if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) { down = null; return; }
     down = null;
-    if (!opts.onPick) return;
     const r = renderer.domElement.getBoundingClientRect();
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
+    const pet = ray.intersectObjects([cat.g, dog.g], true)[0];
+    if (pet) {
+      const m = cat.g.getObjectById(pet.object.id) ? cat : dog;
+      if (!(m.sleep > 0)) { m.sleep = 3; m.sleepIn = 0; m.path = []; }
+      return;
+    }
+    const wet = ray.intersectObject(water)[0];
+    if (wet) { feed(wet.point.x - world.position.x, wet.point.z - world.position.z); return; }
     const hit = ray.intersectObjects(houseObjs, true)[0];
     if (!hit) return;
     let o = hit.object; while (o && !o.userData.id) o = o.parent;
@@ -781,7 +926,7 @@ function create(container, opts) {
   applyTime();
   fitCamera();
   start();
-  if (/[?&]debug3d/.test(location.search)) window.__v3d = { people, graph, get urgent() { return urgent; } };
+  if (/[?&]debug3d/.test(location.search)) window.__v3d = { people, graph, cat, dog, camera, controls, water, food, get urgent() { return urgent; } };
 
   return {
     setUrgent(n) {
@@ -791,6 +936,7 @@ function create(container, opts) {
     anchor,
     onFrame(fn) { frameFns.push(fn); },
     night() { return nightAmt; },
+    setTimeMode(mode) { hourOverride = mode === 'day' ? 11 : mode === 'night' ? 22 : null; applyTime(); },
     show(on) { shown = !!on; if (shown) { resize(); applyTime(); start(); } },
     resize,
     recenter: fitCamera,

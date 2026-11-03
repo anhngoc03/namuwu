@@ -91,6 +91,8 @@
     <div class="village-labels" id="village-labels"></div>
     <div class="village-corner">
       <div class="village-clock" id="village-clock"></div>
+      <button type="button" class="village-btn village-only-open" id="village-theme">◐</button>
+      <button type="button" class="village-btn village-only-open" id="village-gear">⚙</button>
       <button type="button" class="village-btn village-home-btn" id="village-home"><img src="/images/favicon.png" alt="" draggable="false"></button>
       <button type="button" class="village-btn village-star" id="village-star">✮⋆˙</button>
     </div>
@@ -1130,6 +1132,44 @@
         <input type="file" id="hall-file" multiple hidden accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,.txt,.md,.csv,.json,.html,text/*">
         <textarea id="hall-text" rows="1" placeholder="Message the village…"></textarea>
         <button type="button" class="pill-btn hall-send" id="hall-send">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: Village › settings (⚙, after the password) ================= -->
+  <div id="village-settings-modal" class="modal-overlay">
+    <div class="modal-box set-box">
+      <div class="modal-header">
+        <h3>Settings</h3>
+        <button id="set-close" class="modal-close">✕</button>
+      </div>
+      <div class="set-section">
+        <div class="set-title">Notifications on this device</div>
+        <div class="set-push">
+          <span class="set-push-status" id="set-push-status">…</span>
+          <button type="button" class="pill-btn" id="set-push-toggle">Turn on</button>
+          <button type="button" class="pill-btn secondary" id="set-push-test">Test</button>
+        </div>
+        <div class="set-hint" id="set-push-hint"></div>
+      </div>
+      <div class="set-section">
+        <div class="set-title">Remind me</div>
+        <label class="set-row"><input type="checkbox" id="set-morning-on"><span>Morning · today &amp; late</span><input type="time" id="set-morning-time"></label>
+        <label class="set-row"><input type="checkbox" id="set-evening-on"><span>Evening · tomorrow</span><input type="time" id="set-evening-time"></label>
+        <label class="set-row"><input type="checkbox" id="set-before-on"><span>Ahead</span>
+          <select id="set-before-days"><option value="1">1 day before</option><option value="2">2 days before</option><option value="3">3 days before</option><option value="5">5 days before</option><option value="7">7 days before</option><option value="14">14 days before</option></select><input type="time" id="set-before-time"></label>
+      </div>
+      <div class="set-section">
+        <div class="set-title">From</div>
+        <div class="set-chips">
+          <label><input type="checkbox" id="set-src-work"> Work</label>
+          <label><input type="checkbox" id="set-src-calendar"> Calendar</label>
+          <label><input type="checkbox" id="set-src-todo"> To-do</label>
+        </div>
+        <label class="set-row"><input type="checkbox" id="set-private"><span>Hide details on the lock screen</span></label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="pill-btn" id="set-save">Save</button>
       </div>
     </div>
   </div>
