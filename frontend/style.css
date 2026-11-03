@@ -2396,3 +2396,8 @@ body.love-room #love-view .love-head, body.love-room #love-view .love-hint{ poin
 .gc-game:active{ transform:scale(.97); }
 .gc-ico{ grid-row:1 / 3; font-size:30px; text-align:center; }
 .gc-game b{ font-size:16px; } .gc-game small{ opacity:.7; font-weight:700; }
+
+/* first paint: just the village sky, nothing else, until app.js routes */
+html.booting .village{ display:block; }
+html.booting #app-screen, html.booting .desktop-dock, html.booting .mobile-nav-toggle,
+html.booting .mobile-nav-scrim, html.booting .mobile-nav-drawer{ visibility:hidden !important; }

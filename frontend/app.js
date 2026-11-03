@@ -4244,7 +4244,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Open whatever the URL points at ("/" = Home, "/tools/yakult", "/personal/expenses"…).
   try { localStorage.removeItem('henlo_nav'); } catch (e) {}   // old "last page" memory, replaced by URLs
-  routeFromLocation_();
+  try { routeFromLocation_(); } finally {
+    requestAnimationFrame(function () { document.documentElement.classList.remove('booting'); });
+  }
 
   document.addEventListener('click', function (e) {
     if (e.target.closest && e.target.closest('button, .todo-check, .eating-day-cell, .expense-cal-cell, .symbol-cell, .nav-card')) buzz(6);
