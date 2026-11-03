@@ -45,7 +45,7 @@
     if (window.Village3D) { makeScene(); return; }
     loading = true;
     var sc = document.createElement('script');
-    sc.src = '/village3d.js?v=4';
+    sc.src = '/village3d.js?v=5';
     sc.onload = function () { loading = false; makeScene(); };
     sc.onerror = function () { loading = false; toast("Couldn't load the village ʕ´-ก̀ʔᐝ"); };
     document.head.appendChild(sc);
@@ -81,13 +81,14 @@
   });
 
   /* ---------------- clock + date (next to the 🍅 Home button) ---------------- */
-  var DAYS = ['CN', 'Th 2', 'Th 3', 'Th 4', 'Th 5', 'Th 6', 'Th 7'];
+  var DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   function two(n) { return (n < 10 ? '0' : '') + n; }
   function tickClock() {
     if (!clockEl) return;
     var d = new Date();
     clockEl.innerHTML = '<b>' + two(d.getHours()) + ':' + two(d.getMinutes()) + '</b><span>' +
-      DAYS[d.getDay()] + ' · ' + two(d.getDate()) + '/' + two(d.getMonth() + 1) + '/' + d.getFullYear() + '</span>';
+      DAYS[d.getDay()] + ', ' + MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear() + '</span>';
     if (scene3d) root.classList.toggle('village-night', scene3d.night() > 0.5);
   }
   setInterval(function () { if (shown) tickClock(); }, 5000);
@@ -317,7 +318,7 @@
     btn.style.display = ''; test.style.display = '';
     return currentSub().then(function (sub) {
       var on = !!sub && Notification.permission === 'granted';
-      st.textContent = on ? 'On ✓' : (Notification.permission === 'denied' ? 'Blocked' : 'Off');
+      st.textContent = on ? 'On' : (Notification.permission === 'denied' ? 'Blocked' : 'Off');
       btn.textContent = on ? 'Turn off' : 'Turn on';
       btn.dataset.on = on ? '1' : '';
       test.disabled = !on;

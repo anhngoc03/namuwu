@@ -122,13 +122,13 @@ function heart(color) {
 
 function makeHouse(spec, hall) {
   const g = new THREE.Group();
-  const w = hall ? 10 : 5.2, d = hall ? 7 : 4.2, h = hall ? 4.2 : 3, rh = hall ? 3.6 : 2.6;
+  const w = hall ? 10 : 5.2, d = hall ? 7 : 4.2, h = hall ? 4.6 : 3.2, rh = hall ? 3.6 : 2.6;   // 1 unit ≈ 1 m
   g.add(box(w + 0.6, 0.3, d + 0.6, COL.wall2, 0, 0.15, 0));           // base
   g.add(box(w, h, d, COL.wall, 0, 0.3 + h / 2, 0));                      // walls
   const roof = gableRoof(w, d, rh, hall ? COL.roof.hall : COL.roof[spec.roof]);
   roof.position.y = 0.3 + h; g.add(roof);
   // door + step
-  const dw = hall ? 2 : 1.1, dh = hall ? 2.6 : 1.9;
+  const dw = hall ? 1.9 : 1.05, dh = hall ? 2.8 : 2.15;
   g.add(box(dw, dh, 0.12, COL.door, 0, 0.3 + dh / 2, d / 2 + 0.02));
   g.add(box(0.12, 0.12, 0.08, 0xf9e08a, dw / 2 - 0.25, 0.3 + dh / 2, d / 2 + 0.1));
   g.add(box(dw + 0.8, 0.12, 0.8, COL.road, 0, 0.06, d / 2 + 0.6));
@@ -173,7 +173,7 @@ function makeHouse(spec, hall) {
 
 function makeTree(r) {
   const g = new THREE.Group();
-  const s = 0.8 + r() * 0.5;
+  const s = 1.3 + r() * 0.6;
   g.add(box(0.5 * s, 1.6 * s, 0.5 * s, COL.trunk, 0, 0.8 * s, 0));
   const blobs = [[0, 2.1, 0, 1.25], [0.6, 1.8, 0.3, 0.85], [-0.5, 1.9, -0.2, 0.9], [0.1, 2.8, 0.1, 0.8]];
   blobs.forEach(([x, y, z, rr], i) => {
@@ -232,7 +232,7 @@ function makePerson(look) {
   if (look.style === 'bun') { const b = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), mat(look.hair)); b.position.set(0, 0.6, -0.1); b.castShadow = true; head.add(b); }
   if (look.style === 'cap') { head.add(box(0.8, 0.18, 0.76, look.cap, 0, 0.5, 0)); head.add(box(0.7, 0.06, 0.4, look.cap, 0, 0.42, 0.5)); }
   if (look.style === 'long') head.add(box(0.74, 0.8, 0.16, look.hair, 0, -0.3, -0.3));
-  g.scale.setScalar(1.45);
+  g.scale.setScalar(0.86);     // ≈ 1.75 m tall
   return { g, parts };
 }
 function makeCat() {
@@ -254,7 +254,7 @@ function makeCat() {
   const t1 = box(0.1, 0.1, 0.4, c, 0, 0.05, -0.18); tail.add(t1);
   const t2 = new THREE.Group(); t2.position.set(0, 0.05, -0.36); tail.add(t2); t2.add(box(0.1, 0.4, 0.1, dk, 0, 0.18, 0));
   tail.rotation.x = 0.5;
-  g.scale.setScalar(1.35);
+  g.scale.setScalar(0.6);      // cat ≈ 0.45 m
   return { g, parts };
 }
 function makeDog() {
@@ -273,7 +273,7 @@ function makeDog() {
     const eye = box(0.08, 0.11, 0.03, 0x3d3030, x * 0.45, 0.08, 0.26); head.add(eye); (parts.eyes = parts.eyes || []).push(eye);
   });
   const tail = limb(0.12, 0.42, 0.12, br, 0, 0.82, -0.47); tail.rotation.x = -0.9; g.add(tail); parts.tail = tail;
-  g.scale.setScalar(1.3);
+  g.scale.setScalar(0.62);     // dog ≈ 0.75 m
   return { g, parts };
 }
 function makeFish(i) {
@@ -533,11 +533,11 @@ function create(container, opts) {
   world.add(tufts);
 
   // trees, fences, lamps
-  TREE_POS.forEach(([x, z]) => { if (!free(x, z)) return; const t = makeTree(R); t.position.set(x, 0, z); t.userData.post = 0.9; world.add(t); });
+  TREE_POS.forEach(([x, z]) => { if (!free(x, z)) return; const t = makeTree(R); t.position.set(x, 0, z); t.userData.post = 1.2; world.add(t); });
   for (let i = 0; i < 14; i++) {   // a ring of trees near the edge
     const a = i / 14 * Math.PI * 2 + 0.2, x = Math.cos(a) * (ISLAND.w / 2 - 3), z = Math.sin(a) * (ISLAND.d / 2 - 3);
     if (!free(x, z)) continue;
-    const t = makeTree(R); t.position.set(x, 0, z); t.userData.post = 0.9; world.add(t);
+    const t = makeTree(R); t.position.set(x, 0, z); t.userData.post = 1.2; world.add(t);
   }
   // street lamps beside the roads (the first three really light up at night)
   const lampSpots = [];
@@ -574,10 +574,10 @@ function create(container, opts) {
     const p = makePerson(look); world.add(p.g);
     const n = graph.nodes[graph.doorNodes[(i * 3) % graph.doorNodes.length]];
     p.g.position.set(n.x, 0, n.z);
-    return Object.assign(p, { kind: 'person', i, path: [], speed: rnd(2.4, 3.1), wait: rnd(0, 2), t: rnd(0, 6), node: graph.doorNodes[(i * 3) % graph.doorNodes.length] });
+    return Object.assign(p, { kind: 'person', i, path: [], speed: rnd(1.5, 1.9), wait: rnd(0, 2), t: rnd(0, 6), node: graph.doorNodes[(i * 3) % graph.doorNodes.length] });
   });
-  const cat = Object.assign(makeCat(), { kind: 'cat', path: [], speed: 1.6, wait: 2, t: 0, sit: true });
-  const dog = Object.assign(makeDog(), { kind: 'dog', path: [], speed: 3.6, wait: 1, t: 0, buddy: 0 });
+  const cat = Object.assign(makeCat(), { kind: 'cat', path: [], speed: 1.1, wait: 2, t: 0, sit: true });
+  const dog = Object.assign(makeDog(), { kind: 'dog', path: [], speed: 2.2, wait: 1, t: 0, buddy: 0 });
   { const a = graph.nodes[graph.doorNodes[2]], b = graph.nodes[graph.doorNodes[graph.doorNodes.length - 1]];
     cat.g.position.set(a.x + 1.5, 0, a.z + 0.6); dog.g.position.set(b.x + 3, 0, b.z + 0.8); }
   world.add(cat.g, dog.g);
@@ -588,7 +588,7 @@ function create(container, opts) {
     x.font = 'bold 34px sans-serif'; x.fillStyle = '#7a6a9a';
     x.fillText('z', 18, 52); x.font = 'bold 26px sans-serif'; x.fillText('z', 52, 36); x.font = 'bold 20px sans-serif'; x.fillText('z', 82, 22);
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
-    sp.scale.set(1.6, 0.8, 1); sp.visible = false; world.add(sp);
+    sp.scale.set(1.1, 0.55, 1); sp.visible = false; world.add(sp);
     return sp;
   }
   cat.zzz = zzzSprite(); dog.zzz = zzzSprite();
@@ -736,7 +736,7 @@ function create(container, opts) {
         m.parts.eyes.forEach((e) => { e.scale.y = 1 - 0.8 * k; });
         m.parts.tail.rotation.z = Math.sin(time * 0.8) * 0.15;
         m.zzz.visible = true;
-        m.zzz.position.set(m.g.position.x, 1.9 + ((time * 0.6) % 1) * 0.6, m.g.position.z);
+        m.zzz.position.set(m.g.position.x, 0.95 + ((time * 0.6) % 1) * 0.45, m.g.position.z);
         m.zzz.material.opacity = 0.9 - ((time * 0.6) % 1) * 0.6;
         if (m.sleep <= 0) { m.zzz.visible = false; m.parts.eyes.forEach((e) => { e.scale.y = 1; }); m.parts.head.rotation.x = 0; m.wait = rnd(0.3, 1); }
         return;
