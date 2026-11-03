@@ -51,15 +51,7 @@
       <button class="app-nav-sublink" data-open="mochi">Mochi Fly</button>
     </div>
 
-    <button class="app-nav-link app-nav-group-toggle" data-nav-section="personal">
-      <span>Personal</span><span class="nav-chevron">⌄</span>
-    </button>
-    <div class="app-nav-submenu" data-submenu="personal">
-      <button class="app-nav-sublink" data-open="accounts">Account</button>
-      <button class="app-nav-sublink" data-open="expense">Expenses</button>
-      <button class="app-nav-sublink" data-open="work">Work</button>
-      <button class="app-nav-sublink" data-open="calendar">Calendar</button>
-    </div>
+    <button class="app-nav-link" data-nav-section="personal">Personal</button>
 
     <div class="theme-switch-row"><span>Theme</span><button type="button" class="theme-switch" aria-label="Light / dark mode"><span class="ts-knob"></span><span class="ts-sun">☼</span><span class="ts-moon">☾</span></button></div>
   </nav>
@@ -240,11 +232,14 @@
         </section>
 
         <section class="content-section personal">
-          <div class="section-header">
-            <h2 class="section-title">Personal</h2>
-            <p class="section-desc">Just for me. Locked behind a password.</p>
+          <!-- The village (village.js). Locked = picture only; ✮⋆˙ opens the password board. -->
+          <div class="village" id="village">
+            <canvas id="village-canvas" class="village-canvas"></canvas>
+            <div class="village-labels" id="village-labels"></div>
+            <button type="button" class="village-star" id="village-star">✮⋆˙</button>
           </div>
-          <div class="nav-card-grid">
+          <!-- old cards: kept only so their buttons still exist for app.js; never shown -->
+          <div class="nav-card-grid" hidden>
             <button id="open-accounts" class="nav-card" data-accent="blue">
               <span class="nav-card-emoji">'ㅅ'</span>
               <div class="nav-card-body">
@@ -1104,6 +1099,20 @@
     </div>
   </div>
 
+  <!-- ================= MODAL: Village › Town Hall (what's due) ================= -->
+  <div id="village-hall-modal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Town Hall</h3>
+        <button id="village-hall-close" class="modal-close">✕</button>
+      </div>
+      <div id="village-hall-list" class="village-hall-list"></div>
+      <div class="modal-actions">
+        <button id="village-hall-work" class="pill-btn">Open Work</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= MODAL: Edit type ================= -->
   <div id="edit-modal" class="modal-overlay">
     <div class="modal-box">
@@ -1450,6 +1459,7 @@
   <script src="/work.js"></script>
   <script src="/posts.js"></script>
   <script src="/calendar.js"></script>
+  <script src="/village.js"></script>
   <script src="/enter-confirm.js"></script>
 </body>
 </html>
