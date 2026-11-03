@@ -2311,10 +2311,10 @@ body.love-room #love-view .love-head, body.love-room #love-view .love-hint{ poin
   transform-origin:left center; transition:transform .8s cubic-bezier(.5,0,.3,1), opacity .2s ease .6s; backface-visibility:hidden; }
 .lb-cover::before{ content:''; position:absolute; inset:16px 14px 14px 24px; border:2px dashed rgba(107,74,47,.3); border-radius:6px 12px 12px 6px; pointer-events:none; }
 .lb-cover::after{ content:'★   ✦        ✦   ★'; white-space:pre; position:absolute; inset:34px 30px auto 40px; text-align:center; color:#fff; font-size:16px; line-height:1.4; opacity:.9; pointer-events:none; }
-@font-face{ font-family:'Pretty On The Inside'; src:url('/fonts/PrettyOnTheInside.woff2') format('woff2'), url('/fonts/PrettyOnTheInside.ttf') format('truetype'); font-display:swap; }
+@font-face{ font-family:'Pretty On The Inside'; src:url('/fonts/PrettyOnTheInside.ttf') format('truetype'); font-display:swap; }
 .lb-heart{ width:min(30vw, 118px); height:auto; filter:drop-shadow(0 4px 0 rgba(214,110,150,.28)); animation:lbBeat 2.4s ease-in-out infinite; }
 @keyframes lbBeat{ 0%,100%{ transform:scale(1); } 12%{ transform:scale(1.08); } 24%{ transform:scale(.98); } 36%{ transform:scale(1.05); } }
-.lb-title{ font-family:'Pretty On The Inside', 'Henny Penny', cursive; font-size:clamp(28px, 8vw, 38px); line-height:1.08; text-align:center; color:#6b4a2f; padding:0 22px; }
+.lb-title{ font-family:'Pretty On The Inside', 'Henny Penny', cursive; font-size:clamp(44px, 12.5vw, 58px); line-height:1.05; text-align:center; color:#6b4a2f; padding:0 22px; }
 .lb-names{ font-family:'Dancing Script', cursive; font-weight:700; font-size:clamp(19px, 5.2vw, 24px); line-height:1.2; text-align:center; color:#6b4a2f; padding:0 26px; }
 .lb-sym{ font-family:'Noto Sans Warang Citi', 'Dancing Script', sans-serif; font-weight:400; color:#e88fb0; white-space:nowrap; }
 .lb-day{ font-family:'Dancing Script', cursive; font-size:20px; color:#8a5a3a; }
