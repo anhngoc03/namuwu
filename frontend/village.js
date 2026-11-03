@@ -7,8 +7,15 @@
  * house in the middle (Town Hall) is where the villagers walk to when a Work
  * task is due today/tomorrow (or late) and still not done.
  *
- * Everything is drawn on one <canvas> in "logical pixels" (256×160 landscape,
- * 160×256 portrait) and scaled up crisp. No server call while locked.
+ * Full screen. Top-right: 🛖 = back to Home (the only way out), ✮⋆˙ = password
+ * (again = lock). The Town Hall opens what's due + the AI agent chat
+ * (lib/agent.js). The chat lives only in this tab: nothing is saved, files sent
+ * to it are only for Claude to read.
+ *
+ * Everything is drawn on one <canvas> in "logical pixels": the village itself is
+ * 256×160 (landscape) or 160×256 (portrait), centred, with extra meadow around it
+ * to fill the screen, all scaled up by a whole number so the pixels stay crisp.
+ * No server call while locked.
  * ------------------------------------------------------------------
  */
 (function () {
@@ -89,6 +96,8 @@
   /* ---------------- state ---------------- */
   var root, canvas, ctx, bg, labelsEl, starBtn;
   var L = null, mode = '', scale = 1, night = false;
+  var VW = 0, VH = 0, OX = 0, OY = 0;   // whole canvas in logical px, and where the village sits in it
+  var shown = false;
   var people = [], pets = [], fish = [], flies = [];
   var running = false, lastT = 0, acc = 0;
   var urgent = [];            // Work tasks that call everyone to the Town Hall
@@ -200,16 +209,28 @@
   function drawBackground() {
     var p = P();
     bg = document.createElement('canvas');
-    bg.width = L.W * scale; bg.height = L.H * scale;
+    bg.width = VW * scale; bg.height = VH * scale;
     var c = bg.getContext('2d');
     c.imageSmoothingEnabled = false;
     c.scale(scale, scale);
     var R = rng(7);
 
-    px(c, 0, 0, L.W, L.H, p.grass);
-    for (var i = 0; i < L.W * L.H / 40; i++) {
-      px(c, Math.floor(R() * L.W), Math.floor(R() * L.H), 1, 1, R() < 0.6 ? p.grass2 : p.grass3);
+    // meadow over the whole screen, with trees + flowers in the extra space
+    px(c, 0, 0, VW, VH, p.grass);
+    for (var i = 0; i < VW * VH / 40; i++) {
+      px(c, Math.floor(R() * VW), Math.floor(R() * VH), 1, 1, R() < 0.6 ? p.grass2 : p.grass3);
     }
+    var R2 = rng(31), edge = [];
+    for (var e = 0; e < VW * VH / 420; e++) {
+      var ex = Math.floor(R2() * (VW - 10)), ey = Math.floor(R2() * (VH - 12));
+      if (ex + 10 > OX - 2 && ex < OX + L.W + 2 && ey + 13 > OY - 2 && ey < OY + L.H + 2) continue;
+      edge.push([ex, ey]);
+    }
+    edge.sort(function (a, b) { return a[1] - b[1]; }).forEach(function (t, k) {
+      if (k % 3 === 2) { px(c, t[0] + 2, t[1] + 8, 1, 1, p.flower[k % p.flower.length]); px(c, t[0] + 5, t[1] + 9, 1, 1, p.flower[(k + 1) % p.flower.length]); }
+      else drawTree(c, t[0], t[1]);
+    });
+    c.translate(OX, OY);
     // roads
     L.roads.forEach(function (r) {
       px(c, r[0], r[1], r[2], r[3], p.road);
@@ -316,7 +337,7 @@
       return { a: rnd(0, 6.28), r: rnd(0.3, 0.7), sp: rnd(0.25, 0.5) * (i % 2 ? 1 : -1), x: 0, y: 0, dir: 1, anim: 0, jump: 0 };
     });
     flies = [];
-    for (var i = 0; i < 9; i++) flies.push({ x: rnd(0, L.W), y: rnd(0, L.H), ph: rnd(0, 6.28) });
+    for (var i = 0; i < 14; i++) flies.push({ x: rnd(0, 2000), y: rnd(0, 2000), ph: rnd(0, 6.28) });
   }
 
   function pickTarget(m, i) {
@@ -377,7 +398,7 @@
   function render(time) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(bg, 0, 0);
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.setTransform(scale, 0, 0, scale, OX * scale, OY * scale);
     fish.forEach(function (f) { if (!f.jump) drawFish(ctx, f); });
     var actors = people.map(function (m) { return { y: m.y, f: function () { drawPerson(ctx, m); } }; })
       .concat(pets.map(function (m) { return { y: m.y, f: function () { (m.kind === 'cat' ? drawCat : drawDog)(ctx, m); } }; }));
@@ -390,14 +411,17 @@
     }
     if (night) {
       flies.forEach(function (f) {
-        if (Math.sin(f.ph * 2) > 0.2) px(ctx, Math.round(f.x) % L.W, Math.round(f.y) % L.H, 1, 1, '#fff2a8');
+        if (Math.sin(f.ph * 2) > 0.2) {
+          var fx = ((Math.round(f.x) % VW) + VW) % VW - OX, fy = ((Math.round(f.y) % VH) + VH) % VH - OY;
+          px(ctx, fx, fy, 1, 1, '#fff2a8');
+        }
       });
     }
   }
 
   function loop(t) {
     if (!running) return;
-    if (!canvas.offsetParent || document.hidden) { running = false; return; }
+    if (!shown || document.hidden) { running = false; return; }
     var dt = Math.min(0.1, (t - (lastT || t)) / 1000);
     lastT = t; acc += dt;
     if (acc >= 1 / 30) { update(acc); render(t); acc = 0; }   // ~30 fps is plenty for pixels
@@ -411,20 +435,20 @@
 
   /* ---------------- size / theme ---------------- */
   function fit() {
-    if (!root || !root.offsetParent) return;
-    var wantPort = window.innerWidth < window.innerHeight * 0.9;
-    var m = wantPort ? 'port' : 'land';
-    var cssW = root.clientWidth;
-    var dpr = window.devicePixelRatio || 1;
+    if (!shown) return;
+    var cssW = window.innerWidth, cssH = window.innerHeight;
+    var m = cssW < cssH * 0.9 ? 'port' : 'land';
     var newL = LAYOUTS[m];
-    var s = Math.max(1, Math.round(cssW * dpr / newL.W));
+    var dpr = window.devicePixelRatio || 1;
+    // biggest whole-number zoom at which the whole village still fits the screen
+    var s = Math.max(1, Math.floor(Math.min(cssW * dpr / (newL.W + 8), cssH * dpr / (newL.H + 8))));
+    var vw = Math.ceil(cssW * dpr / s), vh = Math.ceil(cssH * dpr / s);
     var n = isNight();
-    if (m === mode && s === scale && n === night && bg) return;
+    if (m === mode && s === scale && n === night && vw === VW && vh === VH && bg) return;
     var changedLayout = m !== mode;
-    mode = m; L = newL; scale = s; night = n;
-    root.style.aspectRatio = L.W + ' / ' + L.H;
-    root.classList.toggle('village-port', m === 'port');
-    canvas.width = L.W * scale; canvas.height = L.H * scale;
+    mode = m; L = newL; scale = s; night = n; VW = vw; VH = vh;
+    OX = Math.floor((VW - L.W) / 2); OY = Math.floor((VH - L.H) / 2);
+    canvas.width = VW * scale; canvas.height = VH * scale;
     ctx.imageSmoothingEnabled = false;
     drawBackground();
     if (changedLayout || !people.length) spawn();
@@ -433,7 +457,10 @@
   }
 
   /* ---------------- labels / taps (only after the password) ---------------- */
-  function pct(v, of) { return (v / of * 100).toFixed(3) + '%'; }
+  function pctX(v) { return ((OX + v) / VW * 100).toFixed(3) + '%'; }
+  function pctY(v) { return ((OY + v) / VH * 100).toFixed(3) + '%'; }
+  function pctW(v) { return (v / VW * 100).toFixed(3) + '%'; }
+  function pctH(v) { return (v / VH * 100).toFixed(3) + '%'; }
 
   function renderLabels() {
     if (!labelsEl || !L) return;
@@ -443,12 +470,12 @@
     HOUSES.forEach(function (h, i) {
       var b = houseBox(i);
       html += '<button type="button" class="village-spot' + (h.open ? '' : ' soon') + '" data-house="' + h.id + '" style="left:' +
-        pct(b.x - 2, L.W) + ';top:' + pct(b.y - 1, L.H) + ';width:' + pct(b.w + 4, L.W) + ';height:' + pct(b.h + 4, L.H) + '">' +
+        pctX(b.x - 2) + ';top:' + pctY(b.y - 1) + ';width:' + pctW(b.w + 4) + ';height:' + pctH(b.h + 4) + '">' +
         '<span class="village-tag">' + h.label + '</span></button>';
     });
     var g = hallBox();
     html += '<button type="button" class="village-spot hall' + (urgent.length ? ' alert' : '') + '" data-house="hall" style="left:' +
-      pct(g.x - 2, L.W) + ';top:' + pct(g.y - 10, L.H) + ';width:' + pct(g.w + 4, L.W) + ';height:' + pct(g.h + 14, L.H) + '">' +
+      pctX(g.x - 2) + ';top:' + pctY(g.y - 10) + ';width:' + pctW(g.w + 4) + ';height:' + pctH(g.h + 14) + '">' +
       '<span class="village-tag">Town Hall' + (urgent.length ? ' <b>' + urgent.length + '</b>' : '') + '</span></button>';
     labelsEl.innerHTML = html;
   }
@@ -463,17 +490,110 @@
   }
 
   function openHall() {
-    var box = document.getElementById('village-hall-list');
-    if (!urgent.length) {
-      box.innerHTML = '<div class="village-hall-empty">All calm in the village ✿</div>';
-    } else {
-      box.innerHTML = urgent.map(function (t) {
-        var late = t.eff < t.today;
-        return '<div class="home-work-row prio-' + t.priority + '"><span>' + icdEscape(t.title) + '</span>' +
-          '<span class="work-due' + (late ? ' over' : '') + '">' + (late ? 'late · ' : '') + workFmtDue(t.eff) + '</span></div>';
-      }).join('');
-    }
+    renderDue();
+    renderChat();
     document.getElementById('village-hall-modal').classList.add('active');
+    setTimeout(function () { var t = document.getElementById('hall-text'); if (t && window.innerWidth > 760) t.focus(); }, 80);
+  }
+  function renderDue() {
+    var box = document.getElementById('village-hall-list');
+    document.getElementById('hall-due').classList.toggle('empty', !urgent.length);
+    box.innerHTML = urgent.map(function (t) {
+      var late = t.eff < t.today;
+      return '<div class="home-work-row prio-' + t.priority + '"><span>' + icdEscape(t.title) + '</span>' +
+        '<span class="work-due' + (late ? ' over' : '') + '">' + (late ? 'late · ' : '') + workFmtDue(t.eff) + '</span></div>';
+    }).join('');
+  }
+
+  /* ---------------- Town Hall chat (AI agent, lib/agent.js) ----------------
+     The conversation (in API form, so Claude keeps its context) lives only here.
+     Files are read in the browser and sent with that one message — never stored. */
+  var chat = { messages: [], view: [], files: [], busy: false };
+  var MAX_FILE = 15 * 1024 * 1024;
+
+  function md(text) {        // tiny, safe formatting: escape, then **bold**, `code`, links, new lines
+    var h = icdEscape(text);
+    h = h.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>');
+    h = h.replace(/(https?:\/\/[^\s<)]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+    return h.replace(/\n/g, '<br>');
+  }
+  function renderChat() {
+    var el = document.getElementById('hall-chat');
+    if (!chat.view.length && !chat.busy) {
+      el.innerHTML = '<div class="hall-hello">ʕ•ᴥ•ʔ</div>';
+    } else {
+      el.innerHTML = chat.view.map(function (m) {
+        if (m.who === 'act') return '<div class="hall-act">✓ ' + icdEscape(m.text) + '</div>';
+        var files = (m.files || []).map(function (n) { return '<span class="hall-file-chip">' + icdEscape(n) + '</span>'; }).join('');
+        return '<div class="hall-msg ' + m.who + (m.err ? ' err' : '') + '">' + (files ? '<div>' + files + '</div>' : '') + md(m.text) + '</div>';
+      }).join('') + (chat.busy ? '<div class="hall-msg bot typing"><span></span><span></span><span></span></div>' : '');
+    }
+    el.scrollTop = el.scrollHeight;
+    document.getElementById('hall-files').innerHTML = chat.files.map(function (f, i) {
+      return '<span class="hall-file-chip">' + icdEscape(f.name) + ' <button type="button" data-rm="' + i + '">✕</button></span>';
+    }).join('');
+    document.getElementById('hall-send').disabled = chat.busy;
+  }
+  function readFile(file) {
+    return new Promise(function (res, rej) {
+      if (file.size > MAX_FILE) { rej(new Error(file.name + ' is over 15MB')); return; }
+      var r = new FileReader();
+      r.onload = function () { res({ name: file.name, type: file.type || 'text/plain', data: String(r.result).split(',')[1] || '' }); };
+      r.onerror = function () { rej(new Error("Can't read " + file.name)); };
+      r.readAsDataURL(file);
+    });
+  }
+  function sendChat() {
+    if (chat.busy || !unlocked()) return;
+    var ta = document.getElementById('hall-text');
+    var text = ta.value.trim();
+    if (!text && !chat.files.length) return;
+    var files = chat.files; chat.files = [];
+    chat.view.push({ who: 'me', text: text, files: files.map(function (f) { return f.name; }) });
+    chat.busy = true; ta.value = ''; autoGrow();
+    renderChat();
+    google.script.run
+      .withSuccessHandler(function (d) {
+        chat.busy = false;
+        chat.messages = d.messages || chat.messages;
+        (d.actions || []).forEach(function (a) { chat.view.push({ who: 'act', text: a }); });
+        chat.view.push({ who: 'bot', text: d.reply || '…' });
+        renderChat();
+        if (d.actions && d.actions.length) loadUrgent();      // data changed → the village reacts
+      })
+      .withFailureHandler(function (err) {
+        chat.busy = false;
+        chat.view.push({ who: 'bot', err: true, text: (err && err.message) || 'Something went wrong' });
+        renderChat();
+      })
+      .agentChat(chat.messages, text, files);
+  }
+  function autoGrow() {
+    var ta = document.getElementById('hall-text');
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(140, ta.scrollHeight) + 'px';
+  }
+  function forgetChat() { chat = { messages: [], view: [], files: [], busy: false }; }
+  function wireChat() {
+    var ta = document.getElementById('hall-text'), fi = document.getElementById('hall-file');
+    ta.addEventListener('input', autoGrow);
+    ta.addEventListener('keydown', function (e) {
+      // desktop: Enter sends, Shift+Enter = new line. Phones: the button sends.
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && window.innerWidth > 760) { e.preventDefault(); sendChat(); }
+    });
+    document.getElementById('hall-send').onclick = sendChat;
+    document.getElementById('hall-attach').onclick = function () { fi.click(); };
+    fi.onchange = function () {
+      var list = Array.prototype.slice.call(fi.files || []);
+      fi.value = '';
+      Promise.all(list.map(readFile)).then(function (got) {
+        chat.files = chat.files.concat(got).slice(0, 10); renderChat();
+      }).catch(function (e) { toast(e.message); });
+    };
+    document.getElementById('hall-files').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-rm]');
+      if (b) { chat.files.splice(Number(b.dataset.rm), 1); renderChat(); }
+    });
   }
 
   /* ---------------- what's due (Work) ---------------- */
@@ -506,6 +626,8 @@
   }
 
   /* ---------------- public ---------------- */
+  function closeHall() { document.getElementById('village-hall-modal').classList.remove('active'); }
+
   function build() {
     root = document.getElementById('village');
     if (!root) return false;
@@ -519,37 +641,48 @@
       if (unlocked()) { lockPersonal(); villageRefresh(); return; }
       openPersonalGate(function () { villageRefresh(); });
     };
+    document.getElementById('village-home').onclick = function () { goHome('home'); };
+    document.getElementById('personal-back').onclick = function () { goHome('personal'); };
+    document.getElementById('personal-home').onclick = function () { goHome('home'); };
     labelsEl.addEventListener('click', function (e) {
       var b = e.target.closest('.village-spot');
       if (b) openHouse(b.dataset.house);
     });
-    document.getElementById('village-hall-close').onclick = function () {
-      document.getElementById('village-hall-modal').classList.remove('active');
-    };
-    document.getElementById('village-hall-work').onclick = function () {
-      document.getElementById('village-hall-modal').classList.remove('active');
-      requirePersonal(openWork);
-    };
+    document.getElementById('village-hall-close').onclick = closeHall;
+    document.getElementById('village-hall-work').onclick = function () { closeHall(); requirePersonal(openWork); };
+    wireChat();
     window.addEventListener('resize', function () { fit(); });
     new MutationObserver(function () { fit(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     if (window.matchMedia) {
       var mq = window.matchMedia('(prefers-color-scheme: dark)');
       if (mq.addEventListener) mq.addEventListener('change', fit);
     }
-    document.addEventListener('visibilitychange', function () { if (!document.hidden && root.offsetParent) start(); });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden && shown) start(); });
+    // locked again (button, idle timer, expired session) → forget the chat
+    window.addEventListener('personal-unauthorized', forgetChat);
     built = true;
     return true;
   }
 
-  // Called whenever the Personal section is shown, and after lock / unlock.
+  // Shows / hides the full-screen village. Called by app.js whenever the page changes.
+  function villageShow(on) {
+    if (!built && !build()) return;
+    shown = !!on;
+    document.body.classList.toggle('village-mode', shown);
+    if (!shown) { running = false; return; }
+    villageRefresh();
+  }
+  // After lock / unlock (and on show): labels, what's due, keep animating.
   function villageRefresh() {
     if (!built && !build()) return;
-    if (!root.offsetParent) return;
+    if (!unlocked()) { forgetChat(); closeHall(); }
+    if (!shown) return;
     fit();
     renderLabels();
     if (unlocked()) loadUrgent(); else setUrgent([]);
     start();
   }
 
+  window.villageShow = villageShow;
   window.villageRefresh = villageRefresh;
 })();

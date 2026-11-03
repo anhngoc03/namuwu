@@ -16,6 +16,8 @@
  * ------------------------------------------------------------------
  */
 
+import { agentChat as runAgentChat } from '../lib/agent.js';
+
 // ---------- Helper gọi Supabase REST (PostgREST) ----------
 async function sb(env, path, options = {}) {
   const url = `${env.SUPABASE_URL}/rest/v1/${path}`;
@@ -59,7 +61,8 @@ function isPersonalAction_(action) {
   // Mọi action Expense đều cần token, trừ ô tóm tắt "Today's spending" ở Home (giữ công khai theo yêu cầu).
   if (/Work/.test(action)) return action !== 'getWorkHomeSummary';   // Home chỉ được xem con số
   if (/Post|Calendar/.test(action)) return true;
-  if (action === 'saveHomeProfile') return true;        // anyone sees the Home photo/name, only you change it
+  if (action === 'saveHomeProfile') return true;
+  if (/^agent/.test(action)) return true;              // Town Hall AI agent (village.js → lib/agent.js)        // anyone sees the Home photo/name, only you change it
   return /Expense/.test(action) && action !== 'getExpenseTodayTotal';
 }
 
@@ -1445,8 +1448,19 @@ const ACTIONS = {
   addExpenseCategory,
   updateExpenseCategory,
   deleteExpenseCategory,
-  getExpenseTodayTotal
+  getExpenseTodayTotal,
+  agentChat
 };
+
+// Town Hall chat — the agent works through the same functions the app uses.
+async function agentChat(env, args) {
+  return runAgentChat(env, args || [], {
+    getWorkData, saveWorkTask, deleteWorkTask,
+    getExpenseData, addExpenseEntry, deleteExpenseEntry, addExpenseIncomeEntry,
+    getCalendarNotes, saveCalendarNote, deleteCalendarNote,
+    getHomeData, addHomeItem, toggleHomeCheck
+  });
+}
 
 async function handle(env, action, args, token) {
   const fn = ACTIONS[action];

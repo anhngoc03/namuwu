@@ -569,7 +569,7 @@ function showHomeSection(section) {
     loadHomeYakultTile();
     if (typeof workLoadHomeBlock === 'function') workLoadHomeBlock();
   }
-  if (section === 'personal' && typeof villageRefresh === 'function') villageRefresh();
+  if (typeof villageShow === 'function') villageShow(section === 'personal');   // full-screen village
   setNavActive(section);
   setPath_(SECTION_PATHS_[section]);
 }
@@ -577,6 +577,9 @@ function showHomeSection(section) {
 function showView(id) {
   document.querySelectorAll('.app-view').forEach(function (v) { v.style.display = 'none'; });
   document.getElementById(id).style.display = 'block';
+  // Personal features (Work, Money…) hide the dock and show ‹ (village) + 🛖 (Home) instead
+  document.body.classList.toggle('personal-view', NAV_SECTION_MAP_[id] === 'personal');
+  if (id !== 'menu-view' && typeof villageShow === 'function') villageShow(false);
   if (id === 'menu-view') {
     showHomeSection(currentHomeSection_);
   } else {
