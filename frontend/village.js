@@ -45,7 +45,7 @@
     if (window.Village3D) { makeScene(); return; }
     loading = true;
     var sc = document.createElement('script');
-    sc.src = '/village3d.js?v=5';
+    sc.src = '/village3d.js?v=6';
     sc.onload = function () { loading = false; makeScene(); };
     sc.onerror = function () { loading = false; toast("Couldn't load the village ʕ´-ก̀ʔᐝ"); };
     document.head.appendChild(sc);
@@ -63,6 +63,7 @@
     }
     scene3d.onFrame(placeTags);
     scene3d.setUrgent(urgent.length);
+    pushBusy();
     scene3d.show(shown);
     tickClock();
     renderLabels();
@@ -251,10 +252,30 @@
           .filter(function (t) { return t.eff && t.eff <= soon; })
           .sort(function (a, b) { return a.eff < b.eff ? -1 : a.eff > b.eff ? 1 : 0; });
         setUrgent(list);
+        // Work house: still busy while anything is in Doing, due today or late
+        busyMap.work = d.tasks.filter(function (t) {
+          if (t.status === 'done') return false;
+          var e = workEffDue_(t);
+          return t.status === 'doing' || (e && e <= d.today);
+        }).length;
+        pushBusy();
       })
       .withFailureHandler(function () { setUrgent([]); })
       .getWorkData();
+    // Calendar house: busy on days with reminders / work / important notes
+    google.script.run
+      .withSuccessHandler(function (c) {
+        var today = c && c.today;
+        busyMap.calendar = !c ? 0 : c.notes.filter(function (n) { return n.day === today && /remind|work|important/.test(n.kind); }).length;
+        pushBusy();
+      })
+      .withFailureHandler(function () {})
+      .getCalendarNotes(new Date().getFullYear());
   }
+  var busyMap = {};
+  function pushBusy() { if (scene3d) scene3d.setBusy(unlocked() ? busyMap : {}); }
+  // keep it fresh while the village is open
+  setInterval(function () { if (shown && unlocked() && !document.hidden) loadUrgent(); }, 5 * 60 * 1000);
   function setUrgent(list) {
     urgent = list || [];
     if (scene3d) scene3d.setUrgent(urgent.length);
@@ -449,7 +470,7 @@
     if (!shown) return;
     tickClock();
     renderLabels();
-    if (unlocked()) loadUrgent(); else setUrgent([]);
+    if (unlocked()) loadUrgent(); else { setUrgent([]); busyMap = {}; pushBusy(); }
   }
 
   window.villageShow = villageShow;

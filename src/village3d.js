@@ -6,7 +6,8 @@
  * window.Village3D.create(container, opts) → api
  *   opts.houses   [{ id, roof, heart }]  same order as the layout below
  *   opts.onPick(id)                        a house was tapped (id or 'hall')
- *   api.setUrgent(n)                       n > 0 → villagers walk to the Town Hall
+ *   api.setUrgent(n)                       n > 0 → villagers (not busy ones) walk to the Town Hall
+ *   api.setBusy({ id: n })                 houses with unfinished work keep going, + helpers
  *   api.anchor(id)                         { x, y, visible } screen px for a name tag
  *   api.onFrame(fn)                        called after every rendered frame
  *   api.night()                            0 (day) … 1 (night), from the real clock
@@ -96,7 +97,8 @@ function slab(shape, depth, color, y) {
 }
 
 /* ---------------- buildings ---------------- */
-let windowMats = [];         // glow at night
+let windowMats = [];         // house windows (lit per house, by who's home)
+let lampMats = [];           // street lamps (on at night)
 function windowMat() {
   const m = new THREE.MeshLambertMaterial({ color: 0xbfe6f2, emissive: 0xffd27a, emissiveIntensity: 0 });
   windowMats.push(m);
@@ -134,6 +136,7 @@ function makeHouse(spec, hall) {
   g.add(box(dw + 0.8, 0.12, 0.8, COL.road, 0, 0.06, d / 2 + 0.6));
   // windows (front + sides)
   const wm = windowMat();
+  g.userData.wm = wm;
   const wx = hall ? [-3.6, -2, 2, 3.6] : [-1.6, 1.6];
   wx.forEach((x) => {
     g.add(box(1.1, 1.1, 0.1, COL.frame, x, 0.3 + h * 0.6, d / 2 + 0.01));
@@ -142,6 +145,7 @@ function makeHouse(spec, hall) {
   [-1, 1].forEach((sx) => g.add(box(0.12, 0.85, 0.85, 0, sx * (w / 2 + 0.01), 0.3 + h * 0.6, 0, wm)));
   if (!hall) {
     g.add(box(0.6, 1.4, 0.6, COL.wall2, w / 4, 0.3 + h + rh * 0.55, -d / 5));            // chimney
+    g.userData.chimney = new THREE.Vector3(w / 4, 0.3 + h + rh * 0.55 + 1, -d / 5);
     g.add(box(0.8, 0.2, 0.8, 0xe2c9ad, w / 4, 0.3 + h + rh * 0.55 + 0.75, -d / 5));
     // little flower box under the windows
     wx.forEach((x) => {
@@ -151,7 +155,8 @@ function makeHouse(spec, hall) {
   }
   if (spec && spec.heart) {
     const hm = heart(0xff7f9e); hm.scale.setScalar(0.9);
-    hm.position.set(0, 0.3 + h + rh * 0.42, d / 2 + 0.42); g.add(hm);
+    hm.material = new THREE.MeshLambertMaterial({ color: 0xff7f9e, emissive: 0xff4f7e, emissiveIntensity: 0.2 });
+    hm.position.set(0, 0.3 + h + rh * 0.42, d / 2 + 0.42); g.add(hm); g.userData.heart = hm;
   }
   let bell = null;
   if (hall) {
@@ -189,7 +194,7 @@ function makeLamp() {
   const g = new THREE.Group();
   g.add(box(0.16, 2.2, 0.16, 0x8c7a6b, 0, 1.1, 0));
   const glass = new THREE.MeshLambertMaterial({ color: 0xfff4cf, emissive: 0xffd27a, emissiveIntensity: 0 });
-  windowMats.push(glass);
+  lampMats.push(glass);
   g.add(box(0.5, 0.5, 0.5, 0, 0, 2.45, 0, glass));
   g.add(box(0.62, 0.12, 0.62, 0x8c7a6b, 0, 2.76, 0));
   return g;
@@ -202,17 +207,33 @@ function limb(w, h, d, color, x, y, z) {   // pivot at the top
   return p;
 }
 const LOOKS = [
-  { hair: 0x5a4040, skin: 0xffdcc6, shirt: 0xffb6c1, pants: 0x8a8fb8, style: 'bun' },
-  { hair: 0x3b2f2f, skin: 0xf3c8a6, shirt: 0xa6d8e8, pants: 0x6d6a8a, style: 'cap', cap: 0xf9e08a },
-  { hair: 0xa8714a, skin: 0xffe2d0, shirt: 0xdde874, pants: 0x7c8aa8, style: 'long' },
-  { hair: 0x2e2a36, skin: 0xedbd9a, shirt: 0xd9c9f0, pants: 0x8a7a6a, style: 'short' }
+  { hair: 0x5a4040, skin: 0xffdcc6, shirt: 0xb9a6e8, pants: 0x6d6a8a, style: 'short' },               // Work
+  { hair: 0x3b2f2f, skin: 0xf3c8a6, shirt: 0xf9c39c, pants: 0x7c8aa8, style: 'bun' },                  // Money
+  { hair: 0xa8714a, skin: 0xffe2d0, shirt: 0xa6d8e8, pants: 0x8a7a6a, style: 'cap', cap: 0x86bfd6 },   // Calendar
+  { hair: 0x2e2a36, skin: 0xedbd9a, shirt: 0xa3d9bd, pants: 0x5f6a7a, style: 'short' },               // Account
+  { hair: 0x1f1b24, skin: 0xffdcc6, shirt: 0xffb6c1, pants: 0x8a8fb8, style: 'twin' },                 // Languages
+  { hair: 0x8a5a3c, skin: 0xf6cfb0, shirt: 0xf5d888, pants: 0x6d6a8a, style: 'cap', cap: 0xf19bb0 },  // Skills
+  { hair: 0x4a3a3a, skin: 0xe9b894, shirt: 0x8fb3d9, pants: 0x4f4a5a, style: 'short', glasses: true },// Law
+  { hair: 0xc98b5a, skin: 0xffe2d0, shirt: 0x9ad690, pants: 0x7c8aa8, style: 'long' },                 // Food & Gym
+  { hair: 0x3b2f2f, skin: 0xf3c8a6, shirt: 0xfff1a8, pants: 0x8a7a6a, style: 'bun', glasses: true },  // Notes
+  null,                                                                                               // Love: the couple
+  { hair: 0x5a4040, skin: 0xedbd9a, shirt: 0xd9c9f0, pants: 0x6d6a8a, style: 'long' }                  // Goals
+];
+const LOVE_LOOKS = {
+  her: { hair: 0x3b2a2a, skin: 0xffdcc6, shirt: 0xffb6c1, pants: 0xffb6c1, style: 'long', dress: 0xf6a9bd },
+  him: { hair: 0x241e22, skin: 0xf0c4a0, shirt: 0x9fcfe4, pants: 0x5f6a8a, style: 'short' }
+};
+const HELPER_LOOKS = [
+  { hair: 0x3b2f2f, skin: 0xf3c8a6, shirt: 0xf5b97a, pants: 0x6b7fa8, style: 'cap', cap: 0xf5d888 },
+  { hair: 0x8a5a3c, skin: 0xffe2d0, shirt: 0xf5b97a, pants: 0x6b7fa8, style: 'cap', cap: 0xf5d888 },
+  { hair: 0x241e22, skin: 0xe9b894, shirt: 0xf5b97a, pants: 0x6b7fa8, style: 'cap', cap: 0xf5d888 }
 ];
 function makePerson(look) {
   const g = new THREE.Group(), parts = {};
   parts.legL = limb(0.24, 0.55, 0.26, look.pants, -0.15, 0.55, 0); g.add(parts.legL);
   parts.legR = limb(0.24, 0.55, 0.26, look.pants, 0.15, 0.55, 0); g.add(parts.legR);
   [parts.legL, parts.legR].forEach((l) => l.add(box(0.26, 0.12, 0.34, 0x6b5a4e, 0, -0.52, 0.04)));
-  g.add(box(0.62, 0.62, 0.4, look.shirt, 0, 0.86, 0));
+  parts.body = box(0.62, 0.62, 0.4, look.shirt, 0, 0.86, 0); g.add(parts.body);
   parts.armL = limb(0.18, 0.52, 0.2, look.shirt, -0.41, 1.12, 0); g.add(parts.armL);
   parts.armR = limb(0.18, 0.52, 0.2, look.shirt, 0.41, 1.12, 0); g.add(parts.armR);
   [parts.armL, parts.armR].forEach((a) => a.add(box(0.17, 0.14, 0.19, look.skin, 0, -0.55, 0)));
@@ -232,6 +253,9 @@ function makePerson(look) {
   if (look.style === 'bun') { const b = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), mat(look.hair)); b.position.set(0, 0.6, -0.1); b.castShadow = true; head.add(b); }
   if (look.style === 'cap') { head.add(box(0.8, 0.18, 0.76, look.cap, 0, 0.5, 0)); head.add(box(0.7, 0.06, 0.4, look.cap, 0, 0.42, 0.5)); }
   if (look.style === 'long') head.add(box(0.74, 0.8, 0.16, look.hair, 0, -0.3, -0.3));
+  if (look.style === 'twin') [-0.42, 0.42].forEach((x) => { const t = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), mat(look.hair)); t.position.set(x, 0.05, -0.15); t.scale.y = 1.6; head.add(t); });
+  if (look.glasses) [-0.15, 0.15].forEach((x) => { head.add(box(0.2, 0.18, 0.02, 0x6b5a4e, x, 0, 0.345)); head.add(box(0.14, 0.12, 0.025, 0xdff3fa, x, 0, 0.35)); });
+  if (look.dress) g.add(box(0.74, 0.42, 0.5, look.dress, 0, 0.6, 0));                // skirt
   g.scale.setScalar(0.86);     // ≈ 1.75 m tall
   return { g, parts };
 }
@@ -292,6 +316,27 @@ function makeButterfly(color) {
   const l = wing(), r = wing(); r.scale.x = -1; g.add(l, r);
   g.userData.l = l; g.userData.r = r;
   return g;
+}
+
+function makeSwing() {
+  const g = new THREE.Group(), wood = 0xc49674, rope = 0xeadfcb;
+  [-1.3, 1.3].forEach((x) => [-1, 1].forEach((sz) => {
+    const leg = box(0.14, 2.75, 0.14, wood, x, 1.3, sz * 0.48); leg.rotation.x = -sz * 0.36; g.add(leg);
+  }));
+  g.add(box(2.9, 0.14, 0.16, wood, 0, 2.58, 0));
+  const pivot = new THREE.Group(); pivot.position.y = 2.52; g.add(pivot);
+  [-0.72, 0.72].forEach((x) => pivot.add(box(0.04, 1.96, 0.04, rope, x, -0.98, 0)));
+  const seat = box(1.65, 0.1, 0.5, 0xf6a9bd, 0, -1.98, 0); pivot.add(seat);
+  g.userData.pivot = pivot; g.userData.seat = seat;
+  return g;
+}
+function textSprite(text, color, w, h) {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 64;
+  const x = c.getContext('2d');
+  x.font = 'bold 48px sans-serif'; x.fillStyle = color; x.textAlign = 'center'; x.fillText(text, 64, 50);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
+  sp.scale.set(w, h, 1); sp.visible = false;
+  return sp;
 }
 
 /* ---------------- road graph (people walk on paths, not through houses) ---------------- */
@@ -380,7 +425,7 @@ function create(container, opts) {
   opts = opts || {};
   const layoutKey = (container.clientWidth || innerWidth) < (container.clientHeight || innerHeight) * 0.9 ? 'port' : 'land';
   useLayout(layoutKey);
-  windowMats = [];
+  windowMats = []; lampMats = [];
   let hourOverride = (() => { const m = /[?&]hour=([\d.]+)/.exec(location.search); return m ? Number(m[1]) : null; })();
   if (hourOverride == null && opts.timeMode === 'day') hourOverride = 11;
   if (hourOverride == null && opts.timeMode === 'night') hourOverride = 22;
@@ -570,11 +615,27 @@ function create(container, opts) {
   const hallNode = graph.doorNodes[graph.doorNodes.length - 1];
 
   /* actors */
-  const people = LOOKS.map((look, i) => {
+  /* residents: one per house, a couple in Love, helpers come when a house has a lot to do */
+  const people = [];
+  const couple = { her: null, him: null, home: null, kiss: 0 };
+  const homeDoor = (i) => graph.nodes[graph.doorNodes[i]];
+  let busy = {};                                   // house index → how much unfinished work
+  const busyAt = (i) => busy[i] || 0;
+  function addPerson(look, home, extra) {
     const p = makePerson(look); world.add(p.g);
-    const n = graph.nodes[graph.doorNodes[(i * 3) % graph.doorNodes.length]];
-    p.g.position.set(n.x, 0, n.z);
-    return Object.assign(p, { kind: 'person', i, path: [], speed: rnd(1.5, 1.9), wait: rnd(0, 2), t: rnd(0, 6), node: graph.doorNodes[(i * 3) % graph.doorNodes.length] });
+    const n = homeDoor(home);
+    p.g.position.set(n.x + rnd(-0.6, 0.6), 0, n.z + rnd(0, 0.4));
+    Object.assign(p, { kind: 'person', i: people.length, home, path: [], speed: rnd(1.35, 1.75), wait: rnd(0, 3), t: rnd(0, 6), v: 0, goal: '', inside: false }, extra || {});
+    people.push(p);
+    return p;
+  }
+  (opts.houses || []).forEach((spec, i) => {
+    if (i >= HOUSE_POS.length) return;
+    if (spec.id === 'love') {
+      couple.home = i;
+      couple.her = addPerson(LOVE_LOOKS.her, i, { love: 'her' });
+      couple.him = addPerson(LOVE_LOOKS.him, i, { love: 'him' });
+    } else addPerson(LOOKS[i] || LOOKS[i % 9], i);
   });
   const cat = Object.assign(makeCat(), { kind: 'cat', path: [], speed: 1.1, wait: 2, t: 0, sit: true });
   const dog = Object.assign(makeDog(), { kind: 'dog', path: [], speed: 2.2, wait: 1, t: 0, buddy: 0 });
@@ -592,6 +653,9 @@ function create(container, opts) {
     return sp;
   }
   cat.zzz = zzzSprite(); dog.zzz = zzzSprite();
+  const kissHeart = textSprite('♥', '#ff6f91', 0.9, 0.45); world.add(kissHeart);
+  const tmpV = new THREE.Vector3();
+  let helperClock = 0;
   const food = [];
   const foodGeo = new THREE.SphereGeometry(0.09, 6, 5);
   function feed(x, z) {
@@ -619,23 +683,139 @@ function create(container, opts) {
   world.add(fireflies);
 
   let urgent = 0;
-  function gatherSpot(i) {
-    const s = [[-2.4, 0.9], [2.4, 0.9], [-1, 2.2], [1, 2.2], [-3.8, 2], [3.8, 2]][i % 6];
-    return { x: hallDoor.x + s[0], z: hallDoor.z + s[1] };
+  /* ---- daily life by the REAL clock (the ◐☼☾ button only changes the picture) ---- */
+  function realHour() { const d = new Date(); return d.getHours() + d.getMinutes() / 60; }
+  function routine(h) {
+    if (h >= 23 || h < 6.5) return 'sleep';
+    if (h < 8) return 'morning';
+    if (h < 11.5) return 'work';
+    if (h < 13) return 'lunch';
+    if (h < 17.5) return 'work';
+    if (h < 21) return 'evening';
+    return 'home';                                   // 21–23: indoors, lights on
   }
-  function planPerson(p) {
-    const here = graph.nearest(p.g.position.x, p.g.position.z);
-    if (urgent) {
-      const pts = graph.path(here, hallNode).slice(1);
-      pts.push(gatherSpot(p.i));
-      p.path = pts; p.goal = 'hall';
-      return;
+  function gatherSpot(i) {                           // rows in front of the Town Hall
+    const k = i % 18, row = Math.floor(k / 6), col = k % 6;
+    return { x: hallDoor.x + (col - 2.5) * 1.2 + (row % 2) * 0.6, z: hallDoor.z + 1.3 + row * 1.1 };
+  }
+  function goTo(p, goal, why) {
+    p.goal = why;
+    p.path = routeTo(p, goal);
+    if (!p.path.length) {
+      const a = graph.nearest(p.g.position.x, p.g.position.z), b = graph.nearest(goal.x, goal.z);
+      p.path = graph.path(a, b).concat([goal]);
     }
-    let to;
-    do { to = graph.doorNodes[Math.floor(Math.random() * graph.doorNodes.length)]; } while (to === here && graph.doorNodes.length > 1);
-    p.path = graph.path(here, to).slice(1);
-    p.goal = 'wander';
   }
+  function comeOut(p) {
+    const n = homeDoor(p.home);
+    p.inside = false; p.g.visible = true;
+    p.g.position.set(n.x + rnd(-0.3, 0.3), 0, n.z - 0.9); p.g.rotation.set(0, 0, 0);
+  }
+  function goInside(p, stay) { const n = homeDoor(p.home); goTo(p, { x: n.x, z: n.z - 0.9 }, 'in'); p.stay = stay; }
+  let workSpots = null, pondSpots = null;
+  function spotsReady() {
+    if (workSpots) return;
+    workSpots = HOUSE_POS.map((_, i) => {
+      const n = homeDoor(i);
+      return [[-1.7, -0.5], [1.7, -0.5], [-0.9, 0.2], [0.9, 0.2]].map(([dx, dz]) => ({ x: n.x + dx, z: n.z + dz })).filter((q) => !blocked(q.x, q.z, 0.15));
+    });
+    pondSpots = [];
+    for (let a = 0; a < 18; a++) {
+      const q = { x: POND.x + Math.cos(a / 18 * 6.283) * (POND.rx + 2.2), z: POND.z + Math.sin(a / 18 * 6.283) * (POND.rz + 1.9) };
+      if (!blocked(q.x, q.z, 0.2)) pondSpots.push(q);
+    }
+  }
+  const pick = (a) => a[Math.floor(Math.random() * a.length)];
+  function workSpot(p) { spotsReady(); const w = workSpots[p.home]; return w.length ? pick(w) : homeDoor(p.home); }
+  function strollSpot(p, r) {
+    spotsReady();
+    const x = Math.random();
+    if (r === 'lunch' && x < 0.5) return gatherSpot(Math.floor(rnd(0, 18)));
+    if (x < 0.4 && pondSpots.length) return pick(pondSpots);
+    if (x < 0.85) { const n = homeDoor(Math.floor(rnd(0, HOUSE_POS.length))); return { x: n.x + rnd(-1, 1), z: n.z + rnd(0, 0.5) }; }   // visiting
+    return gatherSpot(Math.floor(rnd(0, 18)));
+  }
+  function decide(p) {
+    if (p.love === 'him') return;                    // he goes wherever she goes
+    const r = routine(realHour());
+    if (p.love === 'her') return decideCouple(p, r);
+    const hard = busyAt(p.home) > 0;
+    if (p.helper && busyAt(p.home) < p.helper) {     // job done → go back home through the Town Hall
+      if (p.inside) comeOut(p);
+      goTo(p, { x: hallDoor.x, z: hallDoor.z }, 'leave'); return;
+    }
+    if (urgent && !hard && r !== 'sleep' && r !== 'home' && !p.helper) {
+      if (p.inside) comeOut(p);
+      if (p.goal !== 'hall' || p.path.length) goTo(p, gatherSpot(p.i), 'hall');
+      p.wait = rnd(3, 6); return;
+    }
+    if (hard || r === 'work') {                      // in and out of the house, busy at the door
+      if (p.inside) { comeOut(p); goTo(p, workSpot(p), 'work'); return; }
+      if (p.goal === 'work') { goInside(p, rnd(3, hard ? 6 : 10)); return; }
+      goTo(p, workSpot(p), 'work'); return;
+    }
+    if (r === 'sleep' || r === 'home') {
+      if (p.inside) { p.wait = rnd(20, 40); return; }
+      goInside(p, rnd(20, 40)); return;
+    }
+    if (p.inside) comeOut(p);                        // morning / lunch / evening: out and about
+    else if (Math.random() < 0.15) { goInside(p, rnd(5, 12)); return; }
+    goTo(p, strollSpot(p, r), 'stroll'); p.wait = rnd(2, 6);
+  }
+  function decideCouple(her, r) {
+    const him = couple.him;
+    if (r === 'sleep' || r === 'home' || realHour() >= 20.5) {   // evenings at home together
+      standUp();
+      if (her.inside) { her.wait = rnd(30, 60); return; }
+      goInside(her, rnd(30, 60)); return;
+    }
+    if (her.inside) { comeOut(her); comeOut(him); him.g.position.x += 0.7; }
+    if (her.sitting) { standUp(); goTo(her, strollSpot(her, r), 'stroll'); her.wait = rnd(2, 5); return; }
+    if (swing && Math.random() < 0.55) { goTo(her, swing.userData.front, 'swing'); return; }
+    goTo(her, strollSpot(her, r), 'stroll'); her.wait = rnd(2, 5);
+  }
+  function standUp() {
+    [couple.her, couple.him].forEach((q) => {
+      if (!q || !q.sitting) return;
+      q.sitting = false;
+      q.g.position.set(swing.userData.front.x + (q.love === 'her' ? -0.4 : 0.4), 0, swing.userData.front.z);
+      q.g.rotation.set(0, swing.rotation.y, 0);
+    });
+  }
+  function arrive(p) {                               // reached the end of a walk
+    if (p.goal === 'in') { p.inside = true; p.g.visible = false; p.wait = p.stay || 10; }
+    else if (p.goal === 'work') p.wait = rnd(6, 12);
+    else if (p.goal === 'swing') { p.sitting = true; p.wait = rnd(15, 30); }
+    else if (p.goal === 'leave') { world.remove(p.g); people.splice(people.indexOf(p), 1); }
+  }
+  // the boyfriend walks at her side (or follows her in / onto the swing)
+  function followHer(him, dt) {
+    const her = couple.her;
+    if (her.inside) {
+      if (him.inside) return false;
+      const n = homeDoor(him.home), dx = n.x - him.g.position.x, dz = n.z - 0.9 - him.g.position.z, d = Math.hypot(dx, dz);
+      if (d < 0.15) { him.inside = true; him.g.visible = false; return false; }
+      const st = Math.min(d, her.speed * 1.2 * dt); him.g.position.x += dx / d * st; him.g.position.z += dz / d * st;
+      him.g.rotation.y = Math.atan2(dx, dz); him.v = her.speed;
+      return true;
+    }
+    if (him.inside) { comeOut(him); him.g.position.x += 0.7; }
+    if (her.sitting) { him.sitting = true; return false; }
+    him.sitting = false;
+    const yaw = her.g.rotation.y, tx = her.g.position.x - Math.cos(yaw) * 0.72, tz = her.g.position.z + Math.sin(yaw) * 0.72;
+    const dx = tx - him.g.position.x, dz = tz - him.g.position.z, d = Math.hypot(dx, dz);
+    if (d < 0.05) { him.v = 0; let df = yaw - him.g.rotation.y; df = Math.atan2(Math.sin(df), Math.cos(df)); him.g.rotation.y += df * Math.min(1, dt * 6); return false; }
+    const want = Math.min(her.speed * 1.35, d * 4);
+    him.v = (him.v || 0) + (want - (him.v || 0)) * Math.min(1, dt * 5);
+    const st = Math.min(d, him.v * dt);
+    him.g.position.x += dx / d * st; him.g.position.z += dz / d * st;
+    const face = d > 0.35 ? Math.atan2(dx, dz) : yaw;
+    let df = face - him.g.rotation.y; df = Math.atan2(Math.sin(df), Math.cos(df)); him.g.rotation.y += df * Math.min(1, dt * 7);
+    return him.v > 0.15;
+  }
+  // start of the day: whoever should be asleep / at home already is
+  { const r0 = routine(realHour());
+    if (r0 === 'sleep' || r0 === 'home') people.forEach((p) => { p.inside = true; p.g.visible = false; p.wait = rnd(5, 30); }); }
   /* things nobody walks through: houses, the hall, trees, lamps, the pond */
   const blocks = HOUSE_POS.map(([x, z]) => ({ x, z, hw: 3.3, hd: 2.6 }))
     .concat([{ x: HALL_POS[0], z: HALL_POS[1], hw: 5.8, hd: 4.1 }]);
@@ -653,6 +833,54 @@ function create(container, opts) {
     for (let i = 1; i <= n; i++) { const t = i / n; if (blocked(lerp(a.x, b.x, t), lerp(a.z, b.z, t), 0.45)) return false; }
     return true;
   }
+  // the Love couple's swing: beside their house, on grass, not on a road
+  const onRoad = (x, z, pad) => ROADS.some(([x1, z1, x2, z2]) => x >= Math.min(x1, x2) - 0.9 - pad && x <= Math.max(x1, x2) + 0.9 + pad && z >= Math.min(z1, z2) - 0.9 - pad && z <= Math.max(z1, z2) + 0.9 + pad);
+  let swing = null;
+  if (couple.home != null) {
+    const [hx, hz] = HOUSE_POS[couple.home];
+    // in front of the door first (across the path), then beside the house
+    const tries = [[0, 7.2], [0, 6.4], [-2.2, 7.2], [2.2, 7.2], [0, 8.4], [4.6, 0.8], [-4.6, 0.8], [0, -5.2]];
+    const hard = (x, z) => Math.abs(x) > ISLAND.w / 2 - 2.5 || Math.abs(z) > ISLAND.d / 2 - 2.5 || inPond(x, z, 1) ||
+      blocks.some((b) => Math.abs(x - b.x) < b.hw + 0.1 && Math.abs(z - b.z) < b.hd + 0.1) || onRoad(x, z, 0);
+    for (const [dx, dz] of tries) {
+      const x = hx + dx, z = hz + dz;
+      const ok = [[-1.6, -0.9], [1.6, -0.9], [-1.6, 0.9], [1.6, 0.9], [0, 0], [0, 1.6], [-0.5, 1.6], [0.5, 1.6]].every(([a, b]) => !hard(x + a, z + b));
+      if (!ok) continue;
+      // a tree or lamp in the way makes room
+      world.children.slice().forEach((o) => {
+        if (o.userData.post && Math.abs(o.position.x - x) < 2.6 && Math.abs(o.position.z - z) < 2.2) {
+          world.remove(o);
+          const k = posts.findIndex((q) => q.x === o.position.x && q.z === o.position.z); if (k >= 0) posts.splice(k, 1);
+        }
+      });
+      swing = makeSwing(); swing.position.set(x, 0, z); world.add(swing);
+      swing.userData.front = { x, z: z + 1.25 };
+      blocks.push({ x, z, hw: 1.55, hd: 0.75 });
+      break;
+    }
+  }
+  // chimney smoke from houses that still have work to do
+  const puffs = [], puffGeo = new THREE.SphereGeometry(0.28, 8, 6);
+  function puff(h) {
+    const m = new THREE.Mesh(puffGeo, new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.75, depthWrite: false }));
+    const c = h.userData.chimney;
+    m.position.set(h.position.x + c.x + rnd(-0.1, 0.1), c.y, h.position.z + c.z + rnd(-0.1, 0.1));
+    world.add(m); puffs.push({ m, life: 0 });
+  }
+  // helpers: a lot of work → people come over from the Town Hall to help
+  const HELP_AT = [3, 6, 10];                        // unfinished items for +1, +2, +3 helpers
+  function manageHelpers() {
+    HOUSE_POS.forEach((_, i) => {
+      if (i === couple.home) return;
+      const want = HELP_AT.filter((t) => busyAt(i) >= t).length;
+      const have = people.filter((p) => p.helper && p.home === i && p.goal !== 'leave');
+      for (let k = have.length; k < want; k++) {
+        const p = addPerson(HELPER_LOOKS[k % HELPER_LOOKS.length], i, { helper: HELP_AT[k] });
+        p.g.position.set(hallDoor.x + rnd(-1, 1), 0, hallDoor.z + rnd(0, 0.6));
+        goTo(p, workSpot(p), 'work');
+      }
+    });
+  }
   // straight line when it's clear, otherwise along the roads
   function routeTo(m, goal) {
     const from = { x: m.g.position.x, z: m.g.position.z };
@@ -666,7 +894,9 @@ function create(container, opts) {
   }
   function planPet(m) {
     if (m.kind === 'dog' && Math.random() < 0.65) {
-      const b = people[m.buddy % people.length].g.position;
+      let bp = people[m.buddy % people.length];
+      for (let k = 0; k < people.length && (!bp.g.visible || bp.sitting); k++) bp = people[++m.buddy % people.length];
+      const b = bp.g.position;
       const g = { x: b.x + rnd(-1.5, 1.5), z: b.z + rnd(0.8, 1.6) };
       if (Math.random() < 0.15) m.buddy++;
       if (!blocked(g.x, g.z)) { m.path = routeTo(m, g); if (m.path.length) return; }
@@ -687,14 +917,15 @@ function create(container, opts) {
       m.v = 0;
       m.wait -= dt;
       if (m.wait <= 0) {
-        if (m.kind === 'person') planPerson(m); else planPet(m);
-        m.wait = m.kind === 'person' ? (urgent ? rnd(0.4, 1) : rnd(1.5, 4.5)) : rnd(2, 6);
+        if (m.kind === 'person') { m.wait = rnd(1.5, 4); decide(m); return false; }
+        planPet(m);
+        m.wait = rnd(2, 6);
         if (m.kind === 'cat') { m.sit = Math.random() < 0.45; if (m.sit) m.path = []; }
       }
       return false;
     }
     const tgt = m.path[0], dx = tgt.x - pos.x, dz = tgt.z - pos.z, dist = Math.hypot(dx, dz);
-    if (dist < 0.08) { m.path.shift(); return true; }
+    if (dist < 0.08) { m.path.shift(); if (!m.path.length && m.kind === 'person') arrive(m); return true; }
     // turn towards where we're going first, then speed up gently; slow down at the end
     const want = Math.atan2(dx, dz);
     let diff = want - m.g.rotation.y; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
@@ -708,23 +939,87 @@ function create(container, opts) {
     return true;
   }
   function animate(dt, time) {
-    people.forEach((p) => {
-      const moving = step(p, dt);
+    people.slice().forEach((p) => {
+      const moving = p.love === 'him' ? followHer(p, dt) : step(p, dt);
+      if (p.inside || !p.g.visible) return;
+      if (p.sitting && swing) {                     // on the swing, swinging together
+        const side = p.love === 'her' ? -0.4 : 0.4;
+        tmpV.set(side, 0.06, 0); swing.userData.seat.localToWorld(tmpV); world.worldToLocal(tmpV);
+        p.g.position.set(tmpV.x, tmpV.y - 0.47, tmpV.z);
+        p.g.rotation.set(swing.userData.pivot.rotation.x * 0.9, swing.rotation.y, 0);
+        p.parts.legL.rotation.x = p.parts.legR.rotation.x = -1.45 + Math.sin(time * 1.7) * 0.25;
+        p.parts.armL.rotation.x = p.parts.armR.rotation.x = -0.5;
+        p.parts.head.rotation.set(0, 0, 0);
+        return;
+      }
       const pace = Math.min(1, (p.v || 0) / p.speed);
       p.t += dt * (moving ? 3 + 7 * pace : 2);
       const sw = moving ? Math.sin(p.t) * 0.75 * pace : 0;
       p.parts.legL.rotation.x = sw; p.parts.legR.rotation.x = -sw;
       p.parts.armL.rotation.x = -sw * 0.8; p.parts.armR.rotation.x = sw * 0.8;
-      p.g.position.y = (moving ? Math.abs(Math.sin(p.t)) * 0.08 : 0);
+      p.g.rotation.x = 0; p.parts.head.rotation.x = 0; p.parts.head.rotation.z = 0;
+      p.g.position.y = (moving ? Math.abs(Math.sin(p.t)) * 0.06 : 0);
       if (!moving && !p.path.length) {
         if (p.goal === 'hall') {                         // waiting at the hall: face it, little hops
           let d = Math.PI - p.g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); p.g.rotation.y += d * Math.min(1, dt * 6);
-          p.g.position.y = Math.max(0, Math.sin(time * 4 + p.i)) * 0.12;
+          p.g.position.y = Math.max(0, Math.sin(time * 4 + p.i)) * 0.1;
           p.parts.armR.rotation.x = -2.6 + Math.sin(time * 6 + p.i) * 0.3;
+        } else if (p.goal === 'work') {                  // busy at the door: face the house, hands going
+          let d = Math.PI - p.g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); p.g.rotation.y += d * Math.min(1, dt * 6);
+          p.parts.armR.rotation.x = -1.3 + Math.sin(time * 9 + p.i) * 0.55;
+          p.parts.armL.rotation.x = -0.9 + Math.sin(time * 9 + p.i + 1.6) * 0.35;
+          p.parts.head.rotation.x = 0.25;
         }
-        p.parts.head.rotation.y = Math.sin(time * 0.7 + p.i) * 0.4;
+        p.parts.head.rotation.y = p.goal === 'work' ? 0 : Math.sin(time * 0.7 + p.i) * 0.4;
       } else p.parts.head.rotation.y = 0;
     });
+    // tapped the couple: he gives her a kiss on the cheek ♡
+    if (couple.kiss > 0 && couple.him && couple.him.g.visible) {
+      couple.kiss -= dt;
+      const her = couple.her, him = couple.him, k = Math.min(1, Math.sin(Math.min(1, (2.4 - couple.kiss) / 2.4) * Math.PI) * 1.6);
+      const dx = her.g.position.x - him.g.position.x, dz = her.g.position.z - him.g.position.z;
+      if (!him.sitting) {
+        let d = Math.atan2(dx, dz) - him.g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); him.g.rotation.y += d * Math.min(1, dt * 8);
+        let e = Math.atan2(-dx, -dz) - her.g.rotation.y; e = Math.atan2(Math.sin(e), Math.cos(e)); her.g.rotation.y += e * Math.min(1, dt * 3) * 0.5;
+        him.g.rotation.x = 0.2 * k;
+      } else {
+        him.parts.head.rotation.y = 0.9 * k; him.parts.head.rotation.z = 0.25 * k;
+        her.parts.head.rotation.z = -0.15 * k;
+      }
+      kissHeart.visible = true;
+      kissHeart.position.set((her.g.position.x + him.g.position.x) / 2, 2 + (2.4 - couple.kiss) * 0.35, (her.g.position.z + him.g.position.z) / 2);
+      kissHeart.material.opacity = Math.min(1, couple.kiss * 1.5);
+      if (couple.kiss <= 0) { kissHeart.visible = false; him.g.rotation.x = 0; }
+    }
+    // the swing moves while they sit on it
+    if (swing) {
+      const pv = swing.userData.pivot, on = couple.her && couple.her.sitting;
+      pv.rotation.x = on ? Math.sin(time * 1.7) * (couple.kiss > 0 ? 0.12 : 0.32) : pv.rotation.x * Math.max(0, 1 - dt * 1.5);
+    }
+    // lights: a house is lit when someone's awake inside or it still has work; the Love house stays dark when they're in
+    const rNow = routine(realHour());
+    houseObjs.forEach((h, i) => {
+      if (!h.userData.wm) return;
+      let lit = 0;
+      if (i === couple.home) lit = 0;
+      else if (busyAt(i) > 0) lit = 1;
+      else if (rNow !== 'sleep' && people.some((p) => p.home === i && p.inside)) lit = 1;
+      h.userData.lit = lerp(h.userData.lit || 0, lit, Math.min(1, dt * 2));
+      h.userData.wm.emissiveIntensity = nightAmt * h.userData.lit * 0.95;
+      if (h.userData.heart) {
+        const both = couple.her && couple.her.inside && couple.him.inside;
+        h.userData.heart.material.emissiveIntensity = both ? 0.5 + Math.max(0, Math.sin(time * 5)) * 1.3 : 0.2;
+      }
+      if (busyAt(i) > 0 && h.userData.chimney && Math.random() < dt * 2.2) puff(h);
+    });
+    for (let q = puffs.length - 1; q >= 0; q--) {
+      const f = puffs[q]; f.life += dt;
+      f.m.position.y += dt * 0.9; f.m.position.x += dt * 0.25;
+      f.m.scale.setScalar(1 + f.life * 0.9); f.m.material.opacity = Math.max(0, 0.75 - f.life * 0.3);
+      if (f.life > 2.5) { world.remove(f.m); f.m.material.dispose(); puffs.splice(q, 1); }
+    }
+    helperClock += dt;
+    if (helperClock > 2) { helperClock = 0; manageHelpers(); }
     [cat, dog].forEach((m) => {
       if (m.sleep > 0) {                          // tapped: lie down, close eyes, Zzz… for ~3 s
         m.sleep -= dt;
@@ -845,7 +1140,7 @@ function create(container, opts) {
     moonDisc.position.set(Math.cos(ma) * 200, Math.sin(ma) * 160, -120); moonDisc.visible = s.night > 0.3 && Math.sin(ma) > 0;
     stars.material.opacity = s.night;
     fireflies.material.opacity = s.night * 0.95;
-    windowMats.forEach((m) => { m.emissiveIntensity = s.night * 0.95; });
+    lampMats.forEach((m) => { m.emissiveIntensity = s.night * 0.95; });
     lampLights.forEach((l) => { l.intensity = s.night * 18; });
     clouds.forEach((c) => { c.userData.mat.color.set(s.night > 0.5 ? 0x7a83a8 : 0xffffff); });
     flies.forEach((b) => { b.g.visible = s.night < 0.5; });
@@ -878,6 +1173,13 @@ function create(container, opts) {
     const r = renderer.domElement.getBoundingClientRect();
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
+    if (couple.her && couple.her.g.visible && couple.him.g.visible && ray.intersectObjects([couple.her.g, couple.him.g], true)[0]) {
+      if (!(couple.kiss > 0)) {
+        couple.kiss = 2.4;
+        if (!couple.her.sitting) { couple.her.path = []; couple.her.wait = Math.max(couple.her.wait, 2.8); }
+      }
+      return;
+    }
     const pet = ray.intersectObjects([cat.g, dog.g], true)[0];
     if (pet) {
       const m = cat.g.getObjectById(pet.object.id) ? cat : dog;
@@ -926,12 +1228,19 @@ function create(container, opts) {
   applyTime();
   fitCamera();
   start();
-  if (/[?&]debug3d/.test(location.search)) window.__v3d = { people, graph, cat, dog, camera, controls, water, food, get urgent() { return urgent; } };
+  if (/[?&]debug3d/.test(location.search)) window.__v3d = { people, couple, get swing() { return swing; }, graph, cat, dog, routine, realHour, camera, controls, water, food, get urgent() { return urgent; } };
 
   return {
     setUrgent(n) {
       const was = urgent; urgent = n || 0;
-      if (!!was !== !!urgent) people.forEach((p) => { p.path = []; p.wait = rnd(0, 0.6); });
+      if (!!was !== !!urgent) people.forEach((p) => { if (!p.love && !p.helper) { p.path = []; p.wait = rnd(0, 1.5); } });
+    },
+    // { houseId: unfinished count } — busy houses work day and night (lights, smoke), lots of work brings helpers
+    setBusy(map) {
+      const next = {};
+      (opts.houses || []).forEach((h, i) => { if (map && map[h.id] > 0) next[i] = map[h.id]; });
+      busy = next;
+      manageHelpers();
     },
     anchor,
     onFrame(fn) { frameFns.push(fn); },
