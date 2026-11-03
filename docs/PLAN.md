@@ -5,7 +5,7 @@
 | Mục | Chốt |
 |---|---|
 | Nơi dùng | Mục **Personal** của web hiện có (Cloudflare Pages + `functions/api.js` + Supabase). Máy tính + điện thoại. |
-| Khoá | Bấm Personal → ngôi làng **toàn màn hình**, **không chữ**, bấm vào cảnh không có gì xảy ra. Góc phải chỉ có `🛖` (về Home, lối ra duy nhất) và `✮⋆˙` (rê chuột không hiện chữ) → bảng mật khẩu. Đúng mật khẩu → hiện tên các nhà và mở được chức năng. Bấm `✮⋆˙` lần nữa → khoá lại. Trong từng chức năng (Work, Money…): góc trái có `‹` (về làng) và `🛖` (về Home), thanh menu dưới bị ẩn. |
+| Khoá | Bấm Personal → ngôi làng **toàn màn hình**, **không chữ**, bấm vào cảnh không có gì xảy ra. Góc phải chỉ có `🍅` (về Home, lối ra duy nhất) và `✮⋆˙` (rê chuột không hiện chữ) → bảng mật khẩu. Đúng mật khẩu → hiện tên các nhà và mở được chức năng. Bấm `✮⋆˙` lần nữa → khoá lại. Trong từng chức năng (Work, Money…): góc trái có `‹` (về làng) và `🍅` (về Home), thanh menu dưới bị ẩn. |
 | AI agent | Ở Town Hall. Được **tự làm mọi việc** với dữ liệu (tạo/sửa/xoá task, chi tiêu, thu nhập, lịch, to-do); hỏi lại trước khi xoá. Tìm web được; luật thì ưu tiên vbpl.vn, baochinhphu.vn, thuvienphapluat.vn. Cuộc trò chuyện chỉ nằm trong tab đang mở (khoá/tải lại là quên). File gửi kèm chỉ để Claude đọc, không lưu. Model `claude-opus-5-5`, có fallback tự động khi bị từ chối. |
 | Mật khẩu | Dùng **mật khẩu Personal sẵn có** (bảng `pass`, đã băm HMAC, sai 5 lần khoá 15 phút, 10 phút không dùng tự khoá). Không tạo mật khẩu mới. |
 | Giao diện | Làng pixel: người, mèo, chó, cá trong hồ, cây, hoa. Mỗi nhà = 1 chức năng. Nhà to ở giữa = **Town Hall**: khi có việc tới hạn (hôm nay/ngày mai hoặc trễ) mà chưa xong, dân làng kéo về đây, chuông nhấp nháy. Màu pastel; chế độ tối = làng ban đêm có đom đóm. |
@@ -55,11 +55,18 @@ Nguyên tắc: **dữ liệu cũ giữ nguyên**, nhà mới dùng lại bảng 
 ## 5. Các bước
 
 1. ✅ **Ngôi làng + cổng mật khẩu ẩn** (`frontend/village.js`). 4 nhà nối vào chức năng cũ, 7 nhà "Coming soon", Town Hall gom việc tới hạn.
-2. ✅ **Toàn màn hình + 🛖 + AI agent ở Town Hall** (`lib/agent.js`, action `agentChat` trong `functions/api.js`, cần `ANTHROPIC_API_KEY`). Thư viện `@anthropic-ai/sdk` khai báo ở `package.json`.
+2. ✅ **Toàn màn hình + 🍅 + AI agent ở Town Hall** (`lib/agent.js`, action `agentChat` trong `functions/api.js`, cần `ANTHROPIC_API_KEY`). Thư viện `@anthropic-ai/sdk` khai báo ở `package.json`.
 3. **Thông báo đẩy trên điện thoại** (Web Push): service worker + bảng `push_subscriptions` + lịch chạy định kỳ (Supabase pg_cron gọi `/api` với `CRON_SECRET`) gửi nhắc việc sắp tới hạn. iPhone: phải "Thêm vào MH chính" (iOS 16.4+) mới nhận được.
 4. **Law**: lịch chạy hằng ngày, agent tìm văn bản mới (y tế + luật, bộ luật) trên 3 nguồn, lưu bảng `law_docs` (số hiệu, ngày ban hành, hiệu lực, tóm tắt, link), báo qua thông báo đẩy.
 5. **Goals**: bảng `goals` (nhiều mục tiêu theo năm + chi phí dự kiến), chi phí thực tế lấy từ Expenses; **chuyển Savings goal cũ sang đây** (giữ nguyên dữ liệu `expense_savings` / `expense_savings_log`).
 6. Các nhà còn lại: Languages → Notes → Food & Gym → Love (ảnh lên Drive) → Skills.
+
+## 5b. Giao diện làng 3D
+
+- `src/village3d.js` (three.js) → đóng gói thành `frontend/village3d.js` bằng `npm run build` (file đã build được commit sẵn, Cloudflare không cần build). Sửa cảnh 3D thì sửa `src/village3d.js` rồi chạy lại `npm run build`.
+- Xoay (kéo), zoom (lăn chuột / 2 ngón), dời (chuột phải / 2 ngón). Máy tính: bố cục ngang; điện thoại dọc: bố cục dọc riêng (xoay máy là đổi).
+- Trời sáng/tối theo **giờ thật** của máy (bình minh ~6h, hoàng hôn ~18h; đêm có sao, đom đóm, đèn đường, cửa sổ sáng). Nút ☼/☾ của web không đổi màu làng nữa. Thử giờ khác: thêm `?hour=22` vào link.
+- Góc phải: đồng hồ + thứ/ngày, 🍅, ✮⋆˙.
 
 ## 6. Đã chốt
 

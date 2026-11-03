@@ -5,5 +5,12 @@
   "description": "Cloudflare Pages site: static frontend/ + Pages Functions in functions/",
   "dependencies": {
     "@anthropic-ai/sdk": "^1.4.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "three": "^0.170.0"
+  },
+  "scripts": {
+    "build": "esbuild src/village3d.js --bundle --minify --format=iife --target=es2019 --legal-comments=eof --outfile=frontend/village3d.js"
   }
 }

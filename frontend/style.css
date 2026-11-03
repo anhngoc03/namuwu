@@ -2079,25 +2079,23 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
 
 /* ============================================================
    PERSONAL › VILLAGE (village.js) — full-screen pixel scene on a canvas.
-   Locked: picture only + 🛖 / ✮⋆˙. Unlocked: house name tags.
+   Locked: picture only + 🍅 (Home) / ✮⋆˙. Unlocked: house name tags.
    ============================================================ */
 .content-section.personal .nav-card-grid{ display:none !important; }
 .village{
   display:none; position:fixed; inset:0; z-index:30;
-  background:#c6e6ad; overflow:hidden;
+  background:#bfe3f5; overflow:hidden;
   user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent;
   touch-action:none;
 }
 body.village-mode{ overflow:hidden; }
 body.village-mode .village{ display:block; }
 body.village-mode :is(#desktop-dock, #mobile-nav-toggle, #footer-credit, #flower-field, #app-screen){ display:none !important; }
-.village-canvas{
-  position:absolute; inset:0; width:100%; height:100%; display:block;
-  image-rendering:pixelated; image-rendering:crisp-edges;
-}
-.village-labels{ position:absolute; inset:0; }
+.village-stage{ position:absolute; inset:0; }
+.village-stage canvas{ display:block; width:100% !important; height:100% !important; touch-action:none; }
+.village-labels{ position:absolute; inset:0; pointer-events:none; overflow:hidden; }
 .village-corner{
-  position:absolute; z-index:3; display:flex; gap:6px;
+  position:absolute; z-index:3; display:flex; gap:6px; align-items:center;
   top:calc(10px + env(safe-area-inset-top)); right:calc(10px + env(safe-area-inset-right));
 }
 .village-btn{
@@ -2108,10 +2106,12 @@ body.village-mode :is(#desktop-dock, #mobile-nav-toggle, #footer-credit, #flower
   transition:background var(--dur-component), transform var(--dur-component);
 }
 .village-btn:hover{ background:rgba(255,255,255,.75); }
+.village-home-btn{ padding:2px 6px; display:flex; align-items:center; justify-content:center; }
+.village-home-btn img{ width:22px; height:22px; object-fit:contain; display:block; pointer-events:none; }
 .village-btn:active{ transform:scale(.92); }
 .village-unlocked .village-star{ color:#d97a94; }
 
-/* inside a Personal feature: ‹ back to the village, 🛖 Home (the dock is hidden) */
+/* inside a Personal feature: ‹ back to the village, 🍅 Home (the dock is hidden) */
 .personal-bar{
   display:none; position:fixed; z-index:40; gap:6px;
   top:calc(10px + env(safe-area-inset-top)); left:calc(10px + env(safe-area-inset-left));
@@ -2121,26 +2121,30 @@ body.personal-view .personal-bar{ display:flex; }
 body.personal-view :is(#desktop-dock, #mobile-nav-toggle){ display:none !important; }
 @media (min-width:761px){ body.personal-view #app-screen{ padding-top:44px; } }
 
-.village-spot{
-  position:absolute; padding:0; border:0; background:transparent; cursor:pointer;
-  display:flex; align-items:flex-end; justify-content:center;
-  animation:villageTagIn .3s cubic-bezier(.22,.9,.3,1) both;
+.village-clock{
+  display:flex; flex-direction:column; align-items:flex-end; line-height:1.15;
+  padding:3px 10px; border-radius:var(--r-md); background:rgba(255,255,255,.5);
+  color:#7a6a8a; font-size:11px; font-weight:700; backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
 }
+.village-clock b{ font-size:15px; font-weight:800; letter-spacing:.5px; }
+.village-clock:empty{ display:none; }
+.village-night .village-clock, .village-night .village-btn{ background:rgba(20,24,48,.45); color:#e8e2ff; }
+.village-night.village-unlocked .village-star{ color:#ffb6c1; }
+
 .village-tag{
-  transform:translateY(70%);
-  padding:1px 7px; border-radius:var(--r-pill);
-  background:rgba(255,250,234,.92); color:var(--ink-on-pastel);
-  font-size:clamp(9px, 1.1vw, 13px); font-weight:800; white-space:nowrap;
-  box-shadow:0 1px 3px rgba(90,74,74,.18); pointer-events:none;
+  position:absolute; left:0; top:0; pointer-events:auto; cursor:pointer;
+  padding:2px 9px; border:0; border-radius:var(--r-pill);
+  background:rgba(255,250,234,.94); color:var(--ink-on-pastel);
+  font:inherit; font-size:12px; font-weight:800; white-space:nowrap;
+  box-shadow:0 2px 6px rgba(90,74,74,.2);
+  animation:villageTagIn .3s ease both;
 }
-@media (max-aspect-ratio:9/10){ .village-tag{ font-size:clamp(9px, 2.6vw, 13px); } }
-.village-spot.soon .village-tag{ opacity:.72; }
-.village-spot:hover .village-tag, .village-spot:focus-visible .village-tag{ background:#fff; transform:translateY(70%) scale(1.06); }
-.village-spot.hall .village-tag{ background:#ffd6df; }
-.village-spot.hall.alert .village-tag{ background:#ff9bb0; color:#fff; animation:villagePulse 1.2s ease-in-out infinite; }
-.village-spot.hall .village-tag b{ margin-left:2px; }
-@keyframes villageTagIn{ from{ opacity:0; transform:translateY(4px); } to{ opacity:1; transform:none; } }
-@keyframes villagePulse{ 50%{ transform:translateY(70%) scale(1.08); } }
+.village-tag.soon{ opacity:.75; }
+.village-tag:hover{ background:#fff; }
+.village-tag.hall{ background:#ffd6df; font-size:13px; }
+.village-tag.hall.alert{ background:#ff9bb0; color:#fff; }
+.village-tag.hall b{ margin-left:2px; }
+@keyframes villageTagIn{ from{ opacity:0; } to{ opacity:1; } }
 
 /* Town Hall: what's due + chat */
 .hall-box{ max-width:560px; height:min(760px, 88vh); display:flex; flex-direction:column; overflow:hidden; }
@@ -2175,9 +2179,3 @@ body.personal-view :is(#desktop-dock, #mobile-nav-toggle){ display:none !importa
 .hall-send{ min-width:44px; }
 .hall-send:disabled{ opacity:.5; }
 
-:root[data-theme="dark"] .village{ background:#3e5b4c; }
-:root[data-theme="dark"] .village-btn{ background:rgba(0,0,0,.3); color:#cfc5b4; }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]) .village{ background:#3e5b4c; }
-  :root:not([data-theme="light"]) .village-btn{ background:rgba(0,0,0,.3); color:#cfc5b4; }
-}
