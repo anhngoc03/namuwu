@@ -83,6 +83,23 @@
   <div id="top-toast" class="top-toast"></div>
   <div id="footer-credit">created by namu •˖*</div>
 
+  <!-- ===== Personal › the village, full screen (village.js). Body level for the same
+       reason as the nav above (position:fixed must cover the real viewport).
+       Locked = picture only; 🛖 = back to Home, ✮⋆˙ = password. ===== -->
+  <div class="village" id="village">
+    <canvas id="village-canvas" class="village-canvas"></canvas>
+    <div class="village-labels" id="village-labels"></div>
+    <div class="village-corner">
+      <button type="button" class="village-btn" id="village-home">🛖</button>
+      <button type="button" class="village-btn village-star" id="village-star">✮⋆˙</button>
+    </div>
+  </div>
+  <!-- inside a Personal feature (Work, Money…): back to the village / Home -->
+  <div class="personal-bar" id="personal-bar">
+    <button type="button" class="village-btn" id="personal-back">‹</button>
+    <button type="button" class="village-btn" id="personal-home">🛖</button>
+  </div>
+
   <!-- ================= LOADING OVERLAY ================= -->
   <div id="loading-overlay" class="loading-overlay">
     <div class="loading-box">
@@ -232,12 +249,7 @@
         </section>
 
         <section class="content-section personal">
-          <!-- The village (village.js). Locked = picture only; ✮⋆˙ opens the password board. -->
-          <div class="village" id="village">
-            <canvas id="village-canvas" class="village-canvas"></canvas>
-            <div class="village-labels" id="village-labels"></div>
-            <button type="button" class="village-star" id="village-star">✮⋆˙</button>
-          </div>
+          <!-- Personal = the full-screen village (#village, body level, village.js) -->
           <!-- old cards: kept only so their buttons still exist for app.js; never shown -->
           <div class="nav-card-grid" hidden>
             <button id="open-accounts" class="nav-card" data-accent="blue">
@@ -1099,16 +1111,24 @@
     </div>
   </div>
 
-  <!-- ================= MODAL: Village › Town Hall (what's due) ================= -->
+  <!-- ================= MODAL: Village › Town Hall (what's due + AI agent chat) ================= -->
   <div id="village-hall-modal" class="modal-overlay">
-    <div class="modal-box">
+    <div class="modal-box hall-box">
       <div class="modal-header">
         <h3>Town Hall</h3>
         <button id="village-hall-close" class="modal-close">✕</button>
       </div>
-      <div id="village-hall-list" class="village-hall-list"></div>
-      <div class="modal-actions">
-        <button id="village-hall-work" class="pill-btn">Open Work</button>
+      <div class="hall-due" id="hall-due">
+        <div class="hall-due-head"><span>Due soon</span><button type="button" class="expense-edit-link hall-open-work" id="village-hall-work">Work →</button></div>
+        <div id="village-hall-list" class="village-hall-list"></div>
+      </div>
+      <div class="hall-chat" id="hall-chat"></div>
+      <div class="hall-files" id="hall-files"></div>
+      <div class="hall-input" data-own-enter>
+        <button type="button" class="hall-attach" id="hall-attach">📎</button>
+        <input type="file" id="hall-file" multiple hidden accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,.txt,.md,.csv,.json,.html,text/*">
+        <textarea id="hall-text" rows="1" placeholder="Message the village…"></textarea>
+        <button type="button" class="pill-btn hall-send" id="hall-send">➤</button>
       </div>
     </div>
   </div>

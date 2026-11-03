@@ -2078,36 +2078,48 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
 }
 
 /* ============================================================
-   PERSONAL › VILLAGE (village.js) — pixel scene on a canvas.
-   Locked: picture only + the tiny ✮⋆˙ button. Unlocked: house name tags.
+   PERSONAL › VILLAGE (village.js) — full-screen pixel scene on a canvas.
+   Locked: picture only + 🛖 / ✮⋆˙. Unlocked: house name tags.
    ============================================================ */
 .content-section.personal .nav-card-grid{ display:none !important; }
 .village{
-  position:relative; width:100%; margin:0 auto;
-  max-width:min(980px, calc((100vh - 120px) * 1.6));
-  aspect-ratio:256 / 160;
-  border-radius:var(--r-lg); overflow:hidden;
-  box-shadow:var(--shadow-card);
-  background:#c6e6ad;
+  display:none; position:fixed; inset:0; z-index:30;
+  background:#c6e6ad; overflow:hidden;
   user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent;
+  touch-action:none;
 }
-.village.village-port{ max-width:min(520px, calc((100vh - 110px) * 0.625)); }
+body.village-mode{ overflow:hidden; }
+body.village-mode .village{ display:block; }
+body.village-mode :is(#desktop-dock, #mobile-nav-toggle, #footer-credit, #flower-field, #app-screen){ display:none !important; }
 .village-canvas{
-  position:absolute; inset:0; width:100%; height:100%;
-  image-rendering:pixelated; image-rendering:crisp-edges; display:block;
+  position:absolute; inset:0; width:100%; height:100%; display:block;
+  image-rendering:pixelated; image-rendering:crisp-edges;
 }
 .village-labels{ position:absolute; inset:0; }
-.village-star{
-  position:absolute; top:8px; right:8px; z-index:3;
-  padding:3px 8px; border:0; border-radius:var(--r-pill);
-  background:rgba(255,255,255,.45); color:#8a7a9a;
-  font-size:12px; line-height:1.2; letter-spacing:1px; cursor:pointer;
+.village-corner{
+  position:absolute; z-index:3; display:flex; gap:6px;
+  top:calc(10px + env(safe-area-inset-top)); right:calc(10px + env(safe-area-inset-right));
+}
+.village-btn{
+  padding:4px 10px; border:0; border-radius:var(--r-pill);
+  background:rgba(255,255,255,.5); color:#8a7a9a;
+  font-size:13px; line-height:1.3; letter-spacing:1px; cursor:pointer;
   backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
   transition:background var(--dur-component), transform var(--dur-component);
 }
-.village-star:hover{ background:rgba(255,255,255,.7); }
-.village-star:active{ transform:scale(.92); }
+.village-btn:hover{ background:rgba(255,255,255,.75); }
+.village-btn:active{ transform:scale(.92); }
 .village-unlocked .village-star{ color:#d97a94; }
+
+/* inside a Personal feature: ‹ back to the village, 🛖 Home (the dock is hidden) */
+.personal-bar{
+  display:none; position:fixed; z-index:40; gap:6px;
+  top:calc(10px + env(safe-area-inset-top)); left:calc(10px + env(safe-area-inset-left));
+}
+.personal-bar .village-btn{ background:var(--surface); color:var(--ink); box-shadow:var(--shadow-sm); }
+body.personal-view .personal-bar{ display:flex; }
+body.personal-view :is(#desktop-dock, #mobile-nav-toggle){ display:none !important; }
+@media (min-width:761px){ body.personal-view #app-screen{ padding-top:44px; } }
 
 .village-spot{
   position:absolute; padding:0; border:0; background:transparent; cursor:pointer;
@@ -2116,12 +2128,12 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
 }
 .village-tag{
   transform:translateY(70%);
-  padding:1px 6px; border-radius:var(--r-pill);
+  padding:1px 7px; border-radius:var(--r-pill);
   background:rgba(255,250,234,.92); color:var(--ink-on-pastel);
-  font-size:clamp(9px, 1.25vw, 12px); font-weight:800; white-space:nowrap;
+  font-size:clamp(9px, 1.1vw, 13px); font-weight:800; white-space:nowrap;
   box-shadow:0 1px 3px rgba(90,74,74,.18); pointer-events:none;
 }
-.village-port .village-tag{ font-size:clamp(9px, 2.6vw, 12px); }
+@media (max-aspect-ratio:9/10){ .village-tag{ font-size:clamp(9px, 2.6vw, 13px); } }
 .village-spot.soon .village-tag{ opacity:.72; }
 .village-spot:hover .village-tag, .village-spot:focus-visible .village-tag{ background:#fff; transform:translateY(70%) scale(1.06); }
 .village-spot.hall .village-tag{ background:#ffd6df; }
@@ -2129,12 +2141,43 @@ html.theme-anim, html.theme-anim *, html.theme-anim *::before, html.theme-anim *
 .village-spot.hall .village-tag b{ margin-left:2px; }
 @keyframes villageTagIn{ from{ opacity:0; transform:translateY(4px); } to{ opacity:1; transform:none; } }
 @keyframes villagePulse{ 50%{ transform:translateY(70%) scale(1.08); } }
-.village-hall-list{ display:flex; flex-direction:column; gap:2px; }
-.village-hall-empty{ text-align:center; padding:var(--sp-4) 0; font-weight:700; opacity:.75; }
+
+/* Town Hall: what's due + chat */
+.hall-box{ max-width:560px; height:min(760px, 88vh); display:flex; flex-direction:column; overflow:hidden; }
+.hall-due{ flex:0 0 auto; max-height:28%; overflow-y:auto; margin-bottom:8px; padding:8px 12px; border-radius:var(--r-md); background:var(--tint-pink); color:var(--ink-on-pastel); }
+.hall-due.empty{ display:none; }
+.hall-due-head{ display:flex; justify-content:space-between; align-items:center; font-weight:800; font-size:13px; margin-bottom:2px; }
+.hall-open-work{ border:0; background:none; cursor:pointer; font:inherit; font-weight:800; }
+.village-hall-list{ display:flex; flex-direction:column; }
+.hall-chat{ flex:1 1 auto; min-height:120px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:4px 2px; }
+.hall-hello{ margin:auto; font-size:28px; opacity:.35; }
+.hall-msg{ max-width:86%; padding:8px 12px; border-radius:16px; font-size:14px; line-height:1.5; overflow-wrap:anywhere; }
+.hall-msg.me{ align-self:flex-end; background:var(--pink); color:var(--ink-on-pastel); border-bottom-right-radius:6px; }
+.hall-msg.bot{ align-self:flex-start; background:var(--surface-soft); border-bottom-left-radius:6px; }
+.hall-msg.err{ background:var(--tint-red); color:#b2475c; }
+.hall-msg a{ color:inherit; text-decoration:underline; }
+.hall-msg code{ background:rgba(0,0,0,.06); padding:0 4px; border-radius:4px; }
+.hall-act{ align-self:flex-start; font-size:12px; font-weight:800; color:#5f9e7a; background:var(--tint-mint); padding:3px 10px; border-radius:var(--r-pill); }
+.hall-msg.typing{ display:flex; gap:4px; }
+.hall-msg.typing span{ width:6px; height:6px; border-radius:50%; background:currentColor; opacity:.4; animation:hallDot 1s infinite; }
+.hall-msg.typing span:nth-child(2){ animation-delay:.15s; } .hall-msg.typing span:nth-child(3){ animation-delay:.3s; }
+@keyframes hallDot{ 50%{ opacity:1; transform:translateY(-3px); } }
+.hall-files{ display:flex; flex-wrap:wrap; gap:4px; }
+.hall-files:not(:empty){ padding-top:6px; }
+.hall-file-chip{ display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:700; padding:2px 8px; border-radius:var(--r-pill); background:var(--tint-lilac); color:var(--ink-on-pastel); margin:0 4px 4px 0; }
+.hall-file-chip button{ border:0; background:none; cursor:pointer; color:inherit; padding:0; font-size:11px; }
+.hall-input{ flex:0 0 auto; display:flex; align-items:flex-end; gap:6px; padding-top:8px; border-top:1px solid var(--line); }
+.hall-input textarea{
+  flex:1; resize:none; min-height:38px; max-height:140px; padding:8px 12px; border-radius:18px;
+  border:1.5px solid var(--line); background:var(--surface); color:var(--ink); font:inherit; font-size:14px;
+}
+.hall-attach{ border:0; background:none; font-size:20px; cursor:pointer; padding:6px 4px; }
+.hall-send{ min-width:44px; }
+.hall-send:disabled{ opacity:.5; }
 
 :root[data-theme="dark"] .village{ background:#3e5b4c; }
-:root[data-theme="dark"] .village-star{ background:rgba(0,0,0,.28); color:#cfc5b4; }
+:root[data-theme="dark"] .village-btn{ background:rgba(0,0,0,.3); color:#cfc5b4; }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]) .village{ background:#3e5b4c; }
-  :root:not([data-theme="light"]) .village-star{ background:rgba(0,0,0,.28); color:#cfc5b4; }
+  :root:not([data-theme="light"]) .village-btn{ background:rgba(0,0,0,.3); color:#cfc5b4; }
 }

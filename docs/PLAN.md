@@ -5,7 +5,8 @@
 | Mục | Chốt |
 |---|---|
 | Nơi dùng | Mục **Personal** của web hiện có (Cloudflare Pages + `functions/api.js` + Supabase). Máy tính + điện thoại. |
-| Khoá | Bấm Personal → chỉ hiện ngôi làng, **không chữ**, bấm vào cảnh không có gì xảy ra. Nút nhỏ `✮⋆˙` góc phải (rê chuột không hiện chữ) → bảng mật khẩu. Đúng mật khẩu → hiện tên các nhà và mở được chức năng. Bấm `✮⋆˙` lần nữa → khoá lại. |
+| Khoá | Bấm Personal → ngôi làng **toàn màn hình**, **không chữ**, bấm vào cảnh không có gì xảy ra. Góc phải chỉ có `🛖` (về Home, lối ra duy nhất) và `✮⋆˙` (rê chuột không hiện chữ) → bảng mật khẩu. Đúng mật khẩu → hiện tên các nhà và mở được chức năng. Bấm `✮⋆˙` lần nữa → khoá lại. Trong từng chức năng (Work, Money…): góc trái có `‹` (về làng) và `🛖` (về Home), thanh menu dưới bị ẩn. |
+| AI agent | Ở Town Hall. Được **tự làm mọi việc** với dữ liệu (tạo/sửa/xoá task, chi tiêu, thu nhập, lịch, to-do); hỏi lại trước khi xoá. Tìm web được; luật thì ưu tiên vbpl.vn, baochinhphu.vn, thuvienphapluat.vn. Cuộc trò chuyện chỉ nằm trong tab đang mở (khoá/tải lại là quên). File gửi kèm chỉ để Claude đọc, không lưu. Model `claude-opus-5-5`, có fallback tự động khi bị từ chối. |
 | Mật khẩu | Dùng **mật khẩu Personal sẵn có** (bảng `pass`, đã băm HMAC, sai 5 lần khoá 15 phút, 10 phút không dùng tự khoá). Không tạo mật khẩu mới. |
 | Giao diện | Làng pixel: người, mèo, chó, cá trong hồ, cây, hoa. Mỗi nhà = 1 chức năng. Nhà to ở giữa = **Town Hall**: khi có việc tới hạn (hôm nay/ngày mai hoặc trễ) mà chưa xong, dân làng kéo về đây, chuông nhấp nháy. Màu pastel; chế độ tối = làng ban đêm có đom đóm. |
 | Dữ liệu | Supabase (mỗi nhà mới có file SQL riêng trong `supabase/`, tạo khi làm tới nhà đó). Ảnh/file cần lưu → Google Drive (thư mục riêng từng nhà, tạo khi làm tới). Tài liệu **chỉ để Claude tham khảo** → gửi thẳng cho Claude trong lượt đó, **không lưu** ở đâu. |
@@ -47,20 +48,23 @@ Nguyên tắc: **dữ liệu cũ giữ nguyên**, nhà mới dùng lại bảng 
 Điền ở Cloudflare Pages → Settings → Variables and Secrets (Encrypt):
 
 - Đang dùng: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `PERSONAL_SECRET` (⚠ không được đổi — đổi là mất khả năng giải mã Account).
-- Bước 2: `ANTHROPIC_API_KEY`
+- Bước 2 (đã cần ngay): `ANTHROPIC_API_KEY`
+- Bước 3 (thông báo đẩy): `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `CRON_SECRET`
 - Khi làm nhà có ảnh/file: `GOOGLE_SERVICE_ACCOUNT_JSON`, `GOOGLE_DRIVE_ROOT_FOLDER_ID`
 
 ## 5. Các bước
 
 1. ✅ **Ngôi làng + cổng mật khẩu ẩn** (`frontend/village.js`). 4 nhà nối vào chức năng cũ, 7 nhà "Coming soon", Town Hall gom việc tới hạn.
-2. **Town Hall = AI agent (Claude)**: khung chat trong Town Hall; agent đọc Work/Calendar/Expenses, tạo/sửa task, nhắc việc; đính kèm tài liệu chỉ để tham khảo (không lưu). Key chỉ nằm ở server.
-3. **Nhắc nhở tự động**: lịch chạy định kỳ (Supabase pg_cron hoặc Cloudflare Worker Cron) + kênh báo (Web Push trên điện thoại / email / Telegram — bạn chọn).
-4. Từng nhà một (thứ tự bạn chọn): Languages → Notes → Food & Gym → Goals → Love → Skills → Law.
+2. ✅ **Toàn màn hình + 🛖 + AI agent ở Town Hall** (`lib/agent.js`, action `agentChat` trong `functions/api.js`, cần `ANTHROPIC_API_KEY`). Thư viện `@anthropic-ai/sdk` khai báo ở `package.json`.
+3. **Thông báo đẩy trên điện thoại** (Web Push): service worker + bảng `push_subscriptions` + lịch chạy định kỳ (Supabase pg_cron gọi `/api` với `CRON_SECRET`) gửi nhắc việc sắp tới hạn. iPhone: phải "Thêm vào MH chính" (iOS 16.4+) mới nhận được.
+4. **Law**: lịch chạy hằng ngày, agent tìm văn bản mới (y tế + luật, bộ luật) trên 3 nguồn, lưu bảng `law_docs` (số hiệu, ngày ban hành, hiệu lực, tóm tắt, link), báo qua thông báo đẩy.
+5. **Goals**: bảng `goals` (nhiều mục tiêu theo năm + chi phí dự kiến), chi phí thực tế lấy từ Expenses; **chuyển Savings goal cũ sang đây** (giữ nguyên dữ liệu `expense_savings` / `expense_savings_log`).
+6. Các nhà còn lại: Languages → Notes → Food & Gym → Love (ảnh lên Drive) → Skills.
 
-## 6. Cần bạn trả lời trước bước 2–3
+## 6. Đã chốt
 
-1. Agent được **tự làm** tới đâu: chỉ gợi ý, hay được tự tạo/sửa/xoá task, ghi chi tiêu…?
-2. Nhắc nhở gửi qua đâu khi không mở web: thông báo trên điện thoại (Web Push), email, hay Telegram?
-3. Pháp luật: theo dõi lĩnh vực nào, nguồn nào (vd. vbpl.vn, thuvienphapluat.vn)? Bao lâu cập nhật 1 lần?
-4. Mục 3.4: Savings goal cũ giữ trong Expenses hay chuyển sang Goals?
-5. Thứ tự làm các nhà ở bước 4.
+1. Agent được tự làm tất cả (hỏi lại trước khi xoá).
+2. Nhắc qua thông báo đẩy trên điện thoại.
+3. Luật: vbpl.vn, baochinhphu.vn, thuvienphapluat.vn — văn bản QPPL + hướng dẫn lĩnh vực y tế, và tất cả các luật, bộ luật.
+4. Savings goal chuyển sang nhà Goals.
+5. Thứ tự các nhà: như mục 5.
