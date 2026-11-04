@@ -82,6 +82,59 @@ function goalsLoad(y) {
   studyWait(box, 'Opening your goals…');
   studyCall('getGoalsData', y).then(function (d) { goalsState.year = d.year; goalsState.years = d.years; goalsState.goals = d.goals || []; goalsState.today = d.today; goalsRender(); }).catch(hsErr(box));
 }
+/* ---- Goals › Wishlist: what I want and what it costs, cheapest first; tick it when it's mine ---- */
+var wishState = { items: [], tab: 'goals', loaded: false };
+function goalsTab(t) {
+  wishState.tab = t;
+  document.querySelectorAll('#goals-tabs [data-gtab]').forEach(function (b) { b.classList.toggle('on', b.dataset.gtab === t); });
+  var show = function (id, on) { document.getElementById(id).style.display = on ? '' : 'none'; };
+  show('goals-main', t === 'goals'); show('wish-main', t === 'wish'); show('goals-new', t === 'goals'); show('goals-year', t === 'goals');
+  if (t === 'wish') {
+    if (wishState.loaded) wishRender();
+    else { studyWait(document.getElementById('wish-list'), 'Opening your wishlist…');
+      studyCall('getGoalWishlist').then(function (d) { wishState.items = d.items || []; wishState.loaded = true; wishRender(); }).catch(hsErr(document.getElementById('wish-list'))); }
+  }
+}
+function wishMoney(n) { return n ? formatThousands(n) + 'đ' : '—'; }
+function wishRender() {
+  var box = document.getElementById('wish-list'), byPrice = function (a, b) { return a.price - b.price || a.name.localeCompare(b.name); };
+  var todo = wishState.items.filter(function (i) { return !i.done; }).sort(byPrice), got = wishState.items.filter(function (i) { return i.done; }).sort(byPrice);
+  if (!wishState.items.length) { box.innerHTML = '<div class="st-empty"><b>Nothing on the wishlist yet</b><span>Add something you want and what it costs — the cheapest comes first.</span></div>'; return; }
+  var line = function (i) {
+    return '<div class="wl-item' + (i.done ? ' done' : '') + '"><label><input type="checkbox" data-wt="' + i.id + '"' + (i.done ? ' checked' : '') + '><span class="wl-name">' + studyEsc(i.name) + '</span></label>' +
+      '<b class="wl-price">' + wishMoney(i.price) + '</b><button type="button" class="wl-del" data-wd="' + i.id + '" aria-label="Remove">✕</button></div>';
+  };
+  var sum = todo.reduce(function (a, i) { return a + i.price; }, 0);
+  box.innerHTML = '<div class="st-card wl-card">' + (todo.length ? todo.map(line).join('') : '<p class="wl-none">Everything here is yours already ♡</p>') +
+    '<div class="wl-sum"><span>Still to save</span><b>' + wishMoney(sum) + '</b></div></div>' +
+    (got.length ? '<h3 class="wl-h">Got it · ' + got.length + '</h3><div class="st-card wl-card">' + got.map(line).join('') + '</div>' : '');
+}
+function wishSave() {
+  return studyCall('saveGoalWishlist', wishState.items).then(function (d) { wishState.items = d.items || []; wishRender(); }).catch(hsErr());
+}
+function wishWire() {
+  var $ = function (id) { return document.getElementById(id); };
+  $('goals-tabs').onclick = function (e) { var b = e.target.closest('[data-gtab]'); if (b) goalsTab(b.dataset.gtab); };
+  $('wish-price').oninput = function () { var d = this.value.replace(/\D/g, ''); this.value = d ? formatThousands(Number(d)) : ''; };
+  $('wish-form').onsubmit = function (e) {
+    e.preventDefault();
+    var name = $('wish-name').value.trim(); if (!name) return;
+    wishState.items.push({ id: Date.now().toString(36), name: name, price: Number($('wish-price').value.replace(/\D/g, '')) || 0, done: false });
+    $('wish-name').value = ''; $('wish-price').value = ''; wishRender(); wishSave(); $('wish-name').focus();
+  };
+  $('wish-list').onchange = function (e) {
+    var c = e.target.closest('[data-wt]'); if (!c) return;
+    wishState.items.forEach(function (i) { if (i.id === c.dataset.wt) { i.done = c.checked; i.doneAt = ''; } });
+    wishRender(); wishSave();
+    if (c.checked) toast('Yay, it’s yours ✿');
+  };
+  $('wish-list').onclick = function (e) {
+    var d = e.target.closest('[data-wd]'); if (!d) return;
+    var it = wishState.items.filter(function (i) { return i.id === d.dataset.wd; })[0];
+    if (!it || !confirm('Remove “' + it.name + '” from the wishlist?')) return;
+    wishState.items = wishState.items.filter(function (i) { return i !== it; }); wishRender(); wishSave();
+  };
+}
 function goalPct(g) {
   if (g.status === 'done') return 100;
   var st = g.steps.length ? g.steps.filter(function (s) { return s.done; }).length / g.steps.length : null;
@@ -280,6 +333,7 @@ function housesWire() {
   $('note-undo').onclick = function () { var u = notesState.undo; if (!u) return; $('note-title').value = u.title; $('note-body').value = u.body; this.hidden = true; };
   $('note-del').onclick = function () { var id = notesState.edit.id; if (!id || !confirm('Delete this note?')) return; studyCall('deleteNote', id).then(function (d) { notesState.notes = d.notes || []; notesRender(); hsModal('note-modal', false); }).catch(hsErr()); };
   // goals
+  wishWire();
   $('goals-new').onclick = function () { goalOpen(null); };
   $('goals-year').onchange = function () { goalsLoad(Number(this.value)); };
   $('goals-main').onclick = function (e) {

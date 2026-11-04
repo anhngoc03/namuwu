@@ -11,7 +11,7 @@
   <meta name="theme-color" content="#ffb6c1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Fredoka:wght@400;600;700&family=Baloo+2:wght@500;700&family=Dancing+Script:wght@600;700&family=Henny+Penny&family=Noto+Sans+Warang+Citi&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=28">
+  <link rel="stylesheet" href="/style.css?v=29">
   <script src="/theme.js"></script>
 </head>
 <body>
@@ -410,7 +410,16 @@
 
       <div id="goals-view" class="app-view" style="display:none;">
         <div class="study-head"><h2 class="page-title">Goals</h2><select class="hs-year" id="goals-year" aria-label="Year"></select><button class="pill-btn" id="goals-new">+ Goal</button></div>
+        <div class="hs-chips gl-tabs" id="goals-tabs"><button type="button" class="hs-chip on" data-gtab="goals">Goals</button><button type="button" class="hs-chip" data-gtab="wish">Wishlist</button></div>
         <div class="study-main" id="goals-main"></div>
+        <div class="study-main" id="wish-main" style="display:none">
+          <form class="st-card wl-add" id="wish-form" autocomplete="off">
+            <input type="text" id="wish-name" maxlength="120" placeholder="What I want" required>
+            <input type="text" id="wish-price" inputmode="numeric" placeholder="Cost (đ)">
+            <button class="pill-btn" type="submit">Add</button>
+          </form>
+          <div id="wish-list"></div>
+        </div>
       </div>
 
       <div id="health-view" class="app-view" style="display:none;">
@@ -1819,16 +1828,16 @@
   <script src="/qrcode.min.js"></script>
   <script src="/gas-bridge.js"></script>
   <script src="/converter.js"></script>
-  <script src="/app.js?v=28"></script>
+  <script src="/app.js?v=29"></script>
   <script src="/work.js"></script>
   <script src="/posts.js"></script>
   <script src="/calendar.js"></script>
-  <script src="/foodart.js?v=28"></script>
-  <script src="/love.js?v=28"></script>
-  <script src="/study.js?v=28"></script>
-  <script src="/houses.js?v=28"></script>
-  <script src="/store.js?v=28"></script>
-  <script src="/village.js?v=28"></script>
+  <script src="/foodart.js?v=29"></script>
+  <script src="/love.js?v=29"></script>
+  <script src="/study.js?v=29"></script>
+  <script src="/houses.js?v=29"></script>
+  <script src="/store.js?v=29"></script>
+  <script src="/village.js?v=29"></script>
   <script src="/enter-confirm.js"></script>
 </body>
 </html>

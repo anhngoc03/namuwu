@@ -1517,7 +1517,7 @@ const ACTIONS = {
   markStudyAnswer,
   retakeStudyTest,
   getNotesData, saveNote, deleteNote, tidyNote,
-  getGoalsData, saveGoal, deleteGoal, planGoalSteps,
+  getGoalsData, saveGoal, deleteGoal, planGoalSteps, getGoalWishlist, saveGoalWishlist,
   getHealthData, saveHealthLog, deleteHealthLog, estimateHealthKcal, saveHealthProfile, makeHealthPlan,
   getLawDocs, checkLawUpdates, setLawDoc, deleteLawDoc,
   deleteLovePhoto,
@@ -2094,6 +2094,22 @@ function goalOut_(r) {
   const steps = Array.isArray(r.steps) ? r.steps : [];
   return { id: r.id, year: r.year, title: r.title, area: r.area, why: r.why, deadline: r.deadline, target: Number(r.target_amount) || 0, saved: Number(r.saved_amount) || 0,
     status: r.status, steps, createdAt: r.created_at };
+}
+/* ---- Goals › wishlist: things you want and what they cost (app_settings key 'wishlist', no new table) ---- */
+async function getGoalWishlist(env) {
+  const rows = await sb(env, 'app_settings?key=eq.wishlist&select=value').catch(() => []);
+  return { items: ((rows[0] && rows[0].value && rows[0].value.items) || []) };
+}
+async function saveGoalWishlist(env, [items]) {
+  const clean = (Array.isArray(items) ? items : []).slice(0, 300).map((it, i) => ({
+    id: String((it && it.id) || Date.now().toString(36) + i).slice(0, 24),
+    name: String((it && it.name) || '').trim().slice(0, 120),
+    price: Math.max(0, Math.round(Number(it && it.price) || 0)),
+    done: !!(it && it.done),
+    doneAt: it && it.done ? String(it.doneAt || vnNow_().date).slice(0, 10) : ''
+  })).filter((it) => it.name);
+  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'wishlist', value: { items: clean } }]), prefer: 'resolution=merge-duplicates,return=minimal' });
+  return { items: clean };
 }
 async function getGoalsData(env, [year]) {
   const y = Number(year) || Number(vnNow_().date.slice(0, 4));

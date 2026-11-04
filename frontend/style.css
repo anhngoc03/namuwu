@@ -2674,3 +2674,20 @@ body.store-room #store-view .store-head, body.store-room #store-view .store-shel
 .store-empty{ text-align:center; opacity:.7; font-weight:700; padding:18px 0; }
 .store-totalrow{ display:flex; justify-content:space-between; align-items:center; padding:12px 4px 2px; font-weight:800; font-size:16px; }
 .pill-btn.store-ghost{ background:#eef0f2; color:#6a6a7a; box-shadow:none; }
+
+/* Goals › Wishlist */
+.gl-tabs{ margin-top:-4px; }
+.wl-add{ display:grid; grid-template-columns:1fr 130px auto; gap:8px; align-items:center; max-width:760px; margin-bottom:10px; }
+.wl-add input{ min-width:0; }
+@media (max-width:480px){ .wl-add{ grid-template-columns:1fr 1fr; } .wl-add .pill-btn{ grid-column:1 / -1; } }
+.wl-card{ max-width:760px; padding:6px 12px; }
+.wl-item{ display:grid; grid-template-columns:1fr auto auto; gap:10px; align-items:center; padding:10px 0; border-bottom:1px dashed #f0dfe6; }
+.wl-item label{ display:flex; align-items:center; gap:10px; cursor:pointer; min-width:0; }
+.wl-item input[type=checkbox]{ width:20px; height:20px; accent-color:#e88fb0; flex:none; }
+.wl-name{ font-weight:700; overflow-wrap:anywhere; }
+.wl-price{ font-size:14px; color:#c0587a; white-space:nowrap; }
+.wl-item.done .wl-name{ text-decoration:line-through; opacity:.55; } .wl-item.done .wl-price{ opacity:.5; color:inherit; }
+.wl-del{ border:0; background:none; cursor:pointer; color:#b8a0aa; font-size:14px; padding:4px; }
+.wl-sum{ display:flex; justify-content:space-between; padding:10px 0 6px; font-weight:800; }
+.wl-h{ display:inline-block; font-size:13px; margin:14px 0 6px; padding:5px 12px; border-radius:99px; background:rgba(255,255,255,.85); color:#8a6a7a; }
+.wl-none{ text-align:center; opacity:.7; font-weight:700; padding:10px 0; }
