@@ -58,7 +58,7 @@
     if (loading) return;
     loading = true;
     var sc = document.createElement('script');
-    sc.src = '/village3d.js?v=25';
+    sc.src = '/village3d.js?v=26';
     sc.onload = function () { loading = false; var w = loadWaiters; loadWaiters = []; w.forEach(function (f) { f(); }); };
     sc.onerror = function () { loading = false; loadWaiters = []; toast("Couldn't load the village ʕ´-ก̀ʔᐝ"); };
     document.head.appendChild(sc);
@@ -72,7 +72,8 @@
       scene3d = window.Village3D.create(stage, {
         houses: HOUSES,
         timeMode: timeMode(),
-        onPick: function (id) { openHouse(id); }      // houses: ignored while locked (cat, dog, fish always react)
+        onPick: function (id) { openHouse(id); },     // houses: ignored while locked (cat, dog, fish always react)
+        onCar: function () { if (unlocked()) shopDrive(); }   // the Love couple's car: a drive to the shop and back
       });
     } catch (e) {
       toast('This device can\'t show 3D ʕ´-ก̀ʔᐝ');
@@ -218,15 +219,16 @@
   // the Love room: back out of the album zoom, the dishes on the table (love.js calls these)
   window.villageRoomBack = function () { if (room && room.back) room.back(); };
   window.villageRoomFood = function (items) { roomFood = items || []; if (room && room.house === 'love' && room.setFood) room.setFood(roomFood); };
-  // "go for a drive": out of the house, then the G-Class does a loop of the village
-  window.villageDrive = function () {
-    leaveHouse();
-    var tries = 0;
-    (function go() {
-      if (scene3d && document.body.classList.contains('village-mode') && !room) { setTimeout(function () { if (!scene3d.drive(function () { toast('Home again ♡'); })) toast('The car is busy'); }, 1600); return; }
-      if (++tries < 40) setTimeout(go, 150);
-    })();
-  };
+  // tap the car: the two of them drive out to the shop, park and go in (the shop opens), and when you
+  // come back out they get in and drive round the village, home. What they buy goes on their table.
+  var shopResume = null, shopForLove = false;
+  function shopDrive() {
+    var ok = scene3d && scene3d.drive(function () { shopForLove = false; toast('Home again ♡'); }, {
+      onShop: function (resume) { shopResume = resume; shopForLove = true; openHouse('store'); }
+    });
+    if (!ok) toast('The car is out already');
+  }
+  window.villageShopForLove = function () { return shopForLove; };
   function currentCorner(house) {
     if (house === 'work') return typeof workTab !== 'undefined' ? workTab : 'list';
     if (house === 'money') return typeof expenseActiveTab !== 'undefined' ? expenseActiveTab : 'overview';
@@ -251,6 +253,7 @@
         room = Village3D.room(el, {
           house: house, kind: spec.kind, roof: Village3D.ROOF[spec.roof], look: Village3D.lookAs ? Village3D.lookAs(Village3D.LOOKS[idx], (villageNames.genders || {})[house]) : Village3D.LOOKS[idx],
           looks: house === 'love' ? [Village3D.LOVE.her, Village3D.LOVE.him] : null,
+          guests: house === 'store' && shopForLove ? [Village3D.LOVE.her, Village3D.LOVE.him] : null,
           corner: currentCorner(house), timeMode: timeMode(), walkIn: walkingIn, names: { her: villageNames.her || 'namu', him: villageNames.him || 'hunf' },
           onPick: house === 'love' ? function (what, at) { if (typeof loveRoomPick === 'function') loveRoomPick(what, at); } : null
         });
@@ -716,7 +719,12 @@
     if (scene3d) scene3d.show(shown);
     if (!shown) return;
     var fade = document.getElementById('village-fade');
-    if (lastLeft && scene3d) { scene3d.exitHouse(lastLeft); }
+    if (lastLeft && scene3d) {
+      var wasShop = lastLeft === 'store';
+      scene3d.exitHouse(lastLeft, function () {            // out of the shop: back in the car, on with the drive
+        if (wasShop && shopResume) { var r = shopResume; shopResume = null; setTimeout(r, 400); }
+      });
+    }
     lastLeft = null;
     setTimeout(function () { fade.classList.remove('on'); }, 200);   // the camera is in the doorway by then
     ensureScene();

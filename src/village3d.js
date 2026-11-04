@@ -955,9 +955,10 @@ function buildGraph(doors) {
     for (let u = to; u >= 0; u = prev[u]) out.unshift(nodes[u]);
     return out.length && out[0] === nodes[from] ? out : [nodes[to]];
   }
-  function nearest(x, z) {
+  function nearest(x, z, roadOnly) {          // roadOnly: skip the little paths up to each door
     let b = 0, bd = Infinity;
-    nodes.forEach((n, i) => { const d = Math.hypot(n.x - x, n.z - z); if (d < bd) { bd = d; b = i; } });
+    const doors = roadOnly ? new Set(doorNodes) : null;
+    nodes.forEach((n, i) => { if (doors && doors.has(i)) return; const d = Math.hypot(n.x - x, n.z - z); if (d < bd) { bd = d; b = i; } });
     return b;
   }
   return { nodes, doorNodes, path, nearest };
@@ -2167,28 +2168,38 @@ function create(container, opts) {
 
   /* the couple's drive: out of the garage, a loop round the village roads, back home */
   let drive = null;
-  function startDrive(done) {
+  function startDrive(done, o) {
     if (!lot.car || drive) return false;
+    o = o || {};
     const c = lot.car, home = { x: c.position.x, z: c.position.z, ry: c.rotation.y };
     const n0 = graph.nearest(lot.exit.x, lot.exit.z);
     const doorSet = new Set(graph.doorNodes);
     const road = graph.nodes.map((_, i) => i).filter((i) => !doorSet.has(i) && Math.abs(groundY(graph.nodes[i].x, graph.nodes[i].z)) < 0.2);   // down in the village
     const far = road.filter((n) => Math.hypot(graph.nodes[n].x - home.x, graph.nodes[n].z - home.z) > 30);
     const pickN = (a) => a[Math.floor(Math.random() * a.length)];
-    const stops = far.length ? [pickN(far), pickN(far)] : [];
-    let pts = [{ x: home.x, z: home.z }, { x: lot.exit.x, z: lot.exit.z }], at = n0;
-    stops.concat([n0]).forEach((n) => { graph.path(at, n).forEach((q) => pts.push({ x: q.x, z: q.z })); at = n; });
+    const shopAt = (opts.houses || []).findIndex((h) => h.id === 'store');
+    const shopN = o.onShop && shopAt >= 0 ? graph.nearest(graph.nodes[graph.doorNodes[shopAt]].x, graph.nodes[graph.doorNodes[shopAt]].z, true) : -1;
+    const stops = (shopN >= 0 ? [shopN] : []).concat(far.length ? [pickN(far)] : []);
+    let pts = [{ x: home.x, z: home.z }, { x: lot.exit.x, z: lot.exit.z }], at = n0, shopI = -1;
+    stops.concat([n0]).forEach((n) => { graph.path(at, n).forEach((q) => pts.push({ x: q.x, z: q.z })); at = n; if (n === shopN && shopI < 0) shopI = pts.length - 1; });
     pts.push({ x: lot.exit.x, z: lot.exit.z }, { x: home.x, z: home.z - Math.cos(home.ry) * 0.01 });
-    pts = pts.filter((q, i) => !i || Math.hypot(q.x - pts[i - 1].x, q.z - pts[i - 1].z) > 0.3);
-    drive = { pts, i: 1, home, done, v: 0, last: 0 };
+    if (shopI >= 0) pts[shopI].shop = true;
+    pts = pts.filter((q, i) => q.shop || !i || Math.hypot(q.x - pts[i - 1].x, q.z - pts[i - 1].z) > 0.3);
+    drive = { pts, i: 1, home, done, v: 0, last: 0, onShop: o.onShop, wait: false };
     return true;
   }
   function driveStep(dt) {
     const c = lot.car, d = drive, q = d.pts[d.i];
+    if (d.wait) return;                                            // parked at the shop: they're inside
     const reverse = d.i === d.pts.length - 1;                     // backs into the driveway at the end
     const dx = q.x - c.position.x, dz = q.z - c.position.z, l = Math.hypot(dx, dz);
     d.v = Math.min(reverse ? 2 : 6.5, d.v + dt * 3);
     if (l < 0.35) {
+      if (q.shop && d.onShop) {                                    // pull up at the shop, they go in to buy
+        q.shop = false; d.wait = true; d.v = 0;
+        d.onShop(() => { if (drive === d) d.wait = false; });
+        return;
+      }
       d.i++;
       if (d.i >= d.pts.length) {
         c.position.set(d.home.x, groundY(d.home.x, d.home.z), d.home.z); c.rotation.y = d.home.ry;
@@ -2364,6 +2375,7 @@ function create(container, opts) {
       }
       return;
     }
+    if (lot.car && !drive && opts.onCar && ray.intersectObject(lot.car, true)[0]) { opts.onCar(); return; }
     const pet = ray.intersectObjects([cat.g, dog.g], true)[0];
     if (pet) {
       const m = cat.g.getObjectById(pet.object.id) ? cat : dog;
@@ -2938,6 +2950,12 @@ function createRoom(container, opts) {
     w.parts.legL.rotation.x = w.parts.legR.rotation.x = -1.45;
     return w;
   });
+  // customers standing at the counter (the Love couple, when they drive to the shop)
+  const guests = (opts.guests || []).map((lk, k) => {
+    const w = makePerson(lk); g.add(w.g);
+    w.g.position.set(k ? 1.0 : -1.25, 0, -0.25); w.g.rotation.y = Math.PI + (k ? 0.25 : -0.25);
+    return w;
+  });
   const who = R.sofa || R.gamer ? null : sitters[0] || null;
   let coupleMode = '';
   // the Love couple: their names float over their heads; tap = a kiss on the cheek
@@ -2988,7 +3006,7 @@ function createRoom(container, opts) {
   const zzz = textSprite('z Z z', '#7a6a9a', 0.9, 0.45); g.add(zzz);
   // tapping things in the room: the album, the frame, the stairs, the two of them
   if (opts.onPick) {
-    const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(); let down = null, hold = 0, held = false, clickWait = 0;
+    const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(); let down = null;
     const el = renderer.domElement;
     const pickAt = (cx, cy) => {
       const r = el.getBoundingClientRect();
@@ -2998,12 +3016,6 @@ function createRoom(container, opts) {
       if (!hit) return '';
       let o = hit.object; while (o && !o.userData.pick) o = o.parent;
       return o.userData.pick;
-    };
-    const menu = () => {                              // long press / double click on the couple → the chat bubble
-      const v = new THREE.Vector3(); names[0].getWorldPosition(v); const v2 = new THREE.Vector3(); names[1].getWorldPosition(v2);
-      v.add(v2).multiplyScalar(0.5).project(camera);
-      const r = el.getBoundingClientRect();
-      opts.onPick('couple-menu', { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height });
     };
     const act = (what) => {
       if (what === 'couple') { if (kissT < 0) kissT = 0; return; }
@@ -3016,23 +3028,13 @@ function createRoom(container, opts) {
     };
     el.addEventListener('contextmenu', (e) => e.preventDefault());
     el.addEventListener('pointerdown', (e) => {
-      down = { x: e.clientX, y: e.clientY, type: e.pointerType }; held = false;
-      clearTimeout(hold);
-      if (e.pointerType !== 'mouse' && R.couple && pickAt(e.clientX, e.clientY) === 'couple') hold = setTimeout(() => { held = true; menu(); }, 520);
+      down = { x: e.clientX, y: e.clientY, type: e.pointerType };
     });
-    el.addEventListener('pointermove', (e) => { if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) clearTimeout(hold); });
     el.addEventListener('pointerup', (e) => {
-      clearTimeout(hold);
-      if (!down || held || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) { down = null; return; }
-      const type = down.type; down = null;
+      if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) { down = null; return; }
+      down = null;
       const what = pickAt(e.clientX, e.clientY);
-      if (!what) return;
-      if (what === 'couple' && type === 'mouse') { clearTimeout(clickWait); clickWait = setTimeout(() => act('couple'), 260); return; }   // wait: it may be a double click
-      act(what);
-    });
-    el.addEventListener('dblclick', (e) => {
-      if (!R.couple || pickAt(e.clientX, e.clientY) !== 'couple') return;
-      clearTimeout(clickWait); menu();
+      if (what) act(what);
     });
   }
   const gamer = R.gamer ? sitters[0] : null;
@@ -3149,6 +3151,7 @@ function createRoom(container, opts) {
       gamer.parts.armL.rotation.x = gamer.parts.armR.rotation.x = -1.1 + Math.sin(t * 14) * 0.05;
       gamer.parts.head.rotation.x = -0.05; gamer.parts.head.rotation.y = Math.sin(t * 0.5) * 0.08;
     }
+    guests.forEach((w, k) => { w.parts.head.rotation.y = Math.sin(t * 0.5 + k * 2) * 0.3; w.parts.armL.rotation.x = Math.sin(t * 0.8 + k) * 0.06; });
     if (who && who.standing) {                       // the cashier: a little sway, now and then a wave
       const wave = (t % 9) < 1.4;
       who.parts.armL.rotation.x = -0.35 + Math.sin(t * 1.3) * 0.05;
