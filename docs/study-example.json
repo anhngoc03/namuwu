@@ -1,0 +1,58 @@
+{
+  "format": "namuwu-study/1",
+  "house": "language",
+  "subject": "Hiragana trong 1 tuần",
+  "level": "mới bắt đầu",
+  "goal": "đọc và viết được bảng hiragana",
+  "weeks": 1,
+  "daysPerWeek": 3,
+  "minutesPerDay": 20,
+  "summary": "Ba buổi: hàng あ–さ, hàng た–は, hàng ま–ん. Mỗi buổi học 15 chữ, luyện đọc từ ngắn, cuối tuần có bài ôn.",
+  "lessons": [
+    {
+      "week": 1,
+      "title": "Hàng あ・か・さ",
+      "goal": "Đọc và viết 15 chữ đầu",
+      "content": "## Ý chính\n- Hiragana có 46 chữ cơ bản, mỗi chữ là một âm.\n- Hôm nay: **あ い う え お / か き く け こ / さ し す せ そ**\n## Ví dụ\n- あい (ai) — tình yêu\n- すし (sushi)\n- いけ (ike) — cái ao\n## Mẹo nhớ\n- **し** đọc là \"shi\", không phải \"si\".\n- **す** giống một sợi mì cuộn: \"sụp mì\".\n## Tự luyện\n- Đọc: かさ, うし, あき\n## Đáp án\n- かさ = kasa (cái ô), うし = ushi (con bò), あき = aki (mùa thu)",
+      "exercise": {
+        "title": "あ・か・さ",
+        "questions": [
+          { "type": "mcq", "q": "Chữ 「し」 đọc là gì?", "options": ["si", "shi", "chi", "su"], "answer": "shi", "explain": "し = shi", "points": 1 },
+          { "type": "mcq", "q": "「すし」 là gì?", "options": ["sushi", "sake", "kasa", "ushi"], "answer": "sushi", "explain": "す = su, し = shi", "points": 1 },
+          { "type": "short", "q": "Viết romaji của 「かさ」", "answer": "kasa", "accept": ["ka sa"], "explain": "か = ka, さ = sa", "points": 1 },
+          { "type": "short", "q": "Viết bằng hiragana: \"aki\" (mùa thu)", "answer": "あき", "explain": "あ = a, き = ki", "points": 1 },
+          { "type": "write", "q": "Viết 3 từ bất kỳ chỉ dùng chữ của hàng あ・か・さ, kèm nghĩa nếu biết", "answer": "Ví dụ: あい (tình yêu), いえ (ngôi nhà), すし (sushi)", "points": 3 }
+        ]
+      }
+    },
+    {
+      "week": 1,
+      "title": "Hàng た・な・は",
+      "goal": "Thêm 15 chữ tiếp theo",
+      "content": "## Ý chính\n- **た ち つ て と / な に ぬ ね の / は ひ ふ へ ほ**\n- **ち** = chi, **つ** = tsu, **ふ** = fu\n## Ví dụ\n- ねこ (neko) — con mèo\n- はな (hana) — hoa\n## Đáp án\n- …",
+      "exercise": {
+        "questions": [
+          { "type": "mcq", "q": "「ねこ」 là con gì?", "options": ["con chó", "con mèo", "con cá", "con chim"], "answer": "con mèo", "points": 1 },
+          { "type": "short", "q": "Viết romaji của 「つ」", "answer": "tsu", "points": 1 }
+        ]
+      }
+    },
+    {
+      "week": 1,
+      "title": "Hàng ま・や・ら・わ・ん",
+      "goal": "Hoàn thành bảng hiragana",
+      "content": "## Ý chính\n- **ま み む め も / や ゆ よ / ら り る れ ろ / わ を ん**\n## Ví dụ\n- やま (yama) — núi\n- さくら (sakura) — hoa anh đào"
+    }
+  ],
+  "tests": [
+    {
+      "week": 1,
+      "title": "Ôn cả bảng",
+      "questions": [
+        { "type": "mcq", "q": "「さくら」 đọc là gì?", "options": ["sakura", "sakuro", "sukura", "sakira"], "answer": "sakura", "points": 1 },
+        { "type": "short", "q": "Viết bằng hiragana: \"yama\" (núi)", "answer": "やま", "points": 1 },
+        { "type": "short", "q": "Viết romaji của 「ん」", "answer": "n", "accept": ["nn"], "points": 1 }
+      ]
+    }
+  ]
+}

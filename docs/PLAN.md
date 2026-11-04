@@ -138,3 +138,9 @@ Nguyên tắc: **dữ liệu cũ giữ nguyên**, nhà mới dùng lại bảng 
 - Nhắc việc: thêm nguồn Study (bài hôm nay / trễ) và Goals (hạn mục tiêu + từng bước).
 - ✿ AI summary: hằng ngày hoặc Chủ nhật (Cài đặt, mặc định tắt), và nút ✿ Summary ở Town Hall.
 - Study: 🔊 đọc to bài (Nhật / Anh / Việt). Điện thoại: 2 ngón cùng kéo lên/xuống = nghiêng camera.
+
+## 5j. Study from a file (no API cost)
+- Làm file lộ trình trong chat với Claude (gửi sách/tài liệu) theo `docs/study-format.md` (ví dụ: `docs/study-example.json`).
+- Languages/Skills → 📄 Import: bài giảng, bài tập, test + đáp án lưu thẳng vào Supabase, không gọi AI.
+- Chấm không cần AI: trắc nghiệm + trả lời ngắn so khớp (`answer` / `accept`), câu viết tự so với đáp án mẫu (✓ / ✗).
+- ↺ Do it again (làm lại bài), 🔁 Review mistakes lấy lại các câu đã sai.

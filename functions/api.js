@@ -1494,6 +1494,9 @@ const ACTIONS = {
   makeStudyTest,
   submitStudyTest,
   deleteStudyTest,
+  importStudyPlan,
+  markStudyAnswer,
+  retakeStudyTest,
   getNotesData, saveNote, deleteNote, tidyNote,
   getGoalsData, saveGoal, deleteGoal, planGoalSteps,
   getHealthData, saveHealthLog, deleteHealthLog, estimateHealthKcal, saveHealthProfile, makeHealthPlan,
@@ -1803,11 +1806,14 @@ async function getLoveData(env) {
  *  tests and marks them. Answers stay on the server until a test is handed in.
  * ============================================================ */
 const STUDY_HOUSES_ = ['language', 'skills'];
+const STUDY_FILE_ = '[file]';
+const studyFromFile_ = (p) => String((p && p.notes) || '').startsWith(STUDY_FILE_);
 function studyPlanOut_(p, lessons) {
   const ls = lessons || [];
   return {
     id: p.id, house: p.house, subject: p.subject, level: p.level, goal: p.goal, minutesPerDay: p.minutes_per_day,
-    daysPerWeek: p.days_per_week, weeks: p.weeks, startDate: p.start_date, notes: p.notes, summary: p.summary, status: p.status,
+    daysPerWeek: p.days_per_week, weeks: p.weeks, startDate: p.start_date, notes: String(p.notes || '').replace(STUDY_FILE_, '').trim(), summary: p.summary, status: p.status,
+    fromFile: studyFromFile_(p),
     total: ls.length, done: ls.filter((l) => l.done).length,
     next: (ls.filter((l) => !l.done).sort((a, b) => a.seq - b.seq)[0] || null)
   };
@@ -1926,6 +1932,16 @@ async function makeStudyTest(env, [planId, opts]) {
     if (!mistakes.length) throw new Error('No mistakes to review yet ♡');
     title = 'Review · ' + mistakes.length + ' things you missed';
   }
+  if (studyFromFile_(p)) {                            // a plan from a file never calls the AI
+    if (kind !== 'review') throw new Error('This roadmap came from a file — its exercises and tests are already in it');
+    const done = await sb(env, 'study_tests?plan_id=eq.' + p.id + '&submitted_at=not.is.null&select=questions,results&order=submitted_at.desc&limit=40');
+    const qs = [], seen = new Set();
+    done.forEach((t) => (t.results || []).forEach((r, i) => { const q = t.questions[i]; if (r && r.correct === false && q && !seen.has(q.q)) { seen.add(q.q); qs.push(q); } }));
+    if (!qs.length) throw new Error('No mistakes to review yet ♡');
+    const pick = qs.slice(0, 20);
+    const [row] = await sb(env, 'study_tests', { method: 'POST', body: JSON.stringify([{ plan_id: p.id, kind: 'review', title: 'Review · ' + pick.length + ' you missed', questions: pick, max_score: pick.reduce((a, q) => a + (q.points || 1), 0) }]) });
+    return studyTestOut_(row, false);
+  }
   const count = kind === 'exercise' ? 6 : kind === 'review' ? Math.min(12, Math.max(4, mistakes.length)) : Math.min(15, 6 + lessons.length);
   const made = await study.makeQuestions(env, p, { kind, lessons, mistakes, count });
   const [row] = await sb(env, 'study_tests', { method: 'POST', body: JSON.stringify([{ plan_id: p.id, lesson_id: kind === 'exercise' ? lessons[0].id : null, kind, title: title || made.title, questions: made.questions, max_score: made.questions.reduce((s, q) => s + q.points, 0) }]) });
@@ -1939,11 +1955,87 @@ async function submitStudyTest(env, [id, answers]) {
   const p = await studyPlanRow_(env, t.plan_id);
   const ans = (Array.isArray(answers) ? answers : []).slice(0, t.questions.length).map((a) => String(a == null ? '' : a).slice(0, 4000));
   while (ans.length < t.questions.length) ans.push('');
-  const g = await study.gradeAnswers(env, p, t.questions, ans);
+  const g = studyFromFile_(p) ? studyGradeLocal_(t.questions, ans) : await study.gradeAnswers(env, p, t.questions, ans);
   const [row] = await sb(env, 'study_tests?id=eq.' + t.id, { method: 'PATCH', body: JSON.stringify({ answers: ans, results: g.results, score: g.score, max_score: g.max, feedback: g.feedback, submitted_at: new Date().toISOString() }) });
   // an exercise done well ticks its lesson off
   if (t.kind === 'exercise' && t.lesson_id && g.max && g.score / g.max >= 0.7) await setStudyLessonDone(env, [t.lesson_id, true]);
   return studyTestOut_(row, true);
+}
+// marking without the AI: multiple choice and short answers by matching (answer or any "accept"),
+// written answers are left for you to check against the model answer (correct: null)
+function studyNorm_(v) { return String(v == null ? '' : v).normalize('NFKC').toLowerCase().replace(/[\s　]+/g, ' ').replace(/[.,!?;:"'“”‘’。、！？「」()（）\[\]]/g, '').trim(); }
+function studyGradeLocal_(questions, answers) {
+  const results = questions.map((q, i) => {
+    const a = studyNorm_(answers[i]), pts = Number(q.points) || 1;
+    if (!a) return { correct: false, score: 0, comment: 'No answer' };
+    if (q.type === 'write') return { correct: null, score: 0, comment: '' };
+    const ok = [q.answer].concat(q.accept || []).some((x) => studyNorm_(x) === a);
+    return { correct: ok, score: ok ? pts : 0, comment: '' };
+  });
+  const score = results.reduce((s, r) => s + r.score, 0), max = questions.reduce((s, q) => s + (Number(q.points) || 1), 0);
+  const selfs = results.filter((r) => r.correct === null).length;
+  return { results, score, max, feedback: selfs ? 'Check your written answer' + (selfs > 1 ? 's' : '') + ' against the model answer and mark ✓ / ✗ ✿' : '' };
+}
+// you mark a written answer yourself (file plans), or fix a mark you disagree with
+async function markStudyAnswer(env, [id, i, correct]) {
+  const rows = await sb(env, 'study_tests?id=eq.' + Number(id) + '&select=*');
+  if (!rows.length) throw new Error('Test not found');
+  const t = rows[0], res = (t.results || []).slice(), q = t.questions[Number(i)];
+  if (!q || !res[Number(i)]) throw new Error('No such question');
+  res[Number(i)] = Object.assign({}, res[Number(i)], { correct: !!correct, score: correct ? (Number(q.points) || 1) : 0 });
+  const score = res.reduce((s, r) => s + (r.score || 0), 0);
+  const [row] = await sb(env, 'study_tests?id=eq.' + t.id, { method: 'PATCH', body: JSON.stringify({ results: res, score }) });
+  if (t.kind === 'exercise' && t.lesson_id && t.max_score && score / t.max_score >= 0.7) await setStudyLessonDone(env, [t.lesson_id, true]);
+  return studyTestOut_(row, true);
+}
+// do it again: a fresh copy with the same questions (no AI)
+async function retakeStudyTest(env, [id]) {
+  const rows = await sb(env, 'study_tests?id=eq.' + Number(id) + '&select=*');
+  if (!rows.length) throw new Error('Test not found');
+  const t = rows[0];
+  const [row] = await sb(env, 'study_tests', { method: 'POST', body: JSON.stringify([{ plan_id: t.plan_id, lesson_id: t.lesson_id, kind: t.kind, title: t.title.replace(/ · again( \d+)?$/, '') + ' · again', questions: t.questions, max_score: t.max_score }]) });
+  return studyTestOut_(row, false);
+}
+// a whole roadmap from a file (docs/study-format.md): lessons with their content, exercises, tests + answers
+function studyQuestions_(list) {
+  return (Array.isArray(list) ? list : []).slice(0, 60).map((q) => {
+    const type = ['mcq', 'short', 'write'].includes(q && q.type) ? q.type : 'short';
+    const options = type === 'mcq' ? (Array.isArray(q.options) ? q.options : []).map((o) => str_(o, 500)).slice(0, 8) : [];
+    let answer = str_(q && q.answer, 3000);
+    if (type === 'mcq' && /^\d+$/.test(answer) && options[Number(answer)]) answer = options[Number(answer)];   // an index is fine too
+    if (type === 'mcq' && !options.includes(answer)) { const m = options.find((o) => studyNorm_(o) === studyNorm_(answer)); if (m) answer = m; }
+    return { type, q: str_(q && q.q, 3000), options, answer, accept: (Array.isArray(q && q.accept) ? q.accept : []).map((x) => str_(x, 500)).slice(0, 10),
+      explain: str_(q && q.explain, 2000), points: Math.max(1, Math.min(10, Number(q && q.points) || (type === 'write' ? 3 : 1))) };
+  }).filter((q) => q.q && (q.type !== 'mcq' || (q.options.length >= 2 && q.options.includes(q.answer))));
+}
+async function importStudyPlan(env, [file, house]) {
+  let f = file;
+  if (typeof f === 'string') { try { f = JSON.parse(f); } catch (e) { throw new Error('That file is not valid JSON'); } }
+  if (!f || typeof f !== 'object' || !Array.isArray(f.lessons) || !f.lessons.length) throw new Error('The file has no "lessons" — see docs/study-format.md');
+  const lessonsIn = f.lessons.slice(0, 300);
+  const weeks = Math.max(1, Math.min(52, Number(f.weeks) || Math.max(1, ...lessonsIn.map((l) => Number(l.week) || 1))));
+  const plan = {
+    house: STUDY_HOUSES_.includes(f.house) ? f.house : (STUDY_HOUSES_.includes(house) ? house : 'language'),
+    subject: str_(f.subject || f.title, 120).trim() || 'My roadmap', level: str_(f.level, 300), goal: str_(f.goal, 600),
+    minutes_per_day: Math.max(5, Math.min(480, Number(f.minutesPerDay) || 30)), days_per_week: Math.max(1, Math.min(7, Number(f.daysPerWeek) || 5)),
+    weeks, start_date: day_(f.startDate) || vnNow_().date, summary: str_(f.summary, 3000), notes: (STUDY_FILE_ + ' ' + str_(f.notes, 900)).trim()
+  };
+  await sb(env, 'study_plans?select=id&limit=1').catch(studyMissingTable_);
+  const ls = lessonsIn.map((l, i) => ({ week: Math.max(1, Math.min(weeks, Number(l.week) || 1)), seq: i + 1, title: str_(l.title, 200).trim() || 'Lesson ' + (i + 1), goal: str_(l.goal, 400), content: str_(l.content, 40000), day: day_(l.day), ex: l.exercise }));
+  const dated = studyDays_(plan.start_date, ls, plan.days_per_week);
+  const [row] = await sb(env, 'study_plans', { method: 'POST', body: JSON.stringify([plan]) });
+  const made = await sb(env, 'study_lessons', { method: 'POST', body: JSON.stringify(dated.map((l, i) => ({ plan_id: row.id, week: l.week, seq: l.seq, day: ls[i].day || l.day, title: l.title, goal: l.goal, content: l.content }))) });
+  const bySeq = {}; made.forEach((m) => { bySeq[m.seq] = m.id; });
+  const tests = [];
+  ls.forEach((l) => { const qs = l.ex && studyQuestions_(l.ex.questions || l.ex); if (qs && qs.length) tests.push({ plan_id: row.id, lesson_id: bySeq[l.seq], kind: 'exercise', title: 'Exercise · ' + (str_(l.ex.title, 150) || l.title), questions: qs }); });
+  (Array.isArray(f.tests) ? f.tests : []).slice(0, 60).forEach((t, k) => {
+    const qs = studyQuestions_(t && t.questions); if (!qs.length) return;
+    const wk = Number(t.week) || 0;
+    tests.push({ plan_id: row.id, lesson_id: null, kind: 'test', title: (wk ? 'Week ' + wk + ' · ' : 'Final · ') + (str_(t.title, 150) || 'Test ' + (k + 1)), questions: qs });
+  });
+  tests.forEach((t) => { t.max_score = t.questions.reduce((s, q) => s + q.points, 0); });
+  if (tests.length) await sb(env, 'study_tests', { method: 'POST', body: JSON.stringify(tests), prefer: 'return=minimal' });
+  return getStudyPlan(env, [row.id]);
 }
 async function deleteStudyTest(env, [id]) {
   await sb(env, 'study_tests?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' });

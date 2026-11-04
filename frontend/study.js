@@ -102,11 +102,13 @@ function studyRenderPlan() {
     '<div class="st-bar big"><i style="width:' + pc + '%"></i></div>' +
     '<div class="st-plan-meta"><span>' + p.done + ' / ' + p.total + ' lessons · ' + pc + '%</span>' + (late ? '<span class="st-late">' + late + ' behind</span>' : '<span>on track ♡</span>') + '</div>' +
     (next ? '<button type="button" class="st-today" data-st="lesson" data-id="' + next.id + '"><small>' + (next.day && next.day <= today ? 'Today' : 'Next up') + '</small><b>' + studyEsc(next.title) + '</b><span>' + studyEsc(next.goal) + '</span></button>' : '<div class="st-today done"><b>Roadmap finished ✿</b><span>Take the final test or review your mistakes</span></div>') +
-    '<div class="st-acts"><button type="button" class="pill-btn" data-st="test-all">📝 Test</button><button type="button" class="pill-btn secondary" data-st="review">🔁 Review mistakes</button></div>' +
+    '<div class="st-acts">' + (p.fromFile ? '<span class="st-file">📄 from a file · no AI needed</span>' : '<button type="button" class="pill-btn" data-st="test-all">📝 Test</button>') + '<button type="button" class="pill-btn secondary" data-st="review">🔁 Review mistakes</button></div>' +
     '</div>';
   Object.keys(weeks).sort(function (a, b) { return a - b; }).forEach(function (w) {
     var ls = weeks[w], dn = ls.filter(function (l) { return l.done; }).length;
-    html += '<div class="st-card st-week"><div class="st-week-h"><b>Week ' + w + '</b><span>' + dn + '/' + ls.length + '</span><button type="button" class="st-chip" data-st="test-week" data-w="' + w + '">📝 Week test</button></div>' +
+    var wt = p.fromFile ? studyState.tests.filter(function (t) { return t.kind === 'test' && t.title.indexOf('Week ' + w + ' · ') === 0; }).slice(-1)[0] : null;
+    var chip = p.fromFile ? (wt ? '<button type="button" class="st-chip" data-st="open-test" data-id="' + wt.id + '">📝 Week test</button>' : '') : '<button type="button" class="st-chip" data-st="test-week" data-w="' + w + '">📝 Week test</button>';
+    html += '<div class="st-card st-week"><div class="st-week-h"><b>Week ' + w + '</b><span>' + dn + '/' + ls.length + '</span>' + chip + '</div>' +
       ls.map(function (l) {
         var cls = l.done ? ' done' : (l.day && l.day < today ? ' late' : (l.day === today ? ' today' : ''));
         return '<div class="st-lesson' + cls + '"><button type="button" class="st-check" data-st="done" data-id="' + l.id + '" aria-label="Done">' + (l.done ? '✓' : '') + '</button>' +
@@ -115,7 +117,8 @@ function studyRenderPlan() {
   });
   var tests = studyState.tests;
   html += '<div class="st-card"><div class="st-week-h"><b>Tests & exercises</b><span>' + tests.length + '</span></div>' + (tests.length ? tests.map(function (t) {
-    var sc = t.submittedAt ? '<em class="' + (t.max && t.score / t.max >= 0.8 ? 'good' : t.max && t.score / t.max >= 0.5 ? 'ok' : 'low') + '">' + t.score + ' / ' + t.max + '</em>' : '<em class="todo">not done</em>';
+    var pend = t.submittedAt && (t.results || []).some(function (r) { return r && r.correct === null; });
+    var sc = t.submittedAt ? '<em class="' + (pend ? 'ok' : t.max && t.score / t.max >= 0.8 ? 'good' : t.max && t.score / t.max >= 0.5 ? 'ok' : 'low') + '">' + t.score + ' / ' + t.max + (pend ? ' · check ✎' : '') + '</em>' : '<em class="todo">not done</em>';
     return '<button type="button" class="st-test" data-st="open-test" data-id="' + t.id + '"><span>' + ({ exercise: '✍️', test: '📝', review: '🔁' }[t.kind] || '📝') + ' ' + studyEsc(t.title) + '</span>' + sc + '</button>';
   }).join('') : '<div class="st-none">Nothing yet — open a lesson and try its exercise ✿</div>') + '</div>';
   box.innerHTML = html;
@@ -190,6 +193,7 @@ function studyShowTest(t) {
   document.getElementById('st-test-title').textContent = t.title;
   var done = !!t.submittedAt;
   document.getElementById('st-test-submit').hidden = done;
+  document.getElementById('st-test-again').hidden = !done;
   var html = '';
   if (done) {
     var r = t.max ? t.score / t.max : 0;
@@ -211,7 +215,11 @@ function studyShowTest(t) {
       inp = '<input class="st-in" data-q="' + i + '" type="text" autocomplete="off" placeholder="Your answer" value="' + studyEsc(a || '') + '"' + (done ? ' disabled' : '') + '>';
     }
     var after = '';
-    if (done && res) {
+    if (done && res && res.correct === null) {          // written answer: compare with the model answer, mark it yourself
+      after = '<div class="st-res self"><b>Check yourself</b><span><i>Model answer:</i> ' + studyEsc(q.answer).replace(/\n/g, '<br>') + '</span>' +
+        (q.explain ? '<span class="st-ex">💡 ' + studyEsc(q.explain) + '</span>' : '') +
+        '<span class="st-self"><button type="button" data-sm="1" data-i="' + i + '">✓ I got it</button><button type="button" data-sm="0" data-i="' + i + '">✗ Not yet</button></span></div>';
+    } else if (done && res) {
       after = '<div class="st-res ' + (res.correct ? 'right' : 'wrong') + '"><b>' + (res.correct ? '✓ Correct' : '✗ ' + res.score + ' / ' + q.points) + '</b>' +
         (res.comment ? '<span>' + studyEsc(res.comment) + '</span>' : '') +
         (q.type !== 'mcq' && !res.correct ? '<span><i>Answer:</i> ' + studyEsc(q.answer) + '</span>' : '') +
@@ -306,10 +314,44 @@ function studyWire() {
   document.getElementById('st-lesson-ex').onclick = function () {
     var id = Number(document.getElementById('study-lesson-modal').dataset.id), l = studyState.lessons.filter(function (x) { return x.id === id; })[0];
     document.getElementById('study-lesson-modal').classList.remove('active');
-    if (l) studyMakeTest({ kind: 'exercise', lessonId: id }, 'Exercise · ' + l.title);
+    if (!l) return;
+    if (studyState.plan.fromFile) {                    // the exercise came with the file: open the newest copy
+      var ex = studyState.tests.filter(function (t) { return t.kind === 'exercise' && t.lessonId === id; });
+      var open = ex.filter(function (t) { return !t.submittedAt; })[0] || ex[0];
+      if (open) studyShowTest(open); else toast('This lesson has no exercise in the file');
+      return;
+    }
+    studyMakeTest({ kind: 'exercise', lessonId: id }, 'Exercise · ' + l.title);
   };
   document.getElementById('st-test-close').onclick = function () { document.getElementById('study-test-modal').classList.remove('active'); };
   document.getElementById('st-test-submit').onclick = studySubmit;
+  document.getElementById('st-test-again').onclick = function () {
+    var t = studyState.test; if (!t) return;
+    studyCall('retakeStudyTest', t.id).then(function (n) { studyState.tests.unshift(n); studyRenderPlan(); studyShowTest(n); }).catch(function (e) { toast(e.message); });
+  };
+  document.getElementById('st-test-body').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-sm]'); if (!b || !studyState.test) return;
+    studyCall('markStudyAnswer', studyState.test.id, Number(b.dataset.i), b.dataset.sm === '1').then(function (r) {
+      studyState.tests = studyState.tests.map(function (x) { return x.id === r.id ? r : x; });
+      if (r.kind === 'exercise' && r.lessonId && r.max && r.score / r.max >= 0.7) { var l = studyState.lessons.filter(function (x) { return x.id === r.lessonId; })[0]; if (l && !l.done) { l.done = true; studyState.plan.done++; } }
+      studyShowTest(r); studyRenderPlan();
+    }).catch(function (e2) { toast(e2.message); });
+  });
+  // 📄 Import: a roadmap file (made in a chat with Claude) — lessons, exercises, tests and answers, no AI calls
+  document.getElementById('study-import-btn').onclick = function () { document.getElementById('study-import-file').click(); };
+  document.getElementById('study-import-file').onchange = function () {
+    var f = this.files && this.files[0]; this.value = ''; if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function () {
+      var text = String(rd.result || '').replace(/^\uFEFF/, ''), m = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (m) text = m[1];                              // a file copied straight from a chat, with ``` around it
+      try { JSON.parse(text); } catch (e) { toast('That file is not valid JSON: ' + e.message); return; }
+      toast('Importing…');
+      studyCall('importStudyPlan', text, studyHouse).then(function (d) { document.getElementById('study-back').hidden = false; studyShowPlan(d); toast('Imported ✿ ' + d.lessons.length + ' lessons, ' + d.tests.length + ' tests'); })
+        .catch(function (e) { toast(e.message); });
+    };
+    rd.readAsText(f);
+  };
   document.getElementById('st-new-close').onclick = function () { document.getElementById('study-new-modal').classList.remove('active'); };
   document.getElementById('st-new-cancel').onclick = function () { document.getElementById('study-new-modal').classList.remove('active'); };
   document.getElementById('st-new-save').onclick = studyNewSave;

@@ -2609,3 +2609,17 @@ i.e{ background:#f6a9bd; } i.m{ background:#a6d8e8; }
 .hs-step{ flex-wrap:wrap; }
 .hs-step input[type="text"]{ flex:1 1 calc(100% - 74px); }
 .hs-step input[type="date"]{ margin-left:32px; width:auto; flex:0 1 170px; font-size:13px; padding:6px 10px; }
+
+.st-file{ align-self:center; font-size:12px; font-weight:800; color:#7a9a8a; background:#e6f5ee; padding:8px 12px; border-radius:99px; }
+.st-res.self{ background:#f6f0fb; color:#6a5a7a; }
+.st-self{ display:flex; gap:8px; margin-top:4px; }
+.st-self button{ border:0; border-radius:99px; padding:7px 12px; font:inherit; font-size:12.5px; font-weight:800; cursor:pointer; background:#dff3e6; color:#3f8a5f; }
+.st-self button + button{ background:#ffe1e6; color:#c0506a; }
+.study-head .pill-btn{ white-space:nowrap; }
+
+@media (max-width: 480px){
+  .study-head{ gap:6px; }
+  .study-head .page-title{ font-size:24px; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .study-head .pill-btn{ padding-left:12px; padding-right:12px; font-size:13px; flex:none; }
+  .st-long{ display:none; }
+}

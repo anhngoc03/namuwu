@@ -394,7 +394,9 @@
         <div class="study-head">
           <button type="button" class="st-backbtn" id="study-back" hidden aria-label="All roadmaps">‹</button>
           <h2 class="page-title" id="study-title">Languages</h2>
-          <button class="pill-btn" id="study-new-btn">✨ New roadmap</button>
+          <button class="pill-btn secondary" id="study-import-btn">📄 Import</button>
+          <button class="pill-btn" id="study-new-btn">✨ New<span class="st-long"> roadmap</span></button>
+          <input type="file" id="study-import-file" accept=".json,application/json,.txt,.md" hidden>
         </div>
         <div class="study-main" id="study-main"></div>
       </div>
@@ -983,7 +985,7 @@
     <div class="modal-box study-box study-read">
       <div class="modal-header"><h3 id="st-test-title"></h3><button id="st-test-close" class="modal-close">✕</button></div>
       <div class="st-body" id="st-test-body"></div>
-      <div class="modal-actions"><button class="pill-btn" id="st-test-submit">Hand in</button></div>
+      <div class="modal-actions"><button class="pill-btn secondary" id="st-test-again" hidden>↺ Do it again</button><button class="pill-btn" id="st-test-submit">Hand in</button></div>
     </div>
   </div>
 
