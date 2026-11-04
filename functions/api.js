@@ -1377,7 +1377,11 @@ async function saveVillageNames(env, [n]) {
   n = n || {};
   const clean = (o) => { const out = {}; Object.keys(o || {}).slice(0, 60).forEach((k) => { if (/^[a-z]{2,12}$/.test(k)) { const v = String(o[k] || '').trim().slice(0, 24); if (v) out[k] = v; } }); return out; };
   const genders = {}; Object.keys(n.genders || {}).slice(0, 60).forEach((k) => { if (/^[a-z]{2,12}$/.test(k) && (n.genders[k] === 'm' || n.genders[k] === 'f')) genders[k] = n.genders[k]; });
-  const value = { houses: clean(n.houses), people: clean(n.people), genders, her: String(n.her || 'namu').trim().slice(0, 24) || 'namu', him: String(n.him || 'hunf').trim().slice(0, 24) || 'hunf' };
+  const extra = {}; Object.keys(n.extra || {}).slice(0, 60).forEach((k) => {      // the second person in a house (max 2)
+    const e = n.extra[k]; if (!/^[a-z]{2,12}$/.test(k) || k === 'love' || !e || typeof e !== 'object') return;
+    extra[k] = { name: String(e.name || '').trim().slice(0, 24), g: e.g === 'f' ? 'f' : 'm' };
+  });
+  const value = { houses: clean(n.houses), people: clean(n.people), genders, extra, her: String(n.her || 'namu').trim().slice(0, 24) || 'namu', him: String(n.him || 'hunf').trim().slice(0, 24) || 'hunf' };
   await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'village_names', value }]), prefer: 'resolution=merge-duplicates,return=minimal' });
   return value;
 }

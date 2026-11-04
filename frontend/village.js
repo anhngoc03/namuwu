@@ -58,7 +58,7 @@
     if (loading) return;
     loading = true;
     var sc = document.createElement('script');
-    sc.src = '/village3d.js?v=27';
+    sc.src = '/village3d.js?v=28';
     sc.onload = function () { loading = false; var w = loadWaiters; loadWaiters = []; w.forEach(function (f) { f(); }); };
     sc.onerror = function () { loading = false; loadWaiters = []; toast("Couldn't load the village ʕ´-ก̀ʔᐝ"); };
     document.head.appendChild(sc);
@@ -254,6 +254,7 @@
           house: house, kind: spec.kind, roof: Village3D.ROOF[spec.roof], look: Village3D.lookAs ? Village3D.lookAs(Village3D.LOOKS[idx], (villageNames.genders || {})[house]) : Village3D.LOOKS[idx],
           looks: house === 'love' ? [Village3D.LOVE.her, Village3D.LOVE.him] : null,
           guests: house === 'store' && shopForLove ? [Village3D.LOVE.her, Village3D.LOVE.him] : null,
+          mate: scene3d && scene3d.mateLookOf ? scene3d.mateLookOf(house) : null,
           corner: currentCorner(house), timeMode: timeMode(), walkIn: walkingIn, names: { her: villageNames.her || 'namu', him: villageNames.him || 'hunf' },
           onPick: house === 'love' ? function (what, at) { if (typeof loveRoomPick === 'function') loveRoomPick(what, at); } : null
         });
@@ -587,10 +588,15 @@
       return '<div class="nm-row"><div class="nm-house"><small>' + icdEscape(label) + '</small><input type="text" maxlength="24" data-nh="' + id + '" placeholder="' + icdEscape(label) + '" value="' + icdEscape((villageNames.houses || {})[id] || '') + '"></div>' + owner + '</div>';
     };
     var gOf = function (id) { return (villageNames.genders || {})[id] || (scene3d && scene3d.genderOf ? scene3d.genderOf(id) : '') || 'm'; };
+    var gSel = function (attr, id, g) {
+      return '<select ' + attr + '="' + id + '" aria-label="Boy or girl"><option value="m"' + (g === 'm' ? ' selected' : '') + '>Boy</option><option value="f"' + (g === 'f' ? ' selected' : '') + '>Girl</option></select>';
+    };
+    // up to two people per house: the first is always there, "+" adds a second, "−" takes them away
     var who = function (id) {
-      var g = gOf(id);
-      return '<div class="nm-who"><small>Lives here</small><div class="nm-pg"><input type="text" maxlength="24" data-np="' + id + '" placeholder="Name" value="' + icdEscape((villageNames.people || {})[id] || '') + '">' +
-        '<select data-ng="' + id + '" aria-label="Boy or girl"><option value="m"' + (g === 'm' ? ' selected' : '') + '>Boy</option><option value="f"' + (g === 'f' ? ' selected' : '') + '>Girl</option></select></div></div>';
+      var ex = (villageNames.extra || {})[id];
+      return '<div class="nm-who" data-nw="' + id + '"><small>Lives here</small>' +
+        '<div class="nm-pg"><input type="text" maxlength="24" data-np="' + id + '" placeholder="Name" value="' + icdEscape((villageNames.people || {})[id] || '') + '">' + gSel('data-ng', id, gOf(id)) + '</div>' +
+        (ex ? mateLine(id, ex) : '<button type="button" class="nm-add" data-nadd="' + id + '" aria-label="Add a second person">+</button>') + '</div>';
     };
     var html = row('hall', 'Town Hall', '<div class="nm-who"><small>&nbsp;</small><span class="nm-none">the Hall team</span></div>');
     HOUSES.forEach(function (h) {
@@ -601,12 +607,23 @@
     list.innerHTML = html;
     document.getElementById('names-modal').classList.add('active');
   }
+  function mateLine(id, ex) {
+    var g = ex.g || (((villageNames.genders || {})[id] || 'm') === 'm' ? 'f' : 'm');
+    return '<div class="nm-pg nm-two"><input type="text" maxlength="24" data-np2="' + id + '" placeholder="Second person" value="' + icdEscape(ex.name || '') + '">' +
+      '<select data-ng2="' + id + '" aria-label="Boy or girl"><option value="m"' + (g === 'm' ? ' selected' : '') + '>Boy</option><option value="f"' + (g === 'f' ? ' selected' : '') + '>Girl</option></select>' +
+      '<button type="button" class="nm-del" data-ndel="' + id + '" aria-label="Remove the second person">−</button></div>';
+  }
   function saveNames() {
     var n = { houses: {}, people: {}, her: document.getElementById('nm-her').value, him: document.getElementById('nm-him').value };
     document.querySelectorAll('#names-list [data-nh]').forEach(function (i) { if (i.value.trim()) n.houses[i.dataset.nh] = i.value.trim(); });
     document.querySelectorAll('#names-list [data-np]').forEach(function (i) { if (i.value.trim()) n.people[i.dataset.np] = i.value.trim(); });
     n.genders = {};
     document.querySelectorAll('#names-list [data-ng]').forEach(function (i) { n.genders[i.dataset.ng] = i.value; });
+    n.extra = {};
+    document.querySelectorAll('#names-list [data-np2]').forEach(function (i) {
+      var sel = document.querySelector('#names-list [data-ng2="' + i.dataset.np2 + '"]');
+      n.extra[i.dataset.np2] = { name: i.value.trim(), g: sel ? sel.value : 'm' };
+    });
     call('saveVillageNames', n).then(function (v) { villageNames = v; renderLabels(); document.getElementById('names-modal').classList.remove('active'); toast('Names saved ✿'); })
       .catch(function (e) { toast((e && e.message) || 'Could not save'); });
   }
@@ -624,6 +641,14 @@
     document.getElementById('set-names').onclick = function () { document.getElementById('village-settings-modal').classList.remove('active'); openNames(); };
     document.getElementById('names-close').onclick = function () { document.getElementById('names-modal').classList.remove('active'); };
     document.getElementById('names-save').onclick = saveNames;
+    document.getElementById('names-list').addEventListener('click', function (e) {
+      var add = e.target.closest('[data-nadd]'), del = e.target.closest('[data-ndel]');
+      if (add) { var id = add.dataset.nadd, other = document.querySelector('#names-list [data-ng="' + id + '"]');
+        add.insertAdjacentHTML('afterend', mateLine(id, { name: '', g: other && other.value === 'f' ? 'm' : 'f' })); add.remove();
+        var inp = document.querySelector('#names-list [data-np2="' + id + '"]'); if (inp) inp.focus(); }
+      if (del) { var id2 = del.dataset.ndel, line = del.closest('.nm-two');
+        line.insertAdjacentHTML('afterend', '<button type="button" class="nm-add" data-nadd="' + id2 + '" aria-label="Add a second person">+</button>'); line.remove(); }
+    });
     document.getElementById('village-theme').onclick = cycleTimeMode;
     document.getElementById('set-close').onclick = function () { document.getElementById('village-settings-modal').classList.remove('active'); };
     document.getElementById('set-save').onclick = function () {

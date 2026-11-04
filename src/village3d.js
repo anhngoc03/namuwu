@@ -1680,7 +1680,7 @@ function create(container, opts) {
     return gatherSpot(Math.floor(rnd(0, 18)));
   }
   function decide(p) {
-    if (p.love === 'him') return;                    // he goes wherever she goes
+    if (p.love === 'him' || p.pair) return;          // he goes wherever she goes (and so does a housemate)
     const r = routine(realHour());
     if (p.love === 'her') return decideCouple(p, r);
     const hard = busyAt(p.home) > 0;
@@ -1738,9 +1738,10 @@ function create(container, opts) {
     else if (p.goal === 'swing') { p.sitting = true; p.wait = rnd(15, 30); }
     else if (p.goal === 'leave') { world.remove(p.g); people.splice(people.indexOf(p), 1); }
   }
-  // the boyfriend walks at her side (or follows her in / onto the swing)
-  function followHer(him, dt) {
-    const her = couple.her;
+  // the boyfriend walks at her side (or follows her in / onto the swing) — and the same for any two
+  // who live in one house: the second one goes wherever the first one goes
+  function followHer(him, dt) { return follow(couple.her, him, dt); }
+  function follow(her, him, dt) {
     if (her.inside) {
       if (him.inside) return false;
       const n = doorStep(him.home), dx = n.x - him.g.position.x, dz = n.z - him.g.position.z, d = Math.hypot(dx, dz);
@@ -1750,7 +1751,7 @@ function create(container, opts) {
       return true;
     }
     if (him.inside) { comeOut(him); him.g.position.x += 0.7; }
-    if (her.sitting) { him.sitting = true; return false; }
+    if (her.sitting) { if (him.love) him.sitting = true; return false; }
     him.sitting = false;
     const yaw = her.g.rotation.y, tx = her.g.position.x - Math.cos(yaw) * 0.72, tz = her.g.position.z + Math.sin(yaw) * 0.72;
     const dx = tx - him.g.position.x, dz = tz - him.g.position.z, d = Math.hypot(dx, dz);
@@ -1838,10 +1839,36 @@ function create(container, opts) {
   const tagLayer = document.createElement('div'); tagLayer.className = 'v3d-names'; container.appendChild(tagLayer);
   let names = null, namesPrivate = false;
   const nameTags = new Map(), tmpN = new THREE.Vector3();
+  // a housemate looks like family but not a twin: another hair colour and shirt, boy or girl as chosen
+  const MATE_HAIR = [0x3b2a2a, 0x8a5a3c, 0x1f1b24, 0xc98b5a, 0x5a4040, 0xa8714a];
+  const MATE_SHIRT = [0xa6d8e8, 0xf6a9bd, 0xf5d888, 0xa3d9bd, 0xd9c9f0, 0xf9c39c];
+  function mateLook(base, i, g) {
+    const lk = Object.assign({}, base, { hair: MATE_HAIR[i % MATE_HAIR.length], cap: undefined, glasses: !base.glasses && i % 3 === 0 });
+    if (!base.uniform) lk.shirt = MATE_SHIRT[(i + 2) % MATE_SHIRT.length];
+    lk.style = g === 'f' ? ['long', 'bun', 'twin'][i % 3] : 'short';
+    return lk;
+  }
+  function syncMates() {
+    const ex = (names && names.extra) || {};
+    (opts.houses || []).forEach((spec, i) => {
+      if (spec.id === 'love') return;
+      const lead = people.find((q) => q.home === i && !q.love && !q.helper && !q.pair);
+      if (!lead) return;
+      const mate = people.find((q) => q.pair === lead), want = ex[spec.id];
+      if (!want && mate) { world.remove(mate.g); people.splice(people.indexOf(mate), 1); const el = nameTags.get(mate); if (el) { el.remove(); nameTags.delete(mate); } return; }
+      if (!want) return;
+      const look = mateLook(lead.baseLook || lead.parts.look, i, want.g === 'f' ? 'f' : 'm');
+      if (!mate) {
+        const m = addPerson(look, i, { pair: lead, mateG: want.g });
+        m.g.position.copy(lead.g.position); m.g.position.x += 0.7;
+        m.inside = lead.inside; m.g.visible = lead.g.visible;
+      } else if (mate.mateG !== want.g) { mate.mateG = want.g; reskin(mate, look); }
+    });
+  }
   function applyGenders() {
     const gs = (names && names.genders) || {};
     people.forEach((p) => {
-      if (p.love || p.helper) return;
+      if (p.love || p.helper || p.pair) return;
       const spec = (opts.houses || [])[p.home]; if (!spec) return;
       if (!p.baseLook) p.baseLook = p.parts.look;
       const want = gs[spec.id] ? lookAs(p.baseLook, gs[spec.id]) : p.baseLook;
@@ -1855,6 +1882,7 @@ function create(container, opts) {
     if (p.helper) return '';
     const spec = (opts.houses || [])[p.home];
     if (!spec || (!spec.pub && !namesPrivate)) return '';
+    if (p.pair) return (names.extra && names.extra[spec.id] && names.extra[spec.id].name) || '';
     return (names.people && names.people[spec.id]) || '';
   }
   function refreshNames() {
@@ -1968,7 +1996,8 @@ function create(container, opts) {
   }
   function animate(dt, time) {
     people.slice().forEach((p) => {
-      const moving = p.love === 'him' ? followHer(p, dt) : step(p, dt);
+      if (p.pair && people.indexOf(p.pair) < 0) { world.remove(p.g); people.splice(people.indexOf(p), 1); return; }
+      const moving = p.love === 'him' ? followHer(p, dt) : p.pair ? follow(p.pair, p, dt) : step(p, dt);
       if (p.inside || !p.g.visible) return;
       if (p.sitting && swing) {                     // on the swing, swinging together
         const side = p.love === 'her' ? -0.4 : 0.4;
@@ -2481,9 +2510,11 @@ function create(container, opts) {
     enterHouse,
     exitHouse,
     drive: startDrive,
-    setNames(n, priv) { names = n || null; namesPrivate = !!priv; applyGenders(); refreshNames(); },
+    setNames(n, priv) { names = n || null; namesPrivate = !!priv; applyGenders(); syncMates(); refreshNames(); },
+    // the second resident's look in a house, for its room (village.js)
+    mateLookOf(id) { const p = people.find((q) => q.pair && (opts.houses || [])[q.home] && opts.houses[q.home].id === id); return p ? p.parts.look : null; },
     // 'm' or 'f' for the one who lives in house `id` (what they look like now)
-    genderOf(id) { const p = people.find((q) => !q.love && !q.helper && (opts.houses || [])[q.home] && opts.houses[q.home].id === id); return p ? (isGirl(p.parts.look) ? 'f' : 'm') : ''; },
+    genderOf(id) { const p = people.find((q) => !q.love && !q.helper && !q.pair && (opts.houses || [])[q.home] && opts.houses[q.home].id === id); return p ? (isGirl(p.parts.look) ? 'f' : 'm') : ''; },
     resize,
     recenter: fitCamera,
     layout: layoutKey,
@@ -2984,6 +3015,13 @@ function createRoom(container, opts) {
     w.parts.legL.rotation.x = w.parts.legR.rotation.x = -1.45;
     return w;
   });
+  // a housemate: stands by the one at the desk, chatting
+  if (opts.mate && seats[0] && !R.couple) {
+    const st = seats[0], w = makePerson(opts.mate); g.add(w.g);
+    const sx = st.stand ? st.x + 0.8 : st.x + 0.85, sz = st.stand ? st.z : st.z + 0.35;
+    w.g.position.set(sx, 0, sz); w.g.rotation.y = st.ry + (st.stand ? 0 : -0.9);
+    R.mateW = w;
+  }
   // customers standing at the counter (the Love couple, when they drive to the shop)
   const guests = (opts.guests || []).map((lk, k) => {
     const w = makePerson(lk); g.add(w.g);
@@ -3185,6 +3223,7 @@ function createRoom(container, opts) {
       gamer.parts.armL.rotation.x = gamer.parts.armR.rotation.x = -1.1 + Math.sin(t * 14) * 0.05;
       gamer.parts.head.rotation.x = -0.05; gamer.parts.head.rotation.y = Math.sin(t * 0.5) * 0.08;
     }
+    if (R.mateW) { R.mateW.parts.head.rotation.y = -0.4 + Math.sin(t * 0.6) * 0.25; R.mateW.parts.armR.rotation.x = Math.sin(t * 1.1) * 0.15 - 0.1; }
     guests.forEach((w, k) => { w.parts.head.rotation.y = Math.sin(t * 0.5 + k * 2) * 0.3; w.parts.armL.rotation.x = Math.sin(t * 0.8 + k) * 0.06; });
     if (who && who.standing) {                       // the cashier: a little sway, now and then a wave
       const wave = (t % 9) < 1.4;
