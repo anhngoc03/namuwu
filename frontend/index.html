@@ -961,8 +961,6 @@
       </div>
       <div class="modal-actions">
         <button class="pill-btn secondary" id="note-del">Delete</button>
-        <button class="pill-btn secondary" id="note-undo" hidden>↶ Undo tidy</button>
-        <button class="pill-btn secondary" id="note-tidy">Tidy up</button>
         <button class="pill-btn" id="note-edit">✎ Edit</button>
         <button class="pill-btn" id="note-save">Save</button>
       </div>
@@ -1010,6 +1008,7 @@
         <div class="st-row"><label><span>kcal / day target</span><input type="number" id="hp-kcal" inputmode="numeric" placeholder="e.g. 1600"></label></div>
         <div class="expense-field-caption">Goal</div><input type="text" id="hp-goal" maxlength="300" placeholder="e.g. lose 3 kg, more energy, stronger back" autocomplete="off">
         <div class="expense-field-caption">Notes (food you avoid, injuries, gym or home…)</div><textarea id="hp-notes" rows="2" maxlength="600"></textarea>
+        <div class="expense-field-caption">My plan for the week (paste it here — e.g. one Claude wrote for you in a chat)</div><textarea id="hp-plan" rows="6" maxlength="30000" placeholder="## Ăn uống&#10;- Thứ 2: …&#10;## Tập luyện&#10;- …"></textarea>
       </div>
       <div class="modal-actions"><button class="pill-btn" id="hp-save">Save</button></div>
     </div>
@@ -1288,7 +1287,7 @@
     </div>
   </div>
 
-  <!-- ================= MODAL: Village › Town Hall (what's due + AI agent chat) ================= -->
+  <!-- ================= MODAL: Village › Town Hall (what's due + search in your documents) ================= -->
   <div id="village-hall-modal" class="modal-overlay">
     <div class="modal-box hall-box">
       <div class="modal-header">
@@ -1299,9 +1298,8 @@
         <div class="hall-due-head"><span>Due soon</span><button type="button" class="expense-edit-link hall-open-work" id="village-hall-work">Work →</button></div>
         <div id="village-hall-list" class="village-hall-list"></div>
       </div>
-      <div class="hs-chips hall-tabs" id="hall-tabs"><button type="button" class="hs-chip on" data-htab="chat">Chat</button><button type="button" class="hs-chip" data-htab="find">Search files</button></div>
       <!-- search inside the imported documents (library.js) — plain database search, no AI, free -->
-      <div class="lib-pane" id="lib-pane" style="display:none">
+      <div class="lib-pane" id="lib-pane">
         <form class="lib-search" id="lib-form" autocomplete="off">
           <input type="search" id="lib-q" placeholder="Search your documents… (accents optional)">
           <button class="pill-btn" type="submit">Search</button>
@@ -1312,14 +1310,6 @@
           <div class="lib-shelf-head"><b>Library</b><span id="lib-count"></span><button type="button" class="pill-btn" id="lib-import">Import file</button><input type="file" id="lib-file" accept=".json,application/json" hidden></div>
           <div id="lib-docs"></div>
         </div>
-      </div>
-      <div class="hall-chat" id="hall-chat"></div>
-      <div class="hall-files" id="hall-files"></div>
-      <div class="hall-input" data-own-enter id="hall-input">
-        <button type="button" class="hall-attach" id="hall-attach">📎</button>
-        <input type="file" id="hall-file" multiple hidden accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,.txt,.md,.csv,.json,.html,text/*">
-        <textarea id="hall-text" rows="1" placeholder="Message the village…"></textarea>
-        <button type="button" class="pill-btn hall-send" id="hall-send">➤</button>
       </div>
     </div>
   </div>

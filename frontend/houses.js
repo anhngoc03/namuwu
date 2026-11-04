@@ -1,7 +1,7 @@
 /**
  * houses.js — Personal › Notes, Goals, Food & Gym, Law.
  * Uses the small helpers from study.js (studyCall, studyEsc, studyMd, studyWait).
- * Server: functions/api.js; tables in supabase/houses.sql; AI bits in lib/houses.js.
+ * Server: functions/api.js; tables in supabase/houses.sql. No AI anywhere.
  */
 function hsMoney(n) { return (typeof formatThousands === 'function' ? formatThousands(Math.round(n || 0)) : String(Math.round(n || 0))) + ' ₫'; }
 function hsDay(d) { return d ? new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''; }
@@ -29,7 +29,7 @@ function notesRender() {
     return (!notesState.field || n.field === notesState.field) && (!q || (n.title + ' ' + n.body + ' ' + n.field).toLowerCase().indexOf(q) >= 0);
   });
   var box = document.getElementById('notes-main');
-  if (!notesState.notes.length) { box.innerHTML = '<div class="st-empty"><b>No notes yet</b><span>Keep notes by field — work, Japanese, recipes, ideas… The AI can tidy a messy note for you.</span><button type="button" class="pill-btn" data-nn="1">+ Note</button></div>'; return; }
+  if (!notesState.notes.length) { box.innerHTML = '<div class="st-empty"><b>No notes yet</b><span>Keep notes by field — work, Japanese, recipes, ideas…</span><button type="button" class="pill-btn" data-nn="1">+ Note</button></div>'; return; }
   if (!list.length) { box.innerHTML = '<div class="st-empty">Nothing matches “' + studyEsc(notesState.q) + '”</div>'; return; }
   box.innerHTML = '<div class="hs-grid">' + list.map(function (n) {
     var snip = n.body.replace(/[#*\-]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
@@ -44,14 +44,14 @@ function noteOpen(n) {
   var e = notesState.edit;
   document.getElementById('note-field').value = e.field; document.getElementById('note-title').value = e.title;
   document.getElementById('note-body').value = e.body; document.getElementById('note-pin').checked = !!e.pinned;
-  document.getElementById('note-del').hidden = !e.id; document.getElementById('note-undo').hidden = true;
+  document.getElementById('note-del').hidden = !e.id;
   noteMode(e.id ? 'read' : 'edit');
   hsModal('note-modal');
 }
 function noteMode(m) {
   var read = m === 'read', e = notesState.edit;
   document.getElementById('note-read').hidden = !read; document.getElementById('note-form').hidden = read;
-  document.getElementById('note-edit').hidden = !read; document.getElementById('note-save').hidden = read; document.getElementById('note-tidy').hidden = read;
+  document.getElementById('note-edit').hidden = !read; document.getElementById('note-save').hidden = read;
   document.getElementById('note-head').textContent = read ? (e.title || 'Note') : (e.id ? 'Edit note' : 'New note');
   if (read) document.getElementById('note-read').innerHTML = '<small class="hs-badge">' + studyEsc(e.field) + '</small>' + studyMd(e.body);
 }
@@ -59,16 +59,6 @@ function noteRead() { var v = function (id) { return document.getElementById(id)
 function noteSave() {
   var n = noteRead();
   studyCall('saveNote', n).then(function (d) { notesState.notes = d.notes || []; notesRender(); hsModal('note-modal', false); toast('Saved ✿'); }).catch(hsErr());
-}
-function noteTidy() {
-  var n = noteRead(), btn = document.getElementById('note-tidy');
-  if (!n.body.trim()) { toast('Write something first'); return; }
-  btn.disabled = true; btn.textContent = 'Tidying…';
-  studyCall('tidyNote', n).then(function (r) {
-    notesState.undo = { title: n.title, body: n.body };
-    document.getElementById('note-title').value = r.title; document.getElementById('note-body').value = r.body;
-    document.getElementById('note-undo').hidden = false; toast('Tidied — check it, then Save');
-  }).catch(hsErr()).then(function () { btn.disabled = false; btn.textContent = 'Tidy up'; });
 }
 
 /* ======================= GOALS ======================= */
@@ -240,8 +230,7 @@ function hlRender() {
   }).join('') + '</div><div class="hs-legend"><span><i class="e"></i>kcal eaten</span><span><i class="m"></i>minutes moved</span>' +
     (weights.length > 1 ? '<span>Weight ' + weights[0].value + ' → ' + weights[weights.length - 1].value + ' kg (4 weeks)</span>' : '') + '</div></div>';
   html += '<div class="st-card"><div class="st-week-h"><b>My plan</b><span>' + (p.planAt ? 'made ' + hsDay(p.planAt) : '') + '</span><button type="button" class="st-chip" data-hl="profile">⚙︎ Me</button></div>' +
-    (p.plan ? '<div class="st-body hs-plan">' + studyMd(p.plan) + '</div>' : '<div class="st-none">Fill in “Me” (height, weight, goal), then let the AI plan a week of meals and workouts</div>') +
-    '<div class="st-acts"><button type="button" class="pill-btn" data-hl="plan">' + (p.plan ? 'New plan for this week' : 'Plan my week') + '</button></div></div>';
+    (p.plan ? '<div class="st-body hs-plan">' + studyMd(p.plan) + '</div>' : '<div class="st-none">No plan yet — tap “⚙︎ Me” and paste your plan for the week</div>') + '</div>';
   document.getElementById('health-main').innerHTML = html;
 }
 function hlAdd(kind) {
@@ -311,8 +300,7 @@ function housesWire() {
   };
   $('note-close').onclick = function () { hsModal('note-modal', false); };
   $('note-edit').onclick = function () { noteMode('edit'); };
-  $('note-save').onclick = noteSave; $('note-tidy').onclick = noteTidy;
-  $('note-undo').onclick = function () { var u = notesState.undo; if (!u) return; $('note-title').value = u.title; $('note-body').value = u.body; this.hidden = true; };
+  $('note-save').onclick = noteSave;
   $('note-del').onclick = function () { var id = notesState.edit.id; if (!id || !confirm('Delete this note?')) return; studyCall('deleteNote', id).then(function (d) { notesState.notes = d.notes || []; notesRender(); hsModal('note-modal', false); }).catch(hsErr()); };
   // goals
   wishWire();
@@ -345,18 +333,14 @@ function housesWire() {
     else if (k === 'add') hlAdd(b.dataset.k);
     else if (k === 'water') studyCall('saveHealthLog', { kind: 'water', day: hlState.day, value: 250, title: 'Water' }, [hlState.from, hlState.to]).then(function (d) { hlSet(d); toast('+250 ml water'); }).catch(hsErr());
     else if (k === 'del') studyCall('deleteHealthLog', Number(b.dataset.id), [hlState.from, hlState.to]).then(hlSet).catch(hsErr());
-    else if (k === 'profile') { var p = hlState.profile; $('hp-height').value = p.height || ''; $('hp-weight').value = p.weight || hlState.lastWeight || ''; $('hp-goalw').value = p.goalWeight || ''; $('hp-kcal').value = p.kcalTarget || ''; $('hp-goal').value = p.goal || ''; $('hp-notes').value = p.notes || ''; hsModal('hp-modal'); }
-    else if (k === 'plan') {
-      b.disabled = true; b.textContent = 'Planning… (about a minute)';
-      studyCall('makeHealthPlan').then(function (p) { hlState.profile = p; hlRender(); toast('Your week is planned ✿'); }).catch(function (e2) { toast(e2.message); b.disabled = false; b.textContent = 'Plan my week'; });
-    }
+    else if (k === 'profile') { var p = hlState.profile; $('hp-height').value = p.height || ''; $('hp-weight').value = p.weight || hlState.lastWeight || ''; $('hp-goalw').value = p.goalWeight || ''; $('hp-kcal').value = p.kcalTarget || ''; $('hp-plan').value = p.plan || ''; $('hp-goal').value = p.goal || ''; $('hp-notes').value = p.notes || ''; hsModal('hp-modal'); }
   };
   $('hl-close').onclick = function () { hsModal('hl-modal', false); };
   $('hl-save').onclick = hlSave;
   $('hp-close').onclick = function () { hsModal('hp-modal', false); };
   $('hp-save').onclick = function () {
     var v = function (id) { return $(id).value; };
-    studyCall('saveHealthProfile', { height: v('hp-height'), weight: v('hp-weight'), goalWeight: v('hp-goalw'), kcalTarget: v('hp-kcal'), goal: v('hp-goal'), notes: v('hp-notes') })
+    studyCall('saveHealthProfile', { height: v('hp-height'), weight: v('hp-weight'), goalWeight: v('hp-goalw'), kcalTarget: v('hp-kcal'), goal: v('hp-goal'), notes: v('hp-notes'), plan: v('hp-plan') })
       .then(function (p) { hlState.profile = p; hlRender(); hsModal('hp-modal', false); toast('Saved ✿'); }).catch(hsErr());
   };
   // law

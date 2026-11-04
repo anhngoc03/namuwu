@@ -21,13 +21,8 @@
   function call(name) { return studyCall.apply(null, arguments); }
   function kindName(k) { for (var i = 0; i < KINDS.length; i++) if (KINDS[i][0] === k) return KINDS[i][1]; return 'Other'; }
 
-  function tab(t) {
-    document.querySelectorAll('#hall-tabs [data-htab]').forEach(function (b) { b.classList.toggle('on', b.dataset.htab === t); });
-    var find = t === 'find';
-    $('lib-pane').style.display = find ? '' : 'none';
-    ['hall-chat', 'hall-files', 'hall-input'].forEach(function (id) { $(id).style.display = find ? 'none' : ''; });
-    if (find) { if (!st.loaded) loadDocs(); setTimeout(function () { $('lib-q').focus(); }, 60); }
-  }
+  // the Town Hall opened: the library is right there (the documents load the first time)
+  window.libraryShow = function () { if (!st.loaded) loadDocs(); };
   function loadDocs() {
     $('lib-docs').innerHTML = '<p class="lib-note">Opening the library…</p>';
     call('getLibrary').then(function (d) { st.docs = d.docs || []; st.loaded = true; renderDocs(); })
@@ -70,9 +65,8 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    if (!$('hall-tabs')) return;
+    if (!$('lib-pane')) return;
     renderKinds();
-    $('hall-tabs').onclick = function (e) { var b = e.target.closest('[data-htab]'); if (b) tab(b.dataset.htab); };
     $('lib-form').onsubmit = function (e) { e.preventDefault(); search(); };
     $('lib-kinds').onclick = function (e) { var b = e.target.closest('[data-lk]'); if (!b) return; st.kind = b.dataset.lk; renderKinds(); if ($('lib-q').value.trim()) search(); };
     $('lib-results').onclick = function (e) {

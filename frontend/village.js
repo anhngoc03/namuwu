@@ -9,8 +9,7 @@
  * Unlocked: name tags over every house; tapping a house or its tag opens it.
  * Sky follows the real time of day. Villagers walk to the Town Hall when a Work
  * task is due today/tomorrow (or late) and still not done. The Town Hall opens
- * what's due + the AI agent chat (lib/agent.js): the chat lives only in this
- * tab, nothing is saved, attached files are only for Claude to read.
+ * what's due + Search files (library.js): a search inside your imported documents.
  * ------------------------------------------------------------------
  */
 (function () {
@@ -285,9 +284,8 @@
 
   function openHall() {
     renderDue();
-    renderChat();
     document.getElementById('village-hall-modal').classList.add('active');
-    setTimeout(function () { var t = document.getElementById('hall-text'); if (t && window.innerWidth > 760) t.focus(); }, 80);
+    if (typeof window.libraryShow === 'function') window.libraryShow();      // Search files (library.js)
   }
   function renderDue() {
     var box = document.getElementById('village-hall-list');
@@ -297,97 +295,6 @@
       return '<div class="home-work-row prio-' + t.priority + '"><span>' + icdEscape(t.title) + '</span>' +
         '<span class="work-due' + (late ? ' over' : '') + '">' + (late ? 'late · ' : '') + workFmtDue(t.eff) + '</span></div>';
     }).join('');
-  }
-
-  /* ---------------- Town Hall chat (AI agent, lib/agent.js) ----------------
-     The conversation (in API form, so Claude keeps its context) lives only here.
-     Files are read in the browser and sent with that one message — never stored. */
-  var chat = { messages: [], view: [], files: [], busy: false };
-  var MAX_FILE = 15 * 1024 * 1024;
-
-  function md(text) {        // tiny, safe formatting: escape, then **bold**, `code`, links, new lines
-    var h = icdEscape(text);
-    h = h.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>');
-    h = h.replace(/(https?:\/\/[^\s<)]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
-    return h.replace(/\n/g, '<br>');
-  }
-  function renderChat() {
-    var el = document.getElementById('hall-chat');
-    if (!chat.view.length && !chat.busy) {
-      el.innerHTML = '<div class="hall-hello">ʕ•ᴥ•ʔ</div>';
-    } else {
-      el.innerHTML = chat.view.map(function (m) {
-        if (m.who === 'act') return '<div class="hall-act">✓ ' + icdEscape(m.text) + '</div>';
-        var files = (m.files || []).map(function (n) { return '<span class="hall-file-chip">' + icdEscape(n) + '</span>'; }).join('');
-        return '<div class="hall-msg ' + m.who + (m.err ? ' err' : '') + '">' + (files ? '<div>' + files + '</div>' : '') + md(m.text) + '</div>';
-      }).join('') + (chat.busy ? '<div class="hall-msg bot typing"><span></span><span></span><span></span></div>' : '');
-    }
-    el.scrollTop = el.scrollHeight;
-    document.getElementById('hall-files').innerHTML = chat.files.map(function (f, i) {
-      return '<span class="hall-file-chip">' + icdEscape(f.name) + ' <button type="button" data-rm="' + i + '">✕</button></span>';
-    }).join('');
-    document.getElementById('hall-send').disabled = chat.busy;
-  }
-  function readFile(file) {
-    return new Promise(function (res, rej) {
-      if (file.size > MAX_FILE) { rej(new Error(file.name + ' is over 15MB')); return; }
-      var r = new FileReader();
-      r.onload = function () { res({ name: file.name, type: file.type || 'text/plain', data: String(r.result).split(',')[1] || '' }); };
-      r.onerror = function () { rej(new Error("Can't read " + file.name)); };
-      r.readAsDataURL(file);
-    });
-  }
-  function sendChat() {
-    if (chat.busy || !unlocked()) return;
-    var ta = document.getElementById('hall-text');
-    var text = ta.value.trim();
-    if (!text && !chat.files.length) return;
-    var files = chat.files; chat.files = [];
-    chat.view.push({ who: 'me', text: text, files: files.map(function (f) { return f.name; }) });
-    chat.busy = true; ta.value = ''; autoGrow();
-    renderChat();
-    google.script.run
-      .withSuccessHandler(function (d) {
-        chat.busy = false;
-        chat.messages = d.messages || chat.messages;
-        (d.actions || []).forEach(function (a) { chat.view.push({ who: 'act', text: a }); });
-        chat.view.push({ who: 'bot', text: d.reply || '…' });
-        renderChat();
-        if (d.actions && d.actions.length) loadUrgent();      // data changed → the village reacts
-      })
-      .withFailureHandler(function (err) {
-        chat.busy = false;
-        chat.view.push({ who: 'bot', err: true, text: (err && err.message) || 'Something went wrong' });
-        renderChat();
-      })
-      .agentChat(chat.messages, text, files);
-  }
-  function autoGrow() {
-    var ta = document.getElementById('hall-text');
-    ta.style.height = 'auto';
-    ta.style.height = Math.min(140, ta.scrollHeight) + 'px';
-  }
-  function forgetChat() { chat = { messages: [], view: [], files: [], busy: false }; }
-  function wireChat() {
-    var ta = document.getElementById('hall-text'), fi = document.getElementById('hall-file');
-    ta.addEventListener('input', autoGrow);
-    ta.addEventListener('keydown', function (e) {
-      // desktop: Enter sends, Shift+Enter = new line. Phones: the button sends.
-      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && window.innerWidth > 760) { e.preventDefault(); sendChat(); }
-    });
-    document.getElementById('hall-send').onclick = sendChat;
-    document.getElementById('hall-attach').onclick = function () { fi.click(); };
-    fi.onchange = function () {
-      var list = Array.prototype.slice.call(fi.files || []);
-      fi.value = '';
-      Promise.all(list.map(readFile)).then(function (got) {
-        chat.files = chat.files.concat(got).slice(0, 10); renderChat();
-      }).catch(function (e) { toast(e.message); });
-    };
-    document.getElementById('hall-files').addEventListener('click', function (e) {
-      var b = e.target.closest('[data-rm]');
-      if (b) { chat.files.splice(Number(b.dataset.rm), 1); renderChat(); }
-    });
   }
 
   /* ---------------- what's due (Work) ---------------- */
@@ -697,7 +604,6 @@
     });
     document.getElementById('village-hall-close').onclick = closeHall;
     document.getElementById('village-hall-work').onclick = function () { closeHall(); requirePersonal(openWork); };
-    wireChat();
     wireSettings();
     document.getElementById('gc-close').onclick = function () { document.getElementById('game-center-modal').classList.remove('active'); };
     document.querySelectorAll('.gc-game').forEach(function (b) {
@@ -715,8 +621,6 @@
         if (scene3d && shown) scene3d.enterHouse('games', go, { at: { k: 0.7, fn: function () { fade.classList.add('on'); } } }); else go();
       };
     });
-    // locked again (button, idle timer, expired session) → forget the chat
-    window.addEventListener('personal-unauthorized', forgetChat);
     built = true;
     return true;
   }
@@ -743,7 +647,7 @@
   // After lock / unlock (and on show): labels, what's due, clock.
   function villageRefresh() {
     if (!built && !build()) return;
-    if (!unlocked()) { forgetChat(); closeHall(); document.getElementById('village-settings-modal').classList.remove('active'); }
+    if (!unlocked()) { closeHall(); document.getElementById('village-settings-modal').classList.remove('active'); }
     if (!shown) return;
     tickClock();
     renderLabels();

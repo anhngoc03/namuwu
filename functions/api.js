@@ -16,8 +16,6 @@
  * ------------------------------------------------------------------
  */
 
-import * as hai from '../lib/houses.js';
-import { agentChat as runAgentChat } from '../lib/agent.js';
 import { makeVapidKeys, sendPush } from '../lib/push.js';
 import * as drive from '../lib/drive.js';
 
@@ -66,11 +64,10 @@ function isPersonalAction_(action) {
   if (/Post|Calendar/.test(action)) return true;
   if (action === 'saveHomeProfile') return true;
   if (action === 'saveVillageNames') return true;      // anyone sees the names, only you change them
-  if (/^agent/.test(action)) return true;              // Town Hall AI agent (village.js → lib/agent.js)
   if (/Push|Reminder/.test(action)) return action !== 'runReminders';
   if (/Study/.test(action)) return true;
   if (/Library/.test(action)) return true;            // the documents you imported + searching them
-  if (/^(getNotesData|saveNote|deleteNote|tidyNote)$/.test(action) || /Goal|Health|Law/.test(action)) return true;   // Notes, Goals, Food & Gym, Law                // Languages / Skills: roadmaps, lessons, tests
+  if (/^(getNotesData|saveNote|deleteNote)$/.test(action) || /Goal|Health|Law/.test(action)) return true;   // Notes, Goals, Food & Gym, Law                // Languages / Skills: roadmaps, lessons, tests
   if (/Love|Drive|google/.test(action)) return true;   // Love album + Google Drive link   // settings + this device; the timer itself is public        // anyone sees the Home photo/name, only you change it
   return /Expense/.test(action) && action !== 'getExpenseTodayTotal';
 }
@@ -1478,7 +1475,6 @@ const ACTIONS = {
   updateExpenseCategory,
   deleteExpenseCategory,
   getExpenseTodayTotal,
-  agentChat,
   getReminderSettings,
   saveReminderSettings,
   getPushKey,
@@ -1512,9 +1508,9 @@ const ACTIONS = {
   importStudyPlan,
   markStudyAnswer,
   retakeStudyTest,
-  getNotesData, saveNote, deleteNote, tidyNote,
+  getNotesData, saveNote, deleteNote,
   getGoalsData, saveGoal, deleteGoal, getGoalWishlist, saveGoalWishlist,
-  getHealthData, saveHealthLog, deleteHealthLog, saveHealthProfile, makeHealthPlan,
+  getHealthData, saveHealthLog, deleteHealthLog, saveHealthProfile,
   getLawDocs, setLawDoc, deleteLawDoc,
   getLibrary, importLibrary, deleteLibraryDoc, getLibraryDoc, searchLibrary,
   deleteLovePhoto,
@@ -1982,7 +1978,7 @@ async function deleteStudyTest(env, [id]) {
 
 
 /* ============================================================
- *  NOTES · GOALS · FOOD & GYM · LAW (supabase/houses.sql, lib/houses.js)
+ *  NOTES · GOALS · FOOD & GYM · LAW (supabase/houses.sql) — no AI
  * ============================================================ */
 function housesMissing_(e) {
   if (/notes|goals|health_logs|law_docs|does not exist|42P01/.test(String(e && e.message))) throw new Error('Run supabase/houses.sql in Supabase first');
@@ -2006,7 +2002,6 @@ async function saveNote(env, [n]) {
   return getNotesData(env);
 }
 async function deleteNote(env, [id]) { await sb(env, 'notes?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' }); return getNotesData(env); }
-async function tidyNote(env, [n]) { return hai.tidyNote(env, n || {}); }
 
 /* ---- Goals: by year, with cost + steps ---- */
 function goalOut_(r) {
@@ -2090,15 +2085,7 @@ async function saveHealthProfile(env, [p]) {
     height: n(p && p.height), weight: n(p && p.weight), goalWeight: n(p && p.goalWeight), kcalTarget: n(p && p.kcalTarget),
     goal: str_(p && p.goal, 300), notes: str_(p && p.notes, 600)
   });
-  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'health', value }]), prefer: 'resolution=merge-duplicates,return=minimal' });
-  return value;
-}
-async function makeHealthPlan(env) {
-  const p = await healthProfile_(env), today = vnNow_().date;
-  const rows = await sb(env, 'health_logs?day=gte.' + vnAddDays_(today, -14) + '&select=day,kind,title,kcal,minutes,value&order=day.asc').catch(() => []);
-  const recent = rows.slice(-120).map((r) => r.day.slice(5) + ' ' + r.kind + ' ' + (r.title || '') + (r.kcal ? ' ' + r.kcal + 'kcal' : '') + (r.minutes ? ' ' + r.minutes + 'p' : '') + (r.value != null ? ' ' + r.value : '')).join('; ') || '(chưa có)';
-  const plan = await hai.healthPlan(env, p, recent);
-  const value = Object.assign({}, p, { plan: plan.slice(0, 30000), planAt: today });
+  if (p && typeof p.plan === 'string') { value.plan = p.plan.slice(0, 30000); value.planAt = p.plan.trim() ? vnNow_().date : ''; }
   await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'health', value }]), prefer: 'resolution=merge-duplicates,return=minimal' });
   return value;
 }
@@ -2345,16 +2332,6 @@ async function serveLovePhoto_(env, url) {
 }
 
 // Town Hall chat — the agent works through the same functions the app uses.
-async function agentChat(env, args) {
-  return runAgentChat(env, args || [], {
-    getWorkData, saveWorkTask, deleteWorkTask,
-    getExpenseData, addExpenseEntry, deleteExpenseEntry, addExpenseIncomeEntry,
-    getCalendarNotes, saveCalendarNote, deleteCalendarNote,
-    getHomeData, addHomeItem, toggleHomeCheck,
-    getStudyData, setStudyLessonDone,
-    getNotesData, saveNote, getGoalsData, saveGoal, getHealthData, saveHealthLog, getLawDocs, searchLibrary
-  });
-}
 
 async function handle(env, action, args, token) {
   const fn = ACTIONS[action];

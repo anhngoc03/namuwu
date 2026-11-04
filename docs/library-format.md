@@ -1,12 +1,10 @@
 # Library file (`namuwu-library/1`)
 
-The Town Hall's **Search files** tab searches inside documents you imported — the full text of laws,
+The Town Hall searches inside documents you imported — the full text of laws,
 books, course notes… Importing and searching are plain database work: **no AI, no API cost**.
-(Asking the Hall chat a question can also look things up here, and that part does use the API.)
 
 You don't write these files by hand: send the documents (PDF, Word, text, photos of pages) to Claude in a
-chat and ask for a `namuwu-library/1` file. Then in the village: Town Hall → **Search files** →
-**Import file**. The same document imported again replaces the old copy (matched by `title`).
+chat and ask for a `namuwu-library/1` file. Then in the village: Town Hall → **Import file**. The same document imported again replaces the old copy (matched by `title`).
 
 Needs `supabase/library.sql` run once in Supabase.
 

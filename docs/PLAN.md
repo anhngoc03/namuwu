@@ -1,5 +1,8 @@
 # Trợ lý cuộc sống — kế hoạch từng bước
 
+> **Cập nhật 11/2026: web không còn gọi AI ở đâu nữa (không cần `ANTHROPIC_API_KEY`).** Lộ trình học và văn bản luật được làm thành file trong chat rồi nhập vào (`docs/study-format.md`, `docs/library-format.md`); Town Hall tìm trong tài liệu đã nhập bằng tìm kiếm của Postgres. Các mục nói về AI bên dưới là lịch sử.
+
+
 ## 1. Yêu cầu (đã làm rõ)
 
 | Mục | Chốt |
