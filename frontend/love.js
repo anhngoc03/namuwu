@@ -87,8 +87,8 @@ function lbPageHtml(k) {
     '<button type="button" class="lb-edit" data-lb="edit" data-p="' + k + '">✎</button></div>' + collage +
     '<div class="lb-pno">' + (k + 1) + '</div></div>';
 }
-// two pages open at once. The pages turn over from the left to the right, so spread s
-// has page 2s on the right and page 2s+1 on the left; the last page is "The end".
+// two pages open at once, read left to right; the pages turn over from the right to the left,
+// so spread s has page 2s on the left and page 2s+1 on the right; the last page is "The end".
 function lbSpreads() { return Math.ceil((lb.pages.length + 1) / 2); }
 function lbFit() {
   var s = Math.min((innerWidth - 20) / 600, (innerHeight - 170) / 420, 1.4);
@@ -100,8 +100,8 @@ function lbShow() {
   book.classList.toggle('open', lb.i >= 0);
   document.getElementById('lb-day').innerHTML = 'Love day <b>' + (typeof loveDayCount === 'function' ? formatThousands(loveDayCount()) : '') + '</b>';
   if (lb.i >= 0) {
-    document.getElementById('lb-right').innerHTML = lbPageHtml(lb.i * 2);
-    document.getElementById('lb-left').innerHTML = lbPageHtml(lb.i * 2 + 1);
+    document.getElementById('lb-left').innerHTML = lbPageHtml(lb.i * 2);
+    document.getElementById('lb-right').innerHTML = lbPageHtml(lb.i * 2 + 1);
   }
   document.getElementById('lb-count').textContent = lb.i < 0 ? '' : (lb.i + 1) + ' / ' + lbSpreads();
   document.getElementById('lb-prev').disabled = lb.i < 0;
@@ -110,7 +110,7 @@ function lbShow() {
 function lbTurn(dir) {
   if (lb.busy) return;
   var book = document.getElementById('lb-book');
-  if (lb.i < 0) {                                   // the cover swings open to the right
+  if (lb.i < 0) {                                   // the cover swings open to the left
     if (dir < 0) return;
     lb.busy = true; lb.i = 0; lbShow();
     setTimeout(function () { lb.busy = false; }, 820);
@@ -121,14 +121,14 @@ function lbTurn(dir) {
   lb.busy = true;
   var leaf = document.getElementById('lb-leaf'), front = document.getElementById('lb-front'), back = document.getElementById('lb-back');
   var L = document.getElementById('lb-left'), Rt = document.getElementById('lb-right'), s0 = lb.i;
-  if (dir > 0) {                                    // the left page lifts and turns over onto the right
+  if (dir > 0) {                                    // the right page lifts and turns over onto the left
     front.innerHTML = lbPageHtml(s0 * 2 + 1); back.innerHTML = lbPageHtml(s0 * 2 + 2);
-    L.innerHTML = lbPageHtml(s0 * 2 + 3);
-    leaf.className = 'lb-leaf on-left go-next';
-  } else {                                          // the right page turns back over onto the left
+    Rt.innerHTML = lbPageHtml(s0 * 2 + 3);
+    leaf.className = 'lb-leaf on-right go-next';
+  } else {                                          // the left page turns back over onto the right
     front.innerHTML = lbPageHtml(s0 * 2); back.innerHTML = lbPageHtml(s0 * 2 - 1);
-    Rt.innerHTML = lbPageHtml(s0 * 2 - 2);
-    leaf.className = 'lb-leaf on-right go-prev';
+    L.innerHTML = lbPageHtml(s0 * 2 - 2);
+    leaf.className = 'lb-leaf on-left go-prev';
   }
   setTimeout(function () { lb.i = s0 + dir; lbShow(); leaf.className = 'lb-leaf'; lb.busy = false; }, 800);
 }
@@ -228,8 +228,8 @@ function mbPage(k) {
 }
 function mbSpreads() { return Math.ceil(mb.pages.length / 2); }
 function mbShow() {
-  document.getElementById('mb-right').innerHTML = mbPage(mb.i * 2);
-  document.getElementById('mb-left').innerHTML = mbPage(mb.i * 2 + 1);
+  document.getElementById('mb-left').innerHTML = mbPage(mb.i * 2);
+  document.getElementById('mb-right').innerHTML = mbPage(mb.i * 2 + 1);
   document.getElementById('mb-count').textContent = (mb.i + 1) + ' / ' + mbSpreads();
   document.getElementById('mb-prev').disabled = mb.i === 0;
   document.getElementById('mb-next').disabled = mb.i >= mbSpreads() - 1;
@@ -248,8 +248,8 @@ function mbTurn(dir, toSpread) {
   mb.busy = true;
   var leaf = document.getElementById('mb-leaf'), front = document.getElementById('mb-front'), back = document.getElementById('mb-back');
   var L = document.getElementById('mb-left'), Rt = document.getElementById('mb-right'), s0 = mb.i;
-  if (dir > 0) { front.innerHTML = mbPage(s0 * 2 + 1); back.innerHTML = mbPage(to * 2); L.innerHTML = mbPage(to * 2 + 1); leaf.className = 'lb-leaf on-left go-next'; }
-  else { front.innerHTML = mbPage(s0 * 2); back.innerHTML = mbPage(to * 2 + 1); Rt.innerHTML = mbPage(to * 2); leaf.className = 'lb-leaf on-right go-prev'; }
+  if (dir > 0) { front.innerHTML = mbPage(s0 * 2 + 1); back.innerHTML = mbPage(to * 2); Rt.innerHTML = mbPage(to * 2 + 1); leaf.className = 'lb-leaf on-right go-next'; }
+  else { front.innerHTML = mbPage(s0 * 2); back.innerHTML = mbPage(to * 2 + 1); L.innerHTML = mbPage(to * 2); leaf.className = 'lb-leaf on-left go-prev'; }
   setTimeout(function () { mb.i = to; mbShow(); leaf.className = 'lb-leaf'; mb.busy = false; }, 800);
 }
 function mbFit() {
@@ -310,7 +310,7 @@ function loveFoodWire() {
   document.getElementById('menu-book').addEventListener('click', function (e) { if (e.target === this) loveFoodClose(); });
   var sx = 0, st = document.getElementById('mb-stage');
   st.addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; }, { passive: true });
-  st.addEventListener('touchend', function (e) { var dx = e.changedTouches[0].clientX - sx; if (Math.abs(dx) > 40) mbTurn(dx > 0 ? 1 : -1); });
+  st.addEventListener('touchend', function (e) { var dx = e.changedTouches[0].clientX - sx; if (Math.abs(dx) > 40) mbTurn(dx < 0 ? 1 : -1); });
   window.addEventListener('resize', function () { if (document.getElementById('menu-book').classList.contains('on')) mbFit(); });
 }
 function loveSetFrame(file) {
@@ -511,14 +511,14 @@ function loveWire() {
     if (e.target === this || e.target.id === 'lb-stage' && !e.target.closest('.lb-book')) lbClose();
   });
   window.addEventListener('resize', function () { if (document.getElementById('love-book').classList.contains('on')) lbFit(); });
-  // swipe: finger to the right = next (the pages travel left → right), to the left = back
+  // swipe: finger to the left = next (the pages travel right → left), to the right = back
   var sx = 0, sy = 0, st = document.getElementById('lb-stage');
   st.addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
   st.addEventListener('touchend', function (e) {
     var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < 40) return;
     if (Math.abs(dx) < Math.abs(dy)) return;
-    lbTurn(dx > 0 ? 1 : -1);
+    lbTurn(dx < 0 ? 1 : -1);
   });
   document.addEventListener('keydown', function (e) {
     if (!document.getElementById('love-book').classList.contains('on') || document.querySelector('.modal-overlay.active')) return;

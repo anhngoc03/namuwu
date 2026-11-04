@@ -20,6 +20,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import * as VX from './voxel.js';
+import { foodModel } from './foodvox.js';
 
 /* ---------------- layouts (same plans as the old pixel maps: 1 unit = 4 px) ----------------
    'land' for wide screens, 'port' (tall) for phones held upright. Chosen when the scene
@@ -741,6 +742,38 @@ function makeSwing() {
   return g;
 }
 // a plain floating word (no frame): soft colour with a white outline so it reads on anything
+// a blocky pixel arrow (like the arrow item in block games); it points up-right, `rot` turns it
+// (radians, anticlockwise on screen)
+const ARROWS = [];
+function arrowSprite(rot, h) {
+  const c = document.createElement('canvas'); c.width = c.height = 16; const x = c.getContext('2d');
+  const px = (a, b, col) => { x.fillStyle = col; x.fillRect(a, b, 1, 1); };
+  const lines = [];
+  for (let k = 0; k < 9; k++) lines.push([3 + k, 12 - k]);                    // the shaft
+  // dark outline first (every neighbour of the arrow), then the arrow on top
+  const shape = [];
+  lines.forEach(([a, b]) => { shape.push([a, b, '#9a6a3e'], [a + 1, b, '#6b4526']); });
+  [[12, 2], [13, 2], [13, 3], [11, 1], [12, 1], [13, 1], [14, 1], [14, 2], [14, 3], [14, 4], [10, 2], [13, 5]].forEach(([a, b]) => shape.push([a, b, '#e6e6ee']));
+  [[12, 3], [12, 4], [11, 3]].forEach(([a, b]) => shape.push([a, b, '#b8b8c6']));
+  [[1, 12], [2, 11], [1, 13], [2, 14], [3, 14], [1, 11], [2, 13], [4, 14], [0, 12], [3, 15]].forEach(([a, b]) => shape.push([a, b, '#ffffff']));
+  [[2, 12], [3, 13]].forEach(([a, b]) => shape.push([a, b, '#f6a9bd']));
+  shape.forEach(([a, b]) => { [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([dx, dy]) => px(a + dx, b + dy, '#4a3020')); });
+  shape.forEach(([a, b, col]) => px(a, b, col));
+  const tx = new THREE.CanvasTexture(c); tx.magFilter = THREE.NearestFilter; tx.minFilter = THREE.NearestFilter; tx.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tx, transparent: true, depthWrite: false, depthTest: false, rotation: rot }));
+  sp.scale.set(h, h, 1); sp.renderOrder = 5;
+  // it nudges forward along where it points, over and over
+  const dir = new THREE.Vector3(Math.cos(rot + Math.PI / 4), Math.sin(rot + Math.PI / 4), 0);
+  ARROWS.push({ sp, dir, base: null });
+  return sp;
+}
+function stepArrows(t) {
+  ARROWS.forEach((a) => {
+    if (!a.base) a.base = a.sp.position.clone();
+    const k = (Math.sin(t * 4) * 0.5 + 0.5) * 0.12;
+    a.sp.position.set(a.base.x + a.dir.x * k, a.base.y + a.dir.y * k, a.base.z);
+  });
+}
 function labelSprite(text, color, h) {
   const fs = 64, c = document.createElement('canvas'), x0 = c.getContext('2d');
   x0.font = '800 ' + fs + 'px Nunito, sans-serif';
@@ -2602,24 +2635,19 @@ const ROOMS = {
         if (k % 3 === 0) stairs.add(box(0.06, 0.8, 0.06, 0xffffff, x, hgt + 0.4, -2.45));
       }
       { const L = Math.hypot(3.2, 4.4), rail = box(L, 0.08, 0.08, 0xffffff, -1.35 - 1.6 + 0.16, 2.2 + 0.8 + 0.22, -2.45); rail.rotation.z = -Math.atan2(4.4, 3.2); stairs.add(rail); }
-      const up = labelSprite('up to the bedroom', '#c0587a', 0.2); up.position.set(-2.1, 2.1, -2.2); stairs.add(up);
+      const up = arrowSprite(Math.PI / 2, 0.8); up.position.set(-1.85, 1.75, -2.35); stairs.add(up);   // up the stairs, to the left
       // the dining table (bún chả at lunchtime)
       const dt = new THREE.Group(); dt.position.set(1.3, 0, 1.25); g.add(dt);
       dt.add(box(1.5, 0.06, 0.95, 0xe2c39e, 0, 0.76, 0));
       [[-0.65, -0.38], [0.65, -0.38], [-0.65, 0.38], [0.65, 0.38]].forEach(([a, b]) => dt.add(box(0.06, 0.76, 0.06, 0xb08a68, a, 0.38, b)));
       [-1, 1].forEach((sx) => {
-        const bowl = (bx, bz, fill) => {
-          const bw = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.1, 0.1, 12), mat(0xffffff)); bw.position.set(bx, 0.84, bz); dt.add(bw);
-          const f = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.135, 0.02, 12), mat(fill)); f.position.set(bx, 0.88, bz); dt.add(f);
-        };
-        bowl(sx * 0.4 - 0.16, -0.18, 0xf6efe0);                               // bún
-        bowl(sx * 0.4 + 0.16, -0.18, 0xd98c4a);                               // nước chấm with chả
-        [[-0.05, -0.2], [0.05, -0.14], [0.0, -0.24]].forEach(([a, b]) => dt.add(box(0.07, 0.03, 0.05, 0x8a5233, sx * 0.4 + 0.16 + a, 0.9, b)));
+        // block-model bowls: bún, and nước chấm with chả
+        const b1 = foodModel('bowl', { soup: '#f6efe0', noodle: '#fffaf0' }, 0.3); b1.position.set(sx * 0.4 - 0.16, 0.79, -0.18); dt.add(b1);
+        const b2 = foodModel('bowl', { soup: '#d98c4a', top: ['#8a5233', '#8a5233', '#a86a40', '#7fc46a'] }, 0.3); b2.position.set(sx * 0.4 + 0.16, 0.79, -0.18); dt.add(b2);
         dt.add(box(0.32, 0.012, 0.012, 0xc49674, sx * 0.4, 0.8, 0.05));      // chopsticks
         dt.add(box(0.32, 0.012, 0.012, 0xc49674, sx * 0.4, 0.8, 0.08));
       });
-      const herbs = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.03, 12), mat(0xffffff)); herbs.position.set(0, 0.8, -0.05); dt.add(herbs);
-      for (let k = 0; k < 7; k++) dt.add(box(0.07, 0.04, 0.05, [0x6fb85a, 0x8fcc7c][k % 2], (k % 3 - 1) * 0.08, 0.83, (Math.floor(k / 3) - 1) * 0.07 - 0.05));
+      const herbs = foodModel('plate', { dots: ['#6fb85a', '#8fcc7c', '#6fb85a', '#8fcc7c', '#6fb85a', '#8fcc7c', '#6fb85a', '#8fcc7c'] }, 0.4); herbs.position.set(0, 0.79, -0.05); dt.add(herbs);
       // side by side behind the table, facing the room
       rChair(g, 1.3 - 0.4, 1.25 - 0.85, 0); rChair(g, 1.3 + 0.4, 1.25 - 0.85, 0);
       R.dining = [{ x: 1.3 - 0.4, z: 1.25 - 0.8, ry: 0, y: 0.54 }, { x: 1.3 + 0.4, z: 1.25 - 0.8, ry: 0, y: 0.54 }];
@@ -2664,7 +2692,7 @@ const ROOMS = {
       [0.1, 0.6, 1.1, 1.6, 2.1].forEach((dz, k) => down.add(box(1.2, 0.03, 0.42, 0x9c8270, -3.75, 0.02, 0.05 + dz - k * 0.02)));
       for (let k = 0; k < 6; k++) down.add(box(0.06, 0.85, 0.06, 0xffffff, -3.05, 0.42, -0.05 + k * 0.5));
       down.add(box(0.08, 0.08, 2.6, 0xffffff, -3.05, 0.86, 1.2));
-      const dn = labelSprite('down to the living room', '#c0587a', 0.16); dn.position.set(-3.0, 1.35, 0.6); down.add(dn);
+      const dn = arrowSprite(-Math.PI * 3 / 4, 0.45); dn.position.set(-3.75, 0.75, 1.2); down.add(dn);   // down the stairs
       // a rug, a plant, fairy lights
       const brug = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.03, 32), mat(0xd9e9f7)); brug.scale.set(1.8, 1, 1.1); brug.position.set(0.6, 0.02, 1.0); bed.add(brug);
       rPlant(bed, 3.95, 0.4);
@@ -2766,6 +2794,7 @@ const ROOMS = {
 };
 
 function createRoom(container, opts) {
+  ARROWS.length = 0;
   opts = opts || {};
   const spec = ROOMS[opts.house] || (opts.kind === 'game' ? ROOMS.game : ROOMS.other);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -2935,6 +2964,7 @@ function createRoom(container, opts) {
     const dt = Math.min(0.1, clock.getDelta()), t = clock.elapsedTime;
     camP.lerp(goP, Math.min(1, dt * 1.6)); camT.lerp(goT, Math.min(1, dt * 1.6));
     camera.position.copy(camP); camera.lookAt(camT);
+    stepArrows(t);
     if (R.couple) {                                   // by the real clock: sofa · sleeping heads together · bún chả
       const d = new Date(), hr = d.getHours() + d.getMinutes() / 60;
       const want = hr >= 22 || hr < 6.5 ? 'sleep' : (hr >= 11.5 && hr < 13 ? 'lunch' : hr >= 18.5 && hr < 19.75 ? 'dinner' : 'sofa');
@@ -3027,13 +3057,11 @@ function createRoom(container, opts) {
       const plate = new THREE.Group(); plate.position.set(xs[i], 0.8, -0.12 + (i % 2) * 0.06); R.dinner.add(plate); R.foodMeshes.push(plate);
       const pm = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.05, 24), mat(0xffffff)); plate.add(pm);
       const rim = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.015, 8, 24), mat([0xf6c1cf, 0xc9e3f8, 0xfff1a8, 0xcdeccd][i])); rim.rotation.x = Math.PI / 2; rim.position.y = 0.025; plate.add(rim);
-      if (it.key && window.FoodArt) {               // a dish from the menu book: its pixel drawing standing on a block plate
+      const sp = it.key && window.FoodArt && window.FoodArt.spec && window.FoodArt.spec(it.key);
+      if (sp) {                                     // a dish from the menu book, as a little block model on a block mat
         plate.remove(pm); plate.remove(rim);
-        plate.add(box(0.42, 0.04, 0.42, 0xffffff, 0, 0.0, 0)); plate.add(box(0.46, 0.02, 0.46, [0xf6c1cf, 0xc9e3f8, 0xfff1a8, 0xcdeccd][i], 0, -0.02, 0));
-        const tx = new THREE.CanvasTexture(window.FoodArt.draw(document.createElement('canvas'), it.key, 4));
-        tx.magFilter = THREE.NearestFilter; tx.minFilter = THREE.NearestFilter; tx.colorSpace = THREE.SRGBColorSpace;
-        const spr = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.42), new THREE.MeshLambertMaterial({ map: tx, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide }));
-        spr.position.set(0, 0.2, 0); spr.rotation.x = -0.25; plate.add(spr);
+        plate.add(box(0.46, 0.02, 0.46, [0xf6c1cf, 0xc9e3f8, 0xfff1a8, 0xcdeccd][i], 0, -0.01, 0));
+        const fd = foodModel(sp.tpl, sp.o, 0.4); fd.position.y = 0.0; fd.rotation.y = (i - 1.5) * 0.25; plate.add(fd);
         return;
       }
       const fm = new THREE.MeshLambertMaterial({ color: 0xffffff });

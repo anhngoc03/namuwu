@@ -185,6 +185,8 @@
     cats: CATS,
     list: LIST.map(function (d) { return { key: d[0], name: d[1], cat: d[2] }; }),
     byKey: function (k) { var d = byKey(k); return d ? { key: d[0], name: d[1], cat: d[2] } : null; },
-    draw: draw, url: url
+    draw: draw, url: url,
+    // the template + colours, for the 3D block models on the Love table
+    spec: function (k) { var d = byKey(k); return d ? { tpl: d[3], o: d[4] || {} } : null; }
   };
 })();
