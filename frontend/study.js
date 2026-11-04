@@ -4,7 +4,7 @@
  * time it's opened; each lesson has an exercise, each week a test, and there's a
  * "review what I got wrong" set. Answers are marked by the server (multiple choice
  * straight away, the rest by Claude) and stay in Supabase (supabase/study.sql).
- * Server: functions/api.js (getStudyData, createStudyPlan, openStudyLesson, …).
+ * Server: functions/api.js (getStudyData, importStudyPlan, openStudyLesson, …). No AI: roadmaps come from files.
  */
 var studyHouse = 'language';
 var studyState = { plans: [], plan: null, lessons: [], tests: [], today: '', test: null, busy: false };
@@ -63,8 +63,8 @@ function studyList() {
 function studyRenderList() {
   var box = document.getElementById('study-main'), h = STUDY_HOUSES[studyHouse];
   if (!studyState.plans.length) {
-    box.innerHTML = '<div class="st-empty"><b>No roadmap yet</b><span>Tell the AI what you want to learn — it plans the lessons week by week, writes each lesson, gives you exercises and tests, and marks them.</span>' +
-      '<button type="button" class="pill-btn" data-st="new">Make a roadmap</button></div>';
+    box.innerHTML = '<div class="st-empty"><b>No roadmap yet</b><span>Send your book or documents to Claude in a chat and get back a roadmap file (lessons, exercises and tests with answers), then import it here. Your answers are marked right here.</span>' +
+      '<button type="button" class="pill-btn" data-st="import">Import a roadmap file</button></div>';
     return;
   }
   box.innerHTML = studyState.plans.map(function (p) {
@@ -102,12 +102,12 @@ function studyRenderPlan() {
     '<div class="st-bar big"><i style="width:' + pc + '%"></i></div>' +
     '<div class="st-plan-meta"><span>' + p.done + ' / ' + p.total + ' lessons · ' + pc + '%</span>' + (late ? '<span class="st-late">' + late + ' behind</span>' : '<span>on track ♡</span>') + '</div>' +
     (next ? '<button type="button" class="st-today" data-st="lesson" data-id="' + next.id + '"><small>' + (next.day && next.day <= today ? 'Today' : 'Next up') + '</small><b>' + studyEsc(next.title) + '</b><span>' + studyEsc(next.goal) + '</span></button>' : '<div class="st-today done"><b>Roadmap finished ✿</b><span>Take the final test or review your mistakes</span></div>') +
-    '<div class="st-acts">' + (p.fromFile ? '<span class="st-file">From a file · no AI needed</span>' : '<button type="button" class="pill-btn" data-st="test-all">Test</button>') + '<button type="button" class="pill-btn secondary" data-st="review">Review mistakes</button></div>' +
+    '<div class="st-acts">' + '' + '<button type="button" class="pill-btn secondary" data-st="review">Review mistakes</button></div>' +
     '</div>';
   Object.keys(weeks).sort(function (a, b) { return a - b; }).forEach(function (w) {
     var ls = weeks[w], dn = ls.filter(function (l) { return l.done; }).length;
-    var wt = p.fromFile ? studyState.tests.filter(function (t) { return t.kind === 'test' && t.title.indexOf('Week ' + w + ' · ') === 0; }).slice(-1)[0] : null;
-    var chip = p.fromFile ? (wt ? '<button type="button" class="st-chip" data-st="open-test" data-id="' + wt.id + '">Week test</button>' : '') : '<button type="button" class="st-chip" data-st="test-week" data-w="' + w + '">Week test</button>';
+    var wt = studyState.tests.filter(function (t) { return t.kind === 'test' && t.title.indexOf('Week ' + w + ' · ') === 0; }).slice(-1)[0];
+    var chip = wt ? '<button type="button" class="st-chip" data-st="open-test" data-id="' + wt.id + '">Week test</button>' : '';
     html += '<div class="st-card st-week"><div class="st-week-h"><b>Week ' + w + '</b><span>' + dn + '/' + ls.length + '</span>' + chip + '</div>' +
       ls.map(function (l) {
         var cls = l.done ? ' done' : (l.day && l.day < today ? ' late' : (l.day === today ? ' today' : ''));
@@ -179,7 +179,7 @@ function studyMakeTest(opts, label) {
   var m = document.getElementById('study-test-modal'), body = document.getElementById('st-test-body');
   document.getElementById('st-test-title').textContent = label;
   document.getElementById('st-test-submit').hidden = true;
-  studyWait(body, 'Making your questions… (about half a minute)');
+  studyWait(body, 'Getting your questions…');
   m.classList.add('active');
   studyState.test = null;
   studyCall('makeStudyTest', studyState.plan.id, opts).then(function (t) {
@@ -257,29 +257,6 @@ function studySubmit() {
   }).catch(function (e) { toast(e.message); }).then(function () { studyState.busy = false; btn.disabled = false; btn.textContent = 'Hand in'; });
 }
 
-/* ---------- new roadmap ---------- */
-function studyNewOpen() {
-  var h = STUDY_HOUSES[studyHouse];
-  document.getElementById('st-new-subject').placeholder = 'e.g. ' + h.sample;
-  document.getElementById('st-new-hint').textContent = h.hint;
-  document.getElementById('st-new-start').value = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
-  document.getElementById('study-new-modal').classList.add('active');
-  setTimeout(function () { document.getElementById('st-new-subject').focus(); }, 200);
-}
-function studyNewSave() {
-  var v = function (id) { return document.getElementById(id).value; };
-  var input = { house: studyHouse, subject: v('st-new-subject').trim(), level: v('st-new-level').trim(), goal: v('st-new-goal').trim(),
-    weeks: Number(v('st-new-weeks')), daysPerWeek: Number(v('st-new-days')), minutesPerDay: Number(v('st-new-min')), startDate: v('st-new-start'), notes: v('st-new-notes').trim() };
-  if (!input.subject) { toast('What do you want to learn?'); return; }
-  var btn = document.getElementById('st-new-save'); btn.disabled = true; btn.textContent = 'Planning… (up to a minute)';
-  studyCall('createStudyPlan', input).then(function (d) {
-    document.getElementById('study-new-modal').classList.remove('active');
-    ['st-new-subject', 'st-new-level', 'st-new-goal', 'st-new-notes'].forEach(function (id) { document.getElementById(id).value = ''; });
-    document.getElementById('study-back').hidden = false;
-    studyShowPlan(d);
-    toast('Your roadmap is ready ✿');
-  }).catch(function (e) { toast(e.message); }).then(function () { btn.disabled = false; btn.textContent = 'Make my roadmap'; });
-}
 function studyMenu() {
   var p = studyState.plan; if (!p) return;
   var act = prompt('Type a number:\n1 — ' + (p.status === 'paused' ? 'Resume' : 'Pause') + ' this roadmap\n2 — Mark it finished\n3 — Delete it (lessons + tests)', '');
@@ -289,17 +266,14 @@ function studyMenu() {
 }
 
 function studyWire() {
-  document.getElementById('study-new-btn').onclick = studyNewOpen;
   document.getElementById('study-back').onclick = studyList;
   document.getElementById('study-main').addEventListener('click', function (e) {
     var b = e.target.closest('[data-st]'); if (!b) return;
     var id = Number(b.dataset.id), k = b.dataset.st;
-    if (k === 'new') studyNewOpen();
+    if (k === 'import') document.getElementById('study-import-file').click();
     else if (k === 'plan') studyOpenPlan(id);
     else if (k === 'lesson') studyOpenLesson(id);
     else if (k === 'done') { var l = studyState.lessons.filter(function (x) { return x.id === id; })[0]; if (l) studySetDone(id, !l.done); }
-    else if (k === 'test-week') studyMakeTest({ kind: 'test', week: Number(b.dataset.w) }, 'Week ' + b.dataset.w + ' test');
-    else if (k === 'test-all') studyMakeTest({ kind: 'test' }, 'Test');
     else if (k === 'review') studyMakeTest({ kind: 'review' }, 'Review mistakes');
     else if (k === 'open-test') { var t = studyState.tests.filter(function (x) { return x.id === id; })[0]; if (t) studyShowTest(t); }
     else if (k === 'menu') studyMenu();
@@ -315,13 +289,10 @@ function studyWire() {
     var id = Number(document.getElementById('study-lesson-modal').dataset.id), l = studyState.lessons.filter(function (x) { return x.id === id; })[0];
     document.getElementById('study-lesson-modal').classList.remove('active');
     if (!l) return;
-    if (studyState.plan.fromFile) {                    // the exercise came with the file: open the newest copy
-      var ex = studyState.tests.filter(function (t) { return t.kind === 'exercise' && t.lessonId === id; });
-      var open = ex.filter(function (t) { return !t.submittedAt; })[0] || ex[0];
-      if (open) studyShowTest(open); else toast('This lesson has no exercise in the file');
-      return;
-    }
-    studyMakeTest({ kind: 'exercise', lessonId: id }, 'Exercise · ' + l.title);
+    // the exercise came with the file: open the newest copy
+    var ex = studyState.tests.filter(function (t) { return t.kind === 'exercise' && t.lessonId === id; });
+    var open = ex.filter(function (t) { return !t.submittedAt; })[0] || ex[0];
+    if (open) studyShowTest(open); else toast('This lesson has no exercise in the file');
   };
   document.getElementById('st-test-close').onclick = function () { document.getElementById('study-test-modal').classList.remove('active'); };
   document.getElementById('st-test-submit').onclick = studySubmit;
@@ -352,8 +323,5 @@ function studyWire() {
     };
     rd.readAsText(f);
   };
-  document.getElementById('st-new-close').onclick = function () { document.getElementById('study-new-modal').classList.remove('active'); };
-  document.getElementById('st-new-cancel').onclick = function () { document.getElementById('study-new-modal').classList.remove('active'); };
-  document.getElementById('st-new-save').onclick = studyNewSave;
 }
 document.addEventListener('DOMContentLoaded', studyWire);

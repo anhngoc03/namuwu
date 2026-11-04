@@ -16,7 +16,6 @@
  * ------------------------------------------------------------------
  */
 
-import * as study from '../lib/study.js';
 import * as hai from '../lib/houses.js';
 import { agentChat as runAgentChat } from '../lib/agent.js';
 import { makeVapidKeys, sendPush } from '../lib/push.js';
@@ -1503,7 +1502,6 @@ const ACTIONS = {
 
   getStudyData,
   getStudyPlan,
-  createStudyPlan,
   updateStudyPlan,
   deleteStudyPlan,
   openStudyLesson,
@@ -1517,7 +1515,7 @@ const ACTIONS = {
   getNotesData, saveNote, deleteNote, tidyNote,
   getGoalsData, saveGoal, deleteGoal, getGoalWishlist, saveGoalWishlist,
   getHealthData, saveHealthLog, deleteHealthLog, saveHealthProfile, makeHealthPlan,
-  getLawDocs, checkLawUpdates, setLawDoc, deleteLawDoc,
+  getLawDocs, setLawDoc, deleteLawDoc,
   getLibrary, importLibrary, deleteLibraryDoc, getLibraryDoc, searchLibrary,
   deleteLovePhoto,
   deleteLoveMemory
@@ -1793,7 +1791,7 @@ async function getLoveData(env) {
 
 
 /* ============================================================
- *  STUDY — Languages + Skills houses (supabase/study.sql, lib/study.js)
+ *  STUDY — Languages + Skills houses (supabase/study.sql) — roadmaps come from imported files, marked here without AI
  *  Claude plans the roadmap, writes lessons on first open, makes exercises /
  *  tests and marks them. Answers stay on the server until a test is handed in.
  * ============================================================ */
@@ -1854,27 +1852,6 @@ function studyDays_(start, lessons, perWeek) {
     return Object.assign({}, l, { day: d.toISOString().slice(0, 10) });
   });
 }
-async function createStudyPlan(env, [input]) {
-  const i = input || {};
-  const plan = {
-    house: STUDY_HOUSES_.includes(i.house) ? i.house : 'language',
-    subject: String(i.subject || '').trim().slice(0, 120),
-    level: String(i.level || '').trim().slice(0, 300),
-    goal: String(i.goal || '').trim().slice(0, 600),
-    minutes_per_day: Math.max(10, Math.min(240, Number(i.minutesPerDay) || 30)),
-    days_per_week: Math.max(1, Math.min(7, Number(i.daysPerWeek) || 5)),
-    weeks: Math.max(1, Math.min(16, Number(i.weeks) || 8)),
-    start_date: /^\d{4}-\d{2}-\d{2}$/.test(String(i.startDate || '')) ? i.startDate : vnNow_().date,
-    notes: String(i.notes || '').trim().slice(0, 1000)
-  };
-  if (!plan.subject) throw new Error('What do you want to learn?');
-  await sb(env, 'study_plans?select=id&limit=1').catch(studyMissingTable_);
-  const map = await study.makeRoadmap(env, plan);
-  const [row] = await sb(env, 'study_plans', { method: 'POST', body: JSON.stringify([Object.assign({}, plan, { summary: map.summary })]) });
-  const rows = studyDays_(plan.start_date, map.lessons, plan.days_per_week).map((l) => ({ plan_id: row.id, week: l.week, seq: l.seq, day: l.day, title: l.title, goal: l.goal }));
-  await sb(env, 'study_lessons', { method: 'POST', body: JSON.stringify(rows), prefer: 'return=minimal' });
-  return getStudyPlan(env, [row.id]);
-}
 async function updateStudyPlan(env, [id, patch]) {
   const p = patch || {}, body = {};
   if (['active', 'paused', 'done'].includes(p.status)) body.status = p.status;
@@ -1890,53 +1867,22 @@ async function deleteStudyPlan(env, [id]) {
 async function openStudyLesson(env, [id]) {
   const rows = await sb(env, 'study_lessons?id=eq.' + Number(id) + '&select=*');
   if (!rows.length) throw new Error('Lesson not found');
-  const l = rows[0];
-  if (!l.content) {
-    const p = await studyPlanRow_(env, l.plan_id);
-    const before = (await sb(env, 'study_lessons?plan_id=eq.' + p.id + '&seq=lt.' + l.seq + '&select=title&order=seq.asc')).map((x) => x.title).slice(-12);
-    l.content = String(await study.writeLesson(env, p, l, before)).slice(0, 40000);
-    await sb(env, 'study_lessons?id=eq.' + l.id, { method: 'PATCH', body: JSON.stringify({ content: l.content }), prefer: 'return=minimal' });
-  }
-  return studyLessonOut_(l, true);
+  return studyLessonOut_(rows[0], true);                // lessons come written in the imported file
 }
 async function setStudyLessonDone(env, [id, done]) {
   await sb(env, 'study_lessons?id=eq.' + Number(id), { method: 'PATCH', body: JSON.stringify({ done: !!done, done_at: done ? new Date().toISOString() : null }), prefer: 'return=minimal' });
   return { ok: true };
 }
-// kind: exercise (one lesson) | test (a week, or everything done so far) | review (redo what was wrong)
-async function makeStudyTest(env, [planId, opts]) {
-  const o = opts || {}, p = await studyPlanRow_(env, planId);
-  const kind = ['exercise', 'test', 'review'].includes(o.kind) ? o.kind : 'exercise';
-  let lessons = [], mistakes = [], title = '';
-  if (kind === 'exercise') {
-    const rows = await sb(env, 'study_lessons?id=eq.' + Number(o.lessonId) + '&plan_id=eq.' + p.id + '&select=*');
-    if (!rows.length) throw new Error('Lesson not found');
-    lessons = rows; title = 'Exercise · ' + rows[0].title;
-  } else if (kind === 'test') {
-    const all = await sb(env, 'study_lessons?plan_id=eq.' + p.id + '&select=id,week,seq,title,goal,done&order=seq.asc');
-    lessons = o.week ? all.filter((l) => l.week === Number(o.week)) : all.filter((l) => l.done);
-    if (!lessons.length) lessons = all.slice(0, p.days_per_week);
-    title = o.week ? 'Week ' + o.week + ' test' : 'Test · everything so far';
-  } else {
-    const done = await sb(env, 'study_tests?plan_id=eq.' + p.id + '&submitted_at=not.is.null&select=questions,results&order=submitted_at.desc&limit=30');
-    done.forEach((t) => (t.results || []).forEach((r, i) => { if (r && !r.correct && t.questions[i]) mistakes.push({ q: t.questions[i].q, answer: t.questions[i].answer }); }));
-    mistakes = mistakes.slice(0, 20);
-    if (!mistakes.length) throw new Error('No mistakes to review yet ♡');
-    title = 'Review · ' + mistakes.length + ' things you missed';
-  }
-  if (studyFromFile_(p)) {                            // a plan from a file never calls the AI
-    if (kind !== 'review') throw new Error('This roadmap came from a file — its exercises and tests are already in it');
-    const done = await sb(env, 'study_tests?plan_id=eq.' + p.id + '&submitted_at=not.is.null&select=questions,results&order=submitted_at.desc&limit=40');
-    const qs = [], seen = new Set();
-    done.forEach((t) => (t.results || []).forEach((r, i) => { const q = t.questions[i]; if (r && r.correct === false && q && !seen.has(q.q)) { seen.add(q.q); qs.push(q); } }));
-    if (!qs.length) throw new Error('No mistakes to review yet ♡');
-    const pick = qs.slice(0, 20);
-    const [row] = await sb(env, 'study_tests', { method: 'POST', body: JSON.stringify([{ plan_id: p.id, kind: 'review', title: 'Review · ' + pick.length + ' you missed', questions: pick, max_score: pick.reduce((a, q) => a + (q.points || 1), 0) }]) });
-    return studyTestOut_(row, false);
-  }
-  const count = kind === 'exercise' ? 6 : kind === 'review' ? Math.min(12, Math.max(4, mistakes.length)) : Math.min(15, 6 + lessons.length);
-  const made = await study.makeQuestions(env, p, { kind, lessons, mistakes, count });
-  const [row] = await sb(env, 'study_tests', { method: 'POST', body: JSON.stringify([{ plan_id: p.id, lesson_id: kind === 'exercise' ? lessons[0].id : null, kind, title: title || made.title, questions: made.questions, max_score: made.questions.reduce((s, q) => s + q.points, 0) }]) });
+// "Review mistakes": a new test made of the questions you got wrong before (no AI — the
+// exercises and tests themselves come with the imported file)
+async function makeStudyTest(env, [planId]) {
+  const p = await studyPlanRow_(env, planId);
+  const done = await sb(env, 'study_tests?plan_id=eq.' + p.id + '&submitted_at=not.is.null&select=questions,results&order=submitted_at.desc&limit=40');
+  const qs = [], seen = new Set();
+  done.forEach((t) => (t.results || []).forEach((r, i) => { const q = t.questions[i]; if (r && r.correct === false && q && !seen.has(q.q)) { seen.add(q.q); qs.push(q); } }));
+  if (!qs.length) throw new Error('No mistakes to review yet ♡');
+  const pick = qs.slice(0, 20);
+  const [row] = await sb(env, 'study_tests', { method: 'POST', body: JSON.stringify([{ plan_id: p.id, kind: 'review', title: 'Review · ' + pick.length + ' you missed', questions: pick, max_score: pick.reduce((a, q) => a + (Number(q.points) || 1), 0) }]) });
   return studyTestOut_(row, false);
 }
 async function submitStudyTest(env, [id, answers]) {
@@ -1947,7 +1893,7 @@ async function submitStudyTest(env, [id, answers]) {
   const p = await studyPlanRow_(env, t.plan_id);
   const ans = (Array.isArray(answers) ? answers : []).slice(0, t.questions.length).map((a) => String(a == null ? '' : a).slice(0, 4000));
   while (ans.length < t.questions.length) ans.push('');
-  const g = studyFromFile_(p) ? studyGradeLocal_(t.questions, ans) : await study.gradeAnswers(env, p, t.questions, ans);
+  const g = studyGradeLocal_(t.questions, ans);
   const [row] = await sb(env, 'study_tests?id=eq.' + t.id, { method: 'PATCH', body: JSON.stringify({ answers: ans, results: g.results, score: g.score, max_score: g.max, feedback: g.feedback, submitted_at: new Date().toISOString() }) });
   // an exercise done well ticks its lesson off
   if (t.kind === 'exercise' && t.lesson_id && g.max && g.score / g.max >= 0.7) await setStudyLessonDone(env, [t.lesson_id, true]);
@@ -2165,22 +2111,6 @@ async function getLawDocs(env) {
     const rows2 = await sb(env, 'app_settings?key=eq.law&select=value').catch(() => []);
     return { docs: rows.map(lawOut_), lastCheck: (rows2[0] && rows2[0].value && rows2[0].value.lastCheck) || null };
   } catch (e) { housesMissing_(e); }
-}
-async function checkLawUpdates(env, [scope]) {
-  scope = ['health', 'law', 'all'].includes(scope) ? scope : 'health';
-  const today = vnNow_().date;
-  const have = await sb(env, 'law_docs?select=number').catch(housesMissing_);
-  const st = await sb(env, 'app_settings?key=eq.law&select=value').catch(() => []);
-  const last = (st[0] && st[0].value && st[0].value.lastCheck) || vnAddDays_(today, -60);
-  const since = last < vnAddDays_(today, -120) ? vnAddDays_(today, -120) : vnAddDays_(last.slice(0, 10), -14);
-  const found = await hai.lawSearch(env, { scope, since, known: have.map((r) => r.number) });
-  const known = new Set(have.map((r) => r.number.toLowerCase()));
-  const fresh = found.filter((d) => !known.has(d.number.toLowerCase()));
-  if (fresh.length) await sb(env, 'law_docs?on_conflict=number', { method: 'POST', body: JSON.stringify(fresh), prefer: 'resolution=ignore-duplicates,return=minimal' });
-  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'law', value: { lastCheck: today } }]), prefer: 'resolution=merge-duplicates,return=minimal' });
-  const out = await getLawDocs(env);
-  out.added = fresh.length;
-  return out;
 }
 async function setLawDoc(env, [id, patch]) {
   const body = {};

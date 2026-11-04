@@ -274,11 +274,10 @@ function lawRender() {
   var filters = [['all', 'All', function () { return true; }], ['health', 'Health', function (d) { return d.field === 'health'; }], ['law', 'Laws & codes', function (d) { return d.field === 'law'; }],
     ['unread', 'Unread', function (d) { return !d.read; }], ['star', 'Starred', function (d) { return d.starred; }]];
   document.getElementById('law-filters').innerHTML = filters.map(function (x) { return '<button type="button" class="hs-chip' + (f === x[0] ? ' on' : '') + '" data-lf="' + x[0] + '">' + x[1] + ' · ' + cnt(x[2]) + '</button>'; }).join('');
-  document.getElementById('law-last').textContent = lawState.lastCheck ? 'Last checked ' + hsDay(lawState.lastCheck) : 'Not checked yet';
   var fn = filters.filter(function (x) { return x[0] === f; })[0][2];
   var list = lawState.docs.filter(fn).filter(function (d) { return !q || (d.number + ' ' + d.title + ' ' + d.summary + ' ' + d.issuer).toLowerCase().indexOf(q) >= 0; });
   var box = document.getElementById('law-main');
-  if (!lawState.docs.length) { box.innerHTML = '<div class="st-empty"><b>No documents yet</b><span>Tap “Check for new documents”: the AI searches vbpl.vn, baochinhphu.vn and thuvienphapluat.vn and keeps a short summary of each new one (health first, plus all laws and codes).</span></div>'; return; }
+  if (!lawState.docs.length) { box.innerHTML = '<div class="st-empty"><b>No documents yet</b><span>Send the laws to Claude in a chat, get back a library file, then import it in Town Hall → Search files. Each law shows up here, and its full text becomes searchable.</span></div>'; return; }
   if (!list.length) { box.innerHTML = '<div class="st-empty">Nothing here</div>'; return; }
   box.innerHTML = list.map(function (d) {
     var st = String(d.status || '').toLowerCase(), cls = /hết hiệu lực/.test(st) ? 'low' : /chưa/.test(st) ? 'ok' : st ? 'good' : 'todo';
@@ -291,15 +290,6 @@ function lawRender() {
       '<div class="hs-law-acts">' + (d.url ? '<a href="' + studyEsc(d.url) + '" target="_blank" rel="noopener noreferrer" data-la="open" data-id="' + d.id + '">Open source ↗</a>' : '') +
       '<button type="button" data-la="read" data-id="' + d.id + '">' + (d.read ? 'Mark unread' : '✓ Read') + '</button><button type="button" data-la="del" data-id="' + d.id + '">Remove</button></div></div>';
   }).join('');
-}
-function lawCheck() {
-  if (lawState.busy) return;
-  var scope = document.getElementById('law-scope').value, btn = document.getElementById('law-check');
-  lawState.busy = true; btn.disabled = true; btn.textContent = 'Searching… (1–2 min)';
-  studyCall('checkLawUpdates', scope).then(function (d) {
-    lawState.docs = d.docs || []; lawState.lastCheck = d.lastCheck; lawState.filter = d.added ? 'unread' : lawState.filter; lawRender();
-    toast(d.added ? d.added + ' new document' + (d.added > 1 ? 's' : '') + ' ✿' : 'Nothing new since last time');
-  }).catch(hsErr()).then(function () { lawState.busy = false; btn.disabled = false; btn.textContent = 'Check for new documents'; });
 }
 function lawSet(id, patch) {
   var d = lawState.docs.filter(function (x) { return x.id === id; })[0]; if (!d) return;
@@ -370,7 +360,6 @@ function housesWire() {
       .then(function (p) { hlState.profile = p; hlRender(); hsModal('hp-modal', false); toast('Saved ✿'); }).catch(hsErr());
   };
   // law
-  $('law-check').onclick = lawCheck;
   $('law-q').oninput = function () { lawState.q = this.value; lawRender(); };
   $('law-filters').onclick = function (e) { var b = e.target.closest('[data-lf]'); if (!b) return; lawState.filter = b.dataset.lf; lawRender(); };
   $('law-main').addEventListener('click', function (e) {
