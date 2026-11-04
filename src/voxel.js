@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 
 /* ---------------- pixel textures (drawn in code, 16×16 tiles in one atlas) ---------------- */
-const TILE = 16, COLS = 8, ROWS = 5;
+const TILE = 16, COLS = 8, ROWS = 6;
 function rngT(seed) { return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; }
 const hex = (n) => '#' + ('00000' + n.toString(16)).slice(-6);
 function shade(n, k) {
@@ -42,6 +42,12 @@ const DRAW = {
   plankGrey: (x, R) => { for (let j = 0; j < 16; j++) { const b = j % 4 === 3; for (let i = 0; i < 16; i++) { x.fillStyle = shade(0xffffff, b ? 0.72 : 0.9 + R() * 0.1); x.fillRect(i, j, 1, 1); } } },
   glass: (x, R) => { x.fillStyle = '#d8f1fa'; x.fillRect(0, 0, 16, 16); x.fillStyle = '#ffffff'; x.fillRect(3, 3, 1, 4); x.fillRect(4, 3, 1, 2); x.fillRect(10, 9, 1, 3); x.fillStyle = '#bcd9e6'; x.fillRect(0, 0, 16, 1); x.fillRect(0, 15, 16, 1); x.fillRect(0, 0, 1, 16); x.fillRect(15, 0, 1, 16); x.fillRect(7, 0, 2, 16); x.fillRect(0, 7, 16, 2); },
   bricks: (x, R) => { for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) { const m = j % 4 === 3 || (i + (j >> 2) % 2 * 4) % 8 === 7; x.fillStyle = m ? '#e9e2d6' : shade(0xffffff, 0.86 + R() * 0.08); x.fillRect(i, j, 1, 1); } },
+  stoneBrick: (x, R) => { for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) { const m = j % 8 === 7 || (i + (j >> 3) * 8) % 16 === 15; x.fillStyle = m ? '#8c8a94' : shade(0xb6b4bc, 0.9 + R() * 0.12); x.fillRect(i, j, 1, 1); } },
+  farmland: (x, R) => { DRAW.noise(0x7a5a40, 0.14)(x, R); for (let j = 1; j < 16; j += 4) { x.fillStyle = '#5e4430'; x.fillRect(0, j, 16, 1); } },
+  sprucePlank: (x, R) => { for (let j = 0; j < 16; j++) { const b = j % 4 === 3; for (let i = 0; i < 16; i++) { x.fillStyle = b ? '#5e4430' : shade(0x8a6448, 0.9 + R() * 0.12); x.fillRect(i, j, 1, 1); } } for (let j = 0; j < 16; j += 4) { x.fillStyle = '#5e4430'; x.fillRect((j * 5) % 16, j, 1, 3); } },
+  wheat: (x, R) => { for (let i = 1; i < 15; i += 2) { const h = 9 + (R() * 5 | 0); x.fillStyle = '#c9b45a'; x.fillRect(i, 16 - h, 1, h); x.fillStyle = '#f2d36b'; x.fillRect(i, 16 - h, 1, 4); } },
+  carrot: (x, R) => { for (let i = 2; i < 14; i += 3) { x.fillStyle = '#6faa5e'; x.fillRect(i, 7, 1, 6); x.fillRect(i + 1, 8, 1, 3); x.fillStyle = '#f2963a'; x.fillRect(i, 13, 2, 3); } },
+  sprout: (x, R) => { for (let i = 1; i < 15; i += 3) { x.fillStyle = '#7fc46a'; x.fillRect(i + 1, 10, 1, 6); x.fillRect(i, 10, 3, 1); x.fillRect(i + 2, 12, 1, 1); } },
   // plants (drawn on a clear tile, shown as two crossed quads)
   tuft: (x, R) => { for (let i = 1; i < 15; i += 2) { const h = 5 + (R() * 7 | 0); x.fillStyle = shade(0x8fcc78, 0.85 + R() * 0.25); x.fillRect(i, 16 - h, 1, h); } },
   flower: (c) => (x, R) => { x.fillStyle = '#6faa5e'; x.fillRect(7, 8, 2, 8); x.fillRect(5, 11, 2, 1); x.fillRect(9, 13, 2, 1); x.fillStyle = hex(c); x.fillRect(6, 4, 4, 3); x.fillRect(5, 5, 6, 1); x.fillStyle = '#fff6b0'; x.fillRect(7, 5, 2, 1); },
@@ -54,13 +60,15 @@ export const T = {
   SNOW_SIDE: 8, LOG: 9, LOG_TOP: 10, LEAF_G: 11, LEAF_M: 12, LEAF_L: 13, LEAF_P: 14, WATER: 15,
   BIRCH: 16, COBBLE: 17, DEEP: 18, CLAY: 19, GRAVEL: 20, PLANKS: 21, MOSSY: 22, LEAF_T: 23,
   TUFT: 24, FL_PINK: 25, FL_WHITE: 26, FL_YELLOW: 27, FL_BLUE: 28, FL_LAV: 29, REED: 30, LILY: 31,
-  SHINGLE: 32, PLASTER: 33, PLANK_GREY: 34, GLASS: 35, BRICKS: 36
+  SHINGLE: 32, PLASTER: 33, PLANK_GREY: 34, GLASS: 35, BRICKS: 36, STONE_BRICK: 37, FARMLAND: 38, SPRUCE_PLANK: 39,
+  WHEAT: 40, CARROT: 41, SPROUT: 42
 };
 const PAINT = [DRAW.grassTop, DRAW.grassSide, DRAW.dirt, DRAW.stone, DRAW.sand, DRAW.pathTop, DRAW.pathSide, DRAW.snowTop,
   DRAW.snowSide, DRAW.logSide, DRAW.logTop, DRAW.leaves(0x86cc78), DRAW.leaves(0x7cc9a4), DRAW.leaves(0xaad97c), DRAW.leaves(0xf6b3c8), DRAW.water,
   DRAW.birch, DRAW.cobble, DRAW.deep, DRAW.clay, DRAW.gravel, DRAW.planks, DRAW.mossy, DRAW.leaves(0x6fb391),
   DRAW.tuft, DRAW.flower(0xff9fbf), DRAW.flower(0xffffff), DRAW.flower(0xffe27a), DRAW.flower(0x9fcfff), DRAW.flower(0xd2b8ff), DRAW.reed, DRAW.lily,
-  DRAW.shingle, DRAW.plaster, DRAW.plankGrey, DRAW.glass, DRAW.bricks];
+  DRAW.shingle, DRAW.plaster, DRAW.plankGrey, DRAW.glass, DRAW.bricks, DRAW.stoneBrick, DRAW.farmland, DRAW.sprucePlank,
+  DRAW.wheat, DRAW.carrot, DRAW.sprout];
 
 let atlasTex = null;
 export function atlas() {
@@ -88,7 +96,7 @@ const uvOf = (i) => { const u = (i % COLS) / COLS, v = 1 - (Math.floor(i / COLS)
 /* ---------------- blocks ---------------- */
 // id → [top, side, bottom] tiles, kind
 export const B = { AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, PATH: 5, SNOW: 6, LOG: 7, LEAF_G: 8, LEAF_M: 9, LEAF_L: 10, LEAF_P: 11,
-  WATER: 12, BIRCH: 13, COBBLE: 14, DEEP: 15, CLAY: 16, GRAVEL: 17, LEAF_T: 18, MOSSY: 19, PLANKS: 20 };
+  WATER: 12, BIRCH: 13, COBBLE: 14, DEEP: 15, CLAY: 16, GRAVEL: 17, LEAF_T: 18, MOSSY: 19, PLANKS: 20, BRICK: 21, FARM: 22 };
 const DEF = [];
 DEF[B.GRASS] = [T.GRASS_TOP, T.GRASS_SIDE, T.DIRT]; DEF[B.DIRT] = [T.DIRT, T.DIRT, T.DIRT]; DEF[B.STONE] = [T.STONE, T.STONE, T.STONE];
 DEF[B.SAND] = [T.SAND, T.SAND, T.SAND]; DEF[B.PATH] = [T.PATH_TOP, T.PATH_SIDE, T.DIRT]; DEF[B.SNOW] = [T.SNOW_TOP, T.SNOW_SIDE, T.STONE];
@@ -96,7 +104,7 @@ DEF[B.LOG] = [T.LOG_TOP, T.LOG, T.LOG_TOP]; DEF[B.BIRCH] = [T.LOG_TOP, T.BIRCH, 
 DEF[B.LEAF_G] = [T.LEAF_G, T.LEAF_G, T.LEAF_G]; DEF[B.LEAF_M] = [T.LEAF_M, T.LEAF_M, T.LEAF_M]; DEF[B.LEAF_L] = [T.LEAF_L, T.LEAF_L, T.LEAF_L];
 DEF[B.LEAF_P] = [T.LEAF_P, T.LEAF_P, T.LEAF_P]; DEF[B.LEAF_T] = [T.LEAF_T, T.LEAF_T, T.LEAF_T]; DEF[B.WATER] = [T.WATER, T.WATER, T.WATER];
 DEF[B.COBBLE] = [T.COBBLE, T.COBBLE, T.COBBLE]; DEF[B.DEEP] = [T.DEEP, T.DEEP, T.DEEP]; DEF[B.CLAY] = [T.CLAY, T.CLAY, T.CLAY];
-DEF[B.GRAVEL] = [T.GRAVEL, T.GRAVEL, T.GRAVEL]; DEF[B.MOSSY] = [T.MOSSY, T.MOSSY, T.MOSSY]; DEF[B.PLANKS] = [T.PLANKS, T.PLANKS, T.PLANKS];
+DEF[B.GRAVEL] = [T.GRAVEL, T.GRAVEL, T.GRAVEL]; DEF[B.BRICK] = [T.STONE_BRICK, T.STONE_BRICK, T.STONE_BRICK]; DEF[B.FARM] = [T.FARMLAND, T.DIRT, T.DIRT]; DEF[B.MOSSY] = [T.MOSSY, T.MOSSY, T.MOSSY]; DEF[B.PLANKS] = [T.PLANKS, T.PLANKS, T.PLANKS];
 const isLeaf = (b) => b === B.LEAF_G || b === B.LEAF_M || b === B.LEAF_L || b === B.LEAF_P || b === B.LEAF_T;
 
 export class Grid {

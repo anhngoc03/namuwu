@@ -73,14 +73,14 @@ function useLayout(key) {
   HILL = { x: hc[0], z: hc[1], hw: LAY.hill.w / 8, hd: LAY.hill.h / 8, r: LAY.hill.r / 4, h: LAY.hill.height };
   RAMP = { x: P(LAY.ramp.x, 0)[0], z0: P(0, LAY.ramp.from)[1], z1: P(0, LAY.ramp.to)[1], hw: 1.1 };
   RIVER = LAY.river.map(([x, y]) => { const q = P(x, y); return { x: q[0], z: q[1] }; });
-  MOUNTAINS = LAY.mountains.map((m) => m.slice());
+  MOUNTAINS = LAY.mountains.map((m) => [m[0], m[1], m[2] * 1.25, m[3] * 1.5]);   // big blocky peaks
   // the river is born at the foot of the nearest mountain (a waterfall runs down its face) and ends in the lake
   { const s0 = RIVER[0];
     let mi = 0, md = 1e9;
     MOUNTAINS.forEach(([x, z], i) => { const d = Math.hypot(x - s0.x, z - s0.z); if (d < md) { md = d; mi = i; } });
     const m = MOUNTAINS[mi], nx = RIVER[1].x - m[0], nz = RIVER[1].z - m[1], nl = Math.hypot(nx, nz) || 1;
     SOURCE = { i: mi, x: m[0], z: m[1], r: m[2], h: m[3], dx: nx / nl, dz: nz / nl };
-    RIVER[0] = { x: m[0] + SOURCE.dx * (m[2] - 0.2), z: m[1] + SOURCE.dz * (m[2] - 0.2) };
+    RIVER[0] = { x: m[0] + SOURCE.dx * m[2] * 0.45, z: m[1] + SOURCE.dz * m[2] * 0.45 };   // the waterfall's foot, inside a gorge
     const e = RIVER[RIVER.length - 1];
     if (Math.hypot(e.x - POND.x, e.z - POND.z) < 22) RIVER.push({ x: POND.x + (e.x - POND.x) * 0.25, z: POND.z + (e.z - POND.z) * 0.25 });
   }
@@ -208,55 +208,66 @@ function heart(color) {
   return new THREE.Mesh(g, mat(color, { emissive: color, emissiveIntensity: 0.25 }));
 }
 
-// a stepped block roof: half-block steps on both sides, closed at the ends
+// a stepped roof of half-block "stairs" that overhangs the walls; the gable ends are planks
 function blockRoof(w, d, color) {
-  const g = new THREE.Group(), sh = tmat(VX.T.SHINGLE, color), D = d + 1, n = Math.ceil(D / 1);
-  for (let k = 0; k < n; k++) {
+  const g = new THREE.Group(), sh = tmat(VX.T.SHINGLE, color), spr = tmat(VX.T.SPRUCE_PLANK), D = d + 1.6;
+  let k = 0;
+  for (; ; k++) {
     const dd = D - k, y = k * 0.5 + 0.25;
-    if (dd <= 0.2) break;
-    g.add(box(w + 0.8, 0.5, dd, 0, 0, y, 0, sh));
+    if (dd <= 0.6) break;
+    g.add(box(w + 1.0, 0.5, 1, 0, 0, y, dd / 2 - 0.5, sh)); g.add(box(w + 1.0, 0.5, 1, 0, 0, y, -dd / 2 + 0.5, sh));    // the two slopes
+    if (dd > 2.2) g.add(box(w + 0.2, 0.5, dd - 2, 0, 0, y, 0, spr));                                                   // the gable, planks
   }
-  g.userData.h = n * 0.5;
+  g.add(box(w + 1.2, 0.35, 0.6, 0, 0, k * 0.5 + 0.1, 0, spr));                                                           // the ridge
+  g.userData.h = k * 0.5 + 0.3;
   return g;
 }
-// a village house made of blocks: cobble footing, log corners, plaster walls, a shingle roof
+// a little lantern block that glows at night
+function lantern() {
+  const m = new THREE.MeshLambertMaterial({ color: 0xfff1c8, emissive: 0xffc46b, emissiveIntensity: 0, map: VX.tileTexture(VX.T.PLASTER) }); lampMats.push(m);
+  const g = new THREE.Group();
+  g.add(box(0.3, 0.32, 0.3, 0, 0, 0, 0, m)); g.add(box(0.34, 0.08, 0.34, 0x4a3a34, 0, 0.2, 0)); g.add(box(0.08, 0.12, 0.08, 0x4a3a34, 0, 0.3, 0));
+  return g;
+}
+// a wooden cabin: stone-brick footing, a cobble skirt, plank walls between logs, a stepped shingle roof,
+// framed glass windows, a little porch roof over the door with two lanterns, a stone chimney
 function makeHouse(spec, hall) {
   const g = new THREE.Group();
   const w = hall ? 10 : 5, d = hall ? 7 : 4, h = hall ? 4 : 3;
   const rc = hall ? COL.roof.hall : (COL.roof[spec.roof] || COL.roof.pink);
-  const cob = tmat(VX.T.COBBLE), logM = tmat(VX.T.LOG), wall = tmat(VX.T.PLASTER, hall ? 0xfff3e2 : 0xfff6e8), plank = tmat(VX.T.PLANK_GREY, 0xd9a878);
-  g.add(box(w + 0.4, 0.3, d + 0.4, 0, 0, 0.15, 0, cob));                              // footing
-  g.add(box(w, h, d, 0, 0, 0.3 + h / 2, 0, wall));                                     // walls
-  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => g.add(box(0.5, h, 0.5, 0, sx * (w / 2 - 0.15), 0.3 + h / 2, sz * (d / 2 - 0.15), logM)));
-  g.add(box(w + 0.12, 0.35, d + 0.12, 0, 0, 0.3 + h - 0.17, 0, logM));                 // a log beam under the roof
+  const brick = tmat(VX.T.STONE_BRICK), cob = tmat(VX.T.COBBLE), logM = tmat(VX.T.LOG), plank = tmat(VX.T.PLANKS), spr = tmat(VX.T.SPRUCE_PLANK);
+  g.add(box(w + 0.5, 0.3, d + 0.5, 0, 0, 0.15, 0, brick));                                    // footing
+  g.add(box(w, 0.9, d, 0, 0, 0.3 + 0.45, 0, cob));                                             // stone skirt
+  g.add(box(w - 0.02, h - 0.9, d - 0.02, 0, 0, 0.3 + 0.9 + (h - 0.9) / 2, 0, hall ? tmat(VX.T.PLASTER, 0xfff3e2) : plank));   // plank walls
+  const posts = hall ? [-w / 2 + 0.25, -2.6, 2.6, w / 2 - 0.25] : [-w / 2 + 0.25, w / 2 - 0.25];
+  [-1, 1].forEach((sz) => posts.forEach((x) => g.add(box(0.5, h, 0.5, 0, x, 0.3 + h / 2, sz * (d / 2 - 0.15), logM))));
+  g.add(box(w + 0.3, 0.4, d + 0.3, 0, 0, 0.3 + h - 0.2, 0, spr));                            // beam under the roof
   const roof = blockRoof(w, d, rc); roof.position.y = 0.3 + h; g.add(roof);
   const rh = roof.userData.h;
-  // door + step
+  // door, step, porch roof, lanterns
   const dw = hall ? 2 : 1, dh = hall ? 2.6 : 2;
   const hinge = new THREE.Group(); hinge.position.set(-dw / 2, 0.3, d / 2 + 0.02); g.add(hinge);
-  hinge.add(box(dw, dh, 0.12, 0, dw / 2, dh / 2, 0, tmat(VX.T.PLANK_GREY, 0xb07a52)));
+  hinge.add(box(dw, dh, 0.12, 0, dw / 2, dh / 2, 0, spr));
   hinge.add(box(0.12, 0.12, 0.08, 0xf9e08a, dw - 0.2, dh / 2, 0.08));
-  g.add(box(dw - 0.04, dh - 0.04, 0.05, 0x5a4636, 0, 0.3 + dh / 2, d / 2 - 0.02));
+  g.add(box(dw - 0.04, dh - 0.04, 0.05, 0x4a3a30, 0, 0.3 + dh / 2, d / 2 - 0.02));
   g.userData.hinge = hinge;
-  g.add(box(dw + 1, 0.3, 1, 0, 0, 0.15, d / 2 + 0.7, cob));                           // the step
-  // windows: glass blocks with a plank frame (they glow at night)
-  const wm = windowMat();
-  wm.map = VX.tileTexture(VX.T.GLASS);
+  g.add(box(dw + 1, 0.3, 1, 0, 0, 0.15, d / 2 + 0.7, brick));
+  g.add(box(dw + 1.2, 0.2, 1, 0, 0, 0.3 + dh + 0.35, d / 2 + 0.5, spr));                     // porch roof
+  [-1, 1].forEach((sx) => { const l = lantern(); l.position.set(sx * (dw / 2 + 0.4), 0.3 + dh - 0.2, d / 2 + 0.2); g.add(l); });
+  // windows: glass in a dark wood frame (they glow at night)
+  const wm = windowMat(); wm.map = VX.tileTexture(VX.T.GLASS);
   g.userData.wm = wm;
-  const winY = 0.3 + (hall ? 2.2 : 1.6);
-  const wx = hall ? [-3.5, -2, 2, 3.5] : [-1.6, 1.6];
-  wx.forEach((x) => { g.add(box(1.2, 1.2, 0.12, 0, x, winY, d / 2 + 0.02, plank)); g.add(box(1, 1, 0.14, 0, x, winY, d / 2 + 0.04, wm)); });
-  [-1, 1].forEach((sx) => { g.add(box(0.12, 1.2, 1.2, 0, sx * (w / 2 + 0.02), winY, 0, plank)); g.add(box(0.14, 1, 1, 0, sx * (w / 2 + 0.04), winY, 0, wm)); });
+  const winY = 0.3 + (hall ? 2.3 : 1.75);
+  const wx = hall ? [-3.6, -1.5, 1.5, 3.6] : [-1.55, 1.55];
+  wx.forEach((x) => { g.add(box(1.2, 1.1, 0.12, 0, x, winY, d / 2 + 0.02, spr)); g.add(box(1, 0.9, 0.14, 0, x, winY, d / 2 + 0.04, wm)); });
+  [-1, 1].forEach((sx) => { g.add(box(0.12, 1.1, 1.2, 0, sx * (w / 2 + 0.02), winY, 0, spr)); g.add(box(0.14, 0.9, 1, 0, sx * (w / 2 + 0.04), winY, 0, wm)); });
   if (!hall) {
-    // flower boxes under the front windows, a chimney, a mailbox
-    wx.forEach((x) => {
-      g.add(box(1.2, 0.3, 0.4, 0, x, winY - 0.75, d / 2 + 0.22, plank));
-      [-0.35, 0, 0.35].forEach((o, k) => g.add(box(0.22, 0.22, 0.22, COL.flower[k], x + o, winY - 0.5, d / 2 + 0.22)));
+    wx.forEach((x) => {                                                                    // flower boxes
+      g.add(box(1.2, 0.3, 0.4, 0, x, winY - 0.7, d / 2 + 0.22, spr));
+      [-0.35, 0, 0.35].forEach((o, k) => g.add(box(0.22, 0.22, 0.22, COL.flower[k], x + o, winY - 0.45, d / 2 + 0.22)));
     });
-    g.add(box(1, 1.5, 1, 0, w / 4, 0.3 + h + rh * 0.55, -d / 5, cob));
-    g.userData.chimney = new THREE.Vector3(w / 4, 0.3 + h + rh * 0.55 + 1, -d / 5);
-    g.add(box(0.25, 1, 0.25, 0, w / 2 + 0.4, 0.5, d / 2 + 1.4, logM));
-    g.add(box(0.45, 0.35, 0.55, rc, w / 2 + 0.4, 1.15, d / 2 + 1.4));
+    g.add(box(1, 2, 1, 0, w / 4, 0.3 + h + rh * 0.45, -d / 5, cob));
+    g.userData.chimney = new THREE.Vector3(w / 4, 0.3 + h + rh * 0.45 + 1.2, -d / 5);
   }
   if (spec && spec.heart) {
     const hm = heart(0xff7f9e); hm.scale.setScalar(0.9);
@@ -264,16 +275,14 @@ function makeHouse(spec, hall) {
   }
   let bell = null;
   if (hall) {
-    // stone-brick columns, a clock window, a flag, a gold bell
-    const brick = tmat(VX.T.BRICKS, 0xeee6dc);
     [-1.5, 1.5].forEach((x) => g.add(box(0.6, h, 0.6, 0, x, 0.3 + h / 2, d / 2 + 0.35, brick)));
     g.add(box(w + 0.4, 0.4, 1, 0, 0, 0.3 + h + 0.1, d / 2 + 0.35, brick));
     g.add(box(0.2, 3, 0.2, 0, 0, 0.3 + h + rh + 1.4, 0, logM));
     const flag = box(1.4, 0.8, 0.08, 0xff9bb0, 0.75, 0.3 + h + rh + 2.4, 0); g.add(flag); g.userData.flag = flag;
     const bellMat = new THREE.MeshLambertMaterial({ color: 0xf9e08a, emissive: 0xff6b6b, emissiveIntensity: 0, map: VX.tileTexture(VX.T.PLASTER) });
     bell = new THREE.Mesh(blockGeo(0.7, 0.7, 0.7), bellMat);
-    bell.position.set(0, 0.3 + h + rh * 0.42, d / 2 + 0.45); g.add(bell);
-    g.add(box(1.4, 1.4, 0.1, 0, 0, 0.3 + h + rh * 0.42, d / 2 + 0.3, plank));
+    bell.position.set(0, 0.3 + h + rh * 0.42, d / 2 + 0.95); g.add(bell);
+    g.add(box(1.4, 1.4, 0.1, 0, 0, 0.3 + h + rh * 0.42, d / 2 + 0.8, spr));
   }
   g.userData.top = 0.3 + h + rh + (hall ? 3.2 : 0.6);
   const pick = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, h + rh + 0.3, d + 0.6), PICK_MAT);
@@ -1170,14 +1179,21 @@ function create(container, opts) {
   const world = new THREE.Group(); scene.add(world);
   const R = rng(5), dummy = new THREE.Object3D();
   const ax = Math.ceil(ISLAND.a) + 2, az = Math.ceil(ISLAND.b) + 2;
-  const vg = new VX.Grid(-ax, -26, -az, ax * 2, 48, az * 2);
+  const vg = new VX.Grid(-ax, -26, -az, ax * 2, 54, az * 2);
   const mainRoad = (r) => (r[0] === r[2] ? Math.abs(r[3] - r[1]) : Math.abs(r[2] - r[0])) >= 40;
   const roadCell = (x, z) => ROADS.some((r) => {
     const [x1, z1, x2, z2] = r, h = (mainRoad(r) ? ROAD_MAIN : ROAD_SIDE) / 2;
     return x >= Math.min(x1, x2) - h && x <= Math.max(x1, x2) + h && z >= Math.min(z1, z2) - h && z <= Math.max(z1, z2) + h;
   });
   const parkRing = (x, z) => { const e = Math.hypot((x - POND.x) / (POND.rx + 2.6), (z - POND.z) / (POND.rz + 2.6)); return Math.abs(e - 1) * (POND.rx + 2.6) < 0.8; };
-  const mtnH = (x, z) => { let best = 0, mi = -1; MOUNTAINS.forEach(([mx, mz, r, h], i) => { const d = Math.hypot(x - mx, z - mz); if (d < r) { const y = h * Math.pow(Math.max(0, 1 - Math.pow(d / r, 1 / 0.62)), 1 / 1.7); if (y > best) { best = y; mi = i; } } }); return { h: best, i: mi }; };
+  // rugged peaks: a steep cone with lumpy ledges (a little noise), not on the hill itself
+  const lump = (x, z) => Math.sin(x * 0.83 + z * 0.37) * Math.cos(z * 0.71 - x * 0.29) + 0.5 * Math.sin(x * 1.9 - z * 1.3);
+  const mtnH = (x, z) => {
+    let best = 0, mi = -1;
+    if (hillSD(x, z) < 1) return { h: 0, i: -1 };
+    MOUNTAINS.forEach(([mx, mz, r, h], i) => { const d = Math.hypot(x - mx, z - mz); if (d < r) { const y = h * Math.pow(1 - d / r, 1.1) * (0.88 + 0.12 * lump(x, z)) + (d / r < 0.9 ? 0.8 * lump(x * 1.7, z * 1.7) : 0); if (y > best) { best = y; mi = i; } } });
+    return { h: best, i: mi };
+  };
   const riverW = (x, z) => 1.4 + 1.3 * Math.min(1, Math.hypot(x - SOURCE.x, z - SOURCE.z) / 22);
   const colTop = new Map();                           // column → top (the y of its top face)
   for (let x = -ax; x < ax; x++) for (let z = -az; z < az; z++) {
@@ -1185,12 +1201,14 @@ function create(container, opts) {
     if (!onIsland(cx, cz, 0.2)) continue;
     let top = Math.round(groundY(cx, cz)), kind = 'grass';
     const m = mtnH(cx, cz);
-    if (m.h > top + 0.6) { const mh = MOUNTAINS[m.i][3]; top = Math.max(top, Math.round(m.h - 0.2)); kind = top > mh * 0.66 ? 'snow' : top > mh * 0.25 ? 'rock' : 'grass'; }
+    if (m.h > top + 0.6) { const mh = MOUNTAINS[m.i][3]; top = Math.max(top, Math.round(m.h - 0.2)); kind = top > mh * (0.58 + 0.08 * lump(cx * 2, cz * 2)) ? 'snow' : top > mh * 0.22 ? 'rock' : 'grass'; }
     const e = Math.max(0, 1 - Math.hypot(cx, cz) / shoreR(Math.atan2(cz, cx)));
     const bottom = -1 - Math.round(2 + 17 * Math.pow(e, 0.55) + (R() - 0.5) * 2.4);
     for (let y = bottom; y < top; y++) {
       const ft = top - 1 - y;
-      let b = ft === 0 ? (kind === 'snow' ? VX.B.SNOW : kind === 'rock' ? (R() < 0.25 ? VX.B.MOSSY : VX.B.STONE) : VX.B.GRASS)
+      const hillWall = top >= HILL.h && hillSD(cx, cz) <= 0 && y >= 0 && ft > 0;       // the hill's sides: a stone-brick retaining wall
+      if (hillWall) { vg.set(x, y, z, R() < 0.7 ? VX.B.BRICK : R() < 0.5 ? VX.B.MOSSY : VX.B.COBBLE); continue; }
+      let b = ft === 0 ? (kind === 'snow' ? VX.B.SNOW : kind === 'rock' ? (R() < 0.2 ? VX.B.MOSSY : R() < 0.12 ? VX.B.GRAVEL : VX.B.STONE) : VX.B.GRASS)
         : ft < 3 && kind === 'grass' ? VX.B.DIRT : y < bottom + 3 ? (R() < 0.55 ? VX.B.DEEP : VX.B.STONE) : (R() < 0.12 ? VX.B.CLAY : R() < 0.08 ? VX.B.GRAVEL : VX.B.STONE);
       vg.set(x, y, z, b);
     }
@@ -1208,16 +1226,38 @@ function create(container, opts) {
       }
       if ((inPond(cx, cz, 1.2) || rd < rw / 2 + 0.9) && !roadCell(cx, cz)) { vg.set(x, -1, z, VX.B.SAND); vg.set(x, -2, z, VX.B.SAND); continue; }
     }
-    if (roadCell(cx, cz) || parkRing(cx, cz) || onRamp(cx, cz)) vg.set(x, top - 1, z, VX.B.PATH);
+    if (onRamp(cx, cz)) vg.set(x, top - 1, z, VX.B.BRICK);                         // stone steps up the hill
+    else if (roadCell(cx, cz) || parkRing(cx, cz)) vg.set(x, top - 1, z, VX.B.PATH);
   }
   const topAt = (x, z) => { const t = colTop.get(Math.floor(x) + ',' + Math.floor(z)); return t == null ? 0 : t; };
-  // the waterfall: a strip of water stepping down the mountain's face to where the river starts
-  { const S = SOURCE, px = -S.dz, pz = S.dx;
-    for (let d = S.r - 0.5; d > 0.5; d -= 0.5) for (let w = -0.5; w <= 0.5; w += 1) {
-      const x = Math.floor(S.x + S.dx * d + px * w), z = Math.floor(S.z + S.dz * d + pz * w), t = colTop.get(x + ',' + z);
-      if (t == null || t <= 0 || t > S.h * 0.7) continue;
-      vg.set(x, t - 1, z, VX.B.WATER); vg.set(x, t - 2, z, VX.B.WATER);
+  // the waterfall: a gorge cut into the mountain; at its back a curtain of water falls down the cliff
+  const fallAt = [];
+  { const S = SOURCE, px = -S.dz, pz = S.dx, d0 = S.r * 0.45, seen = new Set();
+    for (let d = d0; d < S.r + 2; d += 0.4) for (let w = -1.4; w <= 1.4; w += 0.4) {
+      const x = Math.floor(S.x + S.dx * d + px * w), z = Math.floor(S.z + S.dz * d + pz * w), k = x + ',' + z;
+      if (seen.has(k) || !colTop.has(k)) continue; seen.add(k);
+      const t = colTop.get(k);
+      for (let y = -1; y < t; y++) vg.set(x, y, z, VX.B.AIR);
+      vg.set(x, -1, z, VX.B.WATER); vg.set(x, -2, z, VX.B.WATER); vg.set(x, -3, z, VX.B.SAND);
+      colTop.set(k, -1);
     }
+    // the curtain, against the cliff wall at the gorge's back
+    for (let w = -1; w <= 1; w++) {
+      const x = Math.floor(S.x + S.dx * (d0 + 0.3) + px * w), z = Math.floor(S.z + S.dz * (d0 + 0.3) + pz * w);
+      const wallH = Math.round(mtnH(S.x + S.dx * (d0 - 0.8) + px * w, S.z + S.dz * (d0 - 0.8) + pz * w).h - 0.2);
+      for (let y = -1; y < Math.max(2, wallH - 1); y++) vg.set(x, y, z, VX.B.WATER);
+      fallAt.push([x + 0.5, z + 0.5]);
+    }
+  }
+  // spruce trees on the lower slopes of the mountains
+  { const R5 = rng(77);
+    colTop.forEach((t, k) => {
+      const [x, z] = k.split(',').map(Number), m = mtnH(x + 0.5, z + 0.5);
+      if (m.i < 0 || t < 1 || t > MOUNTAINS[m.i][3] * 0.32 || R5() > 0.035) return;
+      if (Math.hypot(x - SOURCE.x, z - SOURCE.z) < SOURCE.r * 0.9 && Math.abs((x - SOURCE.x) * -SOURCE.dz + (z - SOURCE.z) * SOURCE.dx) < 3) return;   // not in the gorge
+      if (vg.get(x, t, z)) return;
+      VX.tree(vg, x, t, z, 'pine', R5);
+    });
   }
   const river = buildRiver(world, true);
 
@@ -1243,7 +1283,9 @@ function create(container, opts) {
 
   const park = buildPark(world, R, true);
   // what may grow here (not on roads, water, the yard, in front of houses…)
-  const free = (x, z) => onIsland(x, z, 2.2) && !inPond(x, z, 1.5) && !inLot(x, z, 0.8) && !nearCliff(x, z, 0.6) && riverDist(x, z) > 2.4 && !inPark(x, z) && !onRamp(x, z) &&
+  const farms = [];
+  const inFarm = (x, z) => farms.some((f) => x > f.x0 - 1 && x < f.x1 + 1 && z > f.z0 - 1 && z < f.z1 + 1);
+  const free = (x, z) => !inFarm(x, z) && onIsland(x, z, 2.2) && !inPond(x, z, 1.5) && !inLot(x, z, 0.8) && !nearCliff(x, z, 0.6) && riverDist(x, z) > 2.4 && !inPark(x, z) && !onRamp(x, z) &&
     !ROADS.some(([x1, z1, x2, z2]) => x >= Math.min(x1, x2) - RH - 0.3 && x <= Math.max(x1, x2) + RH + 0.3 && z >= Math.min(z1, z2) - RH - 0.3 && z <= Math.max(z1, z2) + RH + 0.3) &&
     !HOUSE_POS.some(([hx, hz]) => Math.abs(x - hx) < 3.6 && Math.abs(z - hz) < 3.8) &&
     !(Math.abs(x - HALL_POS[0]) < 6 && Math.abs(z - HALL_POS[1]) < 5.4) && mtnH(x, z).h < 0.5;
@@ -1255,6 +1297,48 @@ function create(container, opts) {
     const [lx, lz] = HOUSE_POS[loveIdx];
     return (Math.abs(x - lx) < 7 && z > lz + 2.5 && z < lz + 12) || (Math.abs(z - lz) < 3.5 && Math.abs(x - lx) < 8.5) || (Math.abs(x - lx) < 3.5 && z < lz && z > lz - 8);
   };
+  // fenced farm plots on open flat ground: tilled soil, a water channel, wheat / carrots / sprouts
+  { const W = 11, D = 7, tops = (x, z) => colTop.get(x + ',' + z);
+    const okAt = (x0, z0) => { for (let x = x0 - 1; x <= x0 + W; x++) for (let z = z0 - 1; z <= z0 + D; z++) { if (tops(x, z) !== 0 || !free(x + 0.5, z + 0.5) || loveYard(x + 0.5, z + 0.5)) return false; } return true; };
+    const cand = [];
+    for (let z0 = -az + 4; z0 < az - D - 4; z0 += 2) for (let x0 = -ax + 4; x0 < ax - W - 4; x0 += 2) if (okAt(x0, z0)) cand.push([x0, z0]);
+    cand.sort((a0, b0) => (b0[1] - a0[1]) || (Math.abs(a0[0]) - Math.abs(b0[0])));       // nearer the front first
+    for (const [x0, z0] of cand) {
+      if (farms.length >= 2) break;
+      if (farms.some((f) => Math.hypot(f.x0 - x0, f.z0 - z0) < 18)) continue;
+      if (!okAt(x0, z0)) continue;
+      farms.push({ x0, z0, x1: x0 + W, z1: z0 + D });
+      const crops = [VX.T.WHEAT, VX.T.CARROT, VX.T.SPROUT];
+      for (let x = x0 + 1; x < x0 + W - 1; x++) for (let z = z0 + 1; z < z0 + D - 1; z++) {
+        const mid = z === z0 + Math.floor(D / 2);
+        if (mid) { vg.set(x, -1, z, VX.B.WATER); continue; }
+        vg.set(x, -1, z, VX.B.FARM); vg.tint.set(vg.idx(x, -1, z), 1);
+        vg.plant(x + 0.5, 0, z + 0.5, crops[(z < z0 + D / 2 ? 0 : 1) + (x > x0 + W - 4 ? 1 : 0)] , 0.95);
+      }
+      // the fence: log posts, plank rails, a gate in the front, lanterns on the corners
+      const plk = tmat(VX.T.PLANKS), lg = tmat(VX.T.LOG), gateX = x0 + Math.floor(W / 2);
+      const edge = (ax0, az0, ax1, az1) => {
+        const len = Math.hypot(ax1 - ax0, az1 - az0), n = Math.round(len);
+        for (let k = 0; k <= n; k++) {
+          const px = ax0 + (ax1 - ax0) * k / n, pz = az0 + (az1 - az0) * k / n;
+          if (az0 === az1 && az0 === z0 + D && Math.abs(px - gateX - 0.5) < 0.6) continue;
+          world.add(box(0.25, 1, 0.25, 0, px, 0.5, pz, lg));
+          const post = new THREE.Object3D(); post.position.set(px, 0, pz); post.userData.post = 0.7; world.add(post);
+          if (k < n && !(az0 === az1 && az0 === z0 + D && Math.abs(px + (ax1 - ax0) / n / 2 - gateX - 0.5) < 1)) [0.4, 0.8].forEach((y) => {
+            const r0 = box(az0 === az1 ? 1 : 0.1, 0.1, az0 === az1 ? 0.1 : 1, 0, px + (ax1 - ax0) / n / 2, y, pz + (az1 - az0) / n / 2, plk); world.add(r0);
+          });
+        }
+      };
+      edge(x0, z0, x0 + W, z0); edge(x0 + W, z0, x0 + W, z0 + D); edge(x0, z0 + D, x0 + W, z0 + D); edge(x0, z0, x0, z0 + D);
+      [[x0, z0], [x0 + W, z0], [x0, z0 + D], [x0 + W, z0 + D]].forEach(([x, z]) => { const l = lantern(); l.position.set(x, 1.2, z); world.add(l); });
+    }
+  }
+  // lanterns on log posts either side of the stone steps up the hill
+  [[RAMP.z1 + 0.4, 0], [RAMP.z0 - 0.6, HILL.h]].forEach(([z, y]) => [-1, 1].forEach((sx) => {
+    const x = RAMP.x + sx * (RAMP.hw + 0.7);
+    world.add(box(0.25, 1.4, 0.25, 0, x, y + 0.7, z, tmat(VX.T.LOG)));
+    const l = lantern(); l.position.set(x, y + 1.6, z); world.add(l);
+  }));
   // trees in clusters along the shore on low grassy humps (one block high), with leaf bushes, flowers and boulders
   const treeAt = [];
   const raise = (x, z) => { const k = x + ',' + z, t = colTop.get(k); if (t == null) return; vg.set(x, t - 1, z, VX.B.DIRT); vg.set(x, t, z, VX.B.GRASS); vg.tint.set(vg.idx(x, t, z), 0.97 + R() * 0.05); colTop.set(k, t + 1); };
@@ -1307,6 +1391,10 @@ function create(container, opts) {
   }
   // build the meshes (only the faces you can see)
   { const m = vg.build(0.88); world.add(m.solid, m.water, m.plants); }
+  // mist where the waterfall lands
+  const mist = [];
+  { const mm = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false });
+    fallAt.forEach(([x, z]) => { for (let k = 0; k < 4; k++) { const b0 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), mm.clone()); b0.position.set(x + rnd(-0.6, 0.6), 0, z + rnd(0, 1.2)); world.add(b0); mist.push({ m: b0, t: Math.random(), x: b0.position.x, z: b0.position.z }); } }); }
   // sparkles on the lake and the river (three sets, twinkling in turn)
   const sparkles = [0, 1, 2].map((k) => {
     const pos = [];
@@ -1695,7 +1783,8 @@ function create(container, opts) {
     tagLayer.style.display = on ? '' : 'none';
     if (!on) return;
     const W = container.clientWidth || innerWidth, H = container.clientHeight || innerHeight;
-    tagLayer.style.fontSize = Math.max(9, Math.min(15, 1500 / dist)).toFixed(1) + 'px';
+    const personPx = H * 1.8 / (2 * dist * Math.tan(camera.fov * Math.PI / 360));        // how tall a villager is on screen
+    tagLayer.style.fontSize = Math.max(7, Math.min(12, personPx * 0.24)).toFixed(1) + 'px';
     tagLayer.classList.toggle('night', nightAmt > 0.5);
     // every 0.3 s: is the person behind a house? (then no name)
     const now = performance.now(), check = now - (placeNames.t || 0) > 300;
@@ -1955,6 +2044,7 @@ function create(container, opts) {
     });
     river.ftex.offset.y = (river.ftex.offset.y + dt * 1.6) % 1;
     fountain.jet.scale.y = 1 + Math.sin(time * 6) * 0.08;
+    mist.forEach((q) => { q.t = (q.t + dt * 0.35) % 1; q.m.position.set(q.x + Math.sin(q.t * 6 + q.z) * 0.3, -0.1 + q.t * 1.8, q.z + q.t * 0.8); q.m.material.opacity = 0.55 * (1 - q.t); q.m.scale.setScalar(0.6 + q.t * 1.2); });
     fountain.drops.forEach((d0) => {                  // little arcs from the top bowl down into the basin
       d0.t = (d0.t + dt * 0.7) % 1;
       const r0 = 0.15 + d0.t * 0.95, y0 = 2.25 + d0.t * 0.6 - d0.t * d0.t * 2.35;
