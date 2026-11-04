@@ -42,7 +42,6 @@
   // Game Center: one building, three games inside
   window.openGameCenter = function () { document.getElementById('game-center-modal').classList.add('active'); };
   // the corner shop is where the villagers eat and shop (nothing to open)
-  window.openStore = function () { toast('The villagers come here for lunch and snacks'); };
 
   var root, stage, labelsEl, starBtn, clockEl;
   var scene3d = null, loading = false, shown = false, built = false;
@@ -59,7 +58,7 @@
     if (loading) return;
     loading = true;
     var sc = document.createElement('script');
-    sc.src = '/village3d.js?v=24';
+    sc.src = '/village3d.js?v=25';
     sc.onload = function () { loading = false; var w = loadWaiters; loadWaiters = []; w.forEach(function (f) { f(); }); };
     sc.onerror = function () { loading = false; loadWaiters = []; toast("Couldn't load the village ʕ´-ก̀ʔᐝ"); };
     document.head.appendChild(sc);
@@ -171,7 +170,6 @@
     if (id === 'hall') { openHall(); return; }
     if (!h) return;
     if (!h.open || typeof window[h.open] !== 'function') { toast('Coming soon ✿'); return; }
-    if (h.id === 'store') { window.openStore(); return; }
     if (h.id === 'games') { window.openGameCenter(); return; }
     if (entering) return;
     entering = true;
@@ -208,7 +206,7 @@
   var entering = false;
 
   /* ---------------- inside a house: the room behind a feature page ---------------- */
-  var VIEW_HOUSE = { 'work-view': 'work', 'expense-view': 'money', 'calendar-view': 'calendar', 'accounts-view': 'account', 'love-view': 'love', 'notes-view': 'notes', 'goals-view': 'goals', 'health-view': 'health', 'law-view': 'law',
+  var VIEW_HOUSE = { 'work-view': 'work', 'expense-view': 'money', 'calendar-view': 'calendar', 'accounts-view': 'account', 'love-view': 'love', 'notes-view': 'notes', 'goals-view': 'goals', 'health-view': 'health', 'law-view': 'law', 'store-view': 'store',
     'datediff-view': 'daycount', 'converter-view': 'pdf', 'qr-view': 'qr', 'symbols-view': 'symbols', 'eating-view': 'yakult',
     'memory-view': 'games', 'minesweeper-view': 'games', 'mochi-view': 'games' };
   var roomPhotos = [], roomFrame = '';
@@ -240,6 +238,7 @@
     var el = document.getElementById('room-bg');
     document.body.classList.toggle('room-on', !!house);
     document.body.classList.toggle('love-room', house === 'love');     // the album and the frame in this room can be tapped
+    document.body.classList.toggle('store-room', house === 'store');
     if (!house) { if (room) { lastLeft = room.house; room.destroy(); room = null; } el.classList.remove('on'); return; }
     if (room && room.house === house) { el.classList.add('on'); room.setCorner(currentCorner(house)); return; }
     if (room) { room.destroy(); room = null; }
@@ -250,7 +249,7 @@
       var spec = HOUSES[idx];
       try {
         room = Village3D.room(el, {
-          house: house, kind: spec.kind, roof: Village3D.ROOF[spec.roof], look: Village3D.LOOKS[idx],
+          house: house, kind: spec.kind, roof: Village3D.ROOF[spec.roof], look: Village3D.lookAs ? Village3D.lookAs(Village3D.LOOKS[idx], (villageNames.genders || {})[house]) : Village3D.LOOKS[idx],
           looks: house === 'love' ? [Village3D.LOVE.her, Village3D.LOVE.him] : null,
           corner: currentCorner(house), timeMode: timeMode(), walkIn: walkingIn, names: { her: villageNames.her || 'namu', him: villageNames.him || 'hunf' },
           onPick: house === 'love' ? function (what, at) { if (typeof loveRoomPick === 'function') loveRoomPick(what, at); } : null
@@ -584,7 +583,12 @@
     var row = function (id, label, owner) {
       return '<div class="nm-row"><div class="nm-house"><small>' + icdEscape(label) + '</small><input type="text" maxlength="24" data-nh="' + id + '" placeholder="' + icdEscape(label) + '" value="' + icdEscape((villageNames.houses || {})[id] || '') + '"></div>' + owner + '</div>';
     };
-    var who = function (id) { return '<div class="nm-who"><small>Lives here</small><input type="text" maxlength="24" data-np="' + id + '" placeholder="Name" value="' + icdEscape((villageNames.people || {})[id] || '') + '"></div>'; };
+    var gOf = function (id) { return (villageNames.genders || {})[id] || (scene3d && scene3d.genderOf ? scene3d.genderOf(id) : '') || 'm'; };
+    var who = function (id) {
+      var g = gOf(id);
+      return '<div class="nm-who"><small>Lives here</small><div class="nm-pg"><input type="text" maxlength="24" data-np="' + id + '" placeholder="Name" value="' + icdEscape((villageNames.people || {})[id] || '') + '">' +
+        '<select data-ng="' + id + '" aria-label="Boy or girl"><option value="m"' + (g === 'm' ? ' selected' : '') + '>Boy</option><option value="f"' + (g === 'f' ? ' selected' : '') + '>Girl</option></select></div></div>';
+    };
     var html = row('hall', 'Town Hall', '<div class="nm-who"><small>&nbsp;</small><span class="nm-none">the Hall team</span></div>');
     HOUSES.forEach(function (h) {
       html += row(h.id, h.label, h.id === 'love'
@@ -598,6 +602,8 @@
     var n = { houses: {}, people: {}, her: document.getElementById('nm-her').value, him: document.getElementById('nm-him').value };
     document.querySelectorAll('#names-list [data-nh]').forEach(function (i) { if (i.value.trim()) n.houses[i.dataset.nh] = i.value.trim(); });
     document.querySelectorAll('#names-list [data-np]').forEach(function (i) { if (i.value.trim()) n.people[i.dataset.np] = i.value.trim(); });
+    n.genders = {};
+    document.querySelectorAll('#names-list [data-ng]').forEach(function (i) { n.genders[i.dataset.ng] = i.value; });
     call('saveVillageNames', n).then(function (v) { villageNames = v; renderLabels(); document.getElementById('names-modal').classList.remove('active'); toast('Names saved ✿'); })
       .catch(function (e) { toast((e && e.message) || 'Could not save'); });
   }

@@ -2407,11 +2407,10 @@ body.love-room #love-view .love-head, body.love-room #love-view .love-hint{ poin
 /* Game Center chooser */
 .gc-box{ max-width:420px; }
 .gc-list{ display:flex; flex-direction:column; gap:10px; }
-.gc-game{ display:grid; grid-template-columns:48px 1fr; grid-template-rows:auto auto; column-gap:12px; align-items:center; text-align:left;
+.gc-game{ display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left;
   border:0; border-radius:var(--r-lg); padding:12px 14px; cursor:pointer; font:inherit; color:var(--ink-on-pastel);
   background:linear-gradient(135deg, #ffd6df, #e8dcff); box-shadow:var(--shadow-sm); transition:transform var(--dur-component); }
 .gc-game:active{ transform:scale(.97); }
-.gc-ico{ grid-row:1 / 3; font-size:30px; text-align:center; }
 .gc-game b{ font-size:16px; } .gc-game small{ opacity:.7; font-weight:700; }
 
 /* first paint: just the village sky, nothing else, until app.js routes */
@@ -2626,13 +2625,14 @@ i.e{ background:#f6a9bd; } i.m{ background:#a6d8e8; }
 
 /* names over the villagers' heads: small, plain text */
 .v3d-names{ position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:2; font-family:'Nunito', sans-serif; font-weight:800; }
-.v3d-names span{ position:absolute; left:0; top:0; white-space:nowrap; color:#5a4252; line-height:1; letter-spacing:.2px; }
-.v3d-names.night span{ color:#fff3e2; }
+.v3d-names span{ position:absolute; left:0; top:0; white-space:nowrap; color:#fff; line-height:1; letter-spacing:.2px; text-shadow:0 1px 2px rgba(40,30,40,.35); }
+.v3d-names.night span{ color:#fff; }
 
 /* ⚙︎ → Names */
 .nm-row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:8px 0; border-bottom:1px dashed #f0dfe6; }
 .nm-row small{ display:block; font-size:11px; font-weight:800; color:#9a7a8a; margin-bottom:3px; }
 .nm-row input{ width:100%; box-sizing:border-box; font-size:14px; padding:8px 10px; }
+.nm-pg{ display:grid; grid-template-columns:1fr auto; gap:4px; } .nm-pg select{ font-size:13px; padding:6px 4px; border-radius:10px; }
 .nm-who.two{ display:grid; grid-template-columns:1fr 1fr; gap:4px; } .nm-who.two small{ grid-column:1 / -1; }
 .nm-none{ display:block; font-size:12.5px; color:#b89aaa; padding:9px 2px; font-weight:700; }
 
@@ -2683,3 +2683,45 @@ i.e{ background:#f6a9bd; } i.m{ background:#a6d8e8; }
 .hs-pin{ font-size:10px; font-weight:800; font-style:normal; color:#d0668c; background:#ffe6ee; padding:2px 7px; border-radius:99px; }
 .hs-dot{ display:inline-block; width:10px; height:10px; border-radius:2px; }
 .hs-dot.meal{ background:#f6a9bd; } .hs-dot.workout{ background:#a6d8e8; } .hs-dot.weight{ background:#d9c9f0; } .hs-dot.water{ background:#9fdcef; }
+
+/* ============================================================
+   SHOP (store.js) — the cashier is in the 3D room; shelves on the side, basket in the corner
+   ============================================================ */
+body.store-room #app-screen{ pointer-events:none; }
+body.store-room #store-view .store-head, body.store-room #store-view .store-shelf-btn{ pointer-events:auto; }
+.store-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.store-cart-btn{ position:relative; width:48px; height:48px; border-radius:50%; border:0; cursor:pointer; display:grid; place-items:center;
+  background:#fff; color:#3f7f6a; box-shadow:0 4px 0 rgba(60,110,90,.2), var(--shadow-sm); }
+.store-cart-btn.bump{ animation:storeBump .45s ease; }
+@keyframes storeBump{ 0%,100%{ transform:scale(1); } 40%{ transform:scale(1.18) rotate(-8deg); } }
+.store-count{ position:absolute; top:-4px; right:-4px; min-width:20px; height:20px; padding:0 5px; box-sizing:border-box; border-radius:10px;
+  background:#e0485f; color:#fff; font-size:12px; font-weight:800; line-height:20px; text-align:center; }
+.store-say{ position:fixed; left:50%; top:58vh; transform:translateX(-50%); max-width:min(78vw, 320px); z-index:3; pointer-events:none;
+  background:#fff; color:#4a3a44; font-weight:800; font-size:14px; padding:10px 14px; border-radius:16px; box-shadow:var(--shadow-sm); text-align:center; }
+.store-say::after{ content:''; position:absolute; left:50%; bottom:-8px; margin-left:-8px; border:8px solid transparent; border-bottom:0; border-top-color:#fff; }
+.store-say.pop{ animation:storePop .35s ease; }
+@keyframes storePop{ 0%{ transform:translateX(-50%) scale(.8); opacity:.3; } 100%{ transform:translateX(-50%) scale(1); opacity:1; } }
+.store-shelf-btn{ position:fixed; left:0; top:52vh; z-index:3; border:0; cursor:pointer; font:inherit; font-weight:800; font-size:14px;
+  padding:14px 12px 14px 10px; border-radius:0 16px 16px 0; background:#9ad6c0; color:#24584a; box-shadow:0 4px 0 rgba(60,110,90,.25);
+  writing-mode:vertical-rl; transform:rotate(180deg); letter-spacing:1px; }
+.store-box{ max-width:460px; }
+.store-tabs{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+.store-tabs button{ border:0; cursor:pointer; font:inherit; font-weight:800; font-size:13px; padding:7px 12px; border-radius:var(--r-pill); background:#eef6f2; color:#3f7f6a; }
+.store-tabs button.on{ background:#9ad6c0; color:#1f4e41; }
+.store-goods{ display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; max-height:52vh; overflow:auto; }
+.store-item{ position:relative; display:flex; flex-direction:column; align-items:center; gap:2px; border:0; cursor:pointer; font:inherit;
+  padding:8px 4px; border-radius:14px; background:#fffaf5; box-shadow:var(--shadow-sm); color:#4a3a44; }
+.store-item.in{ background:#e6f6ef; }
+.store-item img{ width:56px; height:56px; image-rendering:pixelated; }
+.store-item b{ font-size:12px; line-height:1.2; text-align:center; } .store-item small{ font-size:11px; font-weight:700; opacity:.7; }
+.store-item i{ position:absolute; top:4px; right:6px; font-style:normal; font-size:11px; font-weight:800; background:#e0485f; color:#fff; border-radius:9px; min-width:18px; padding:0 4px; }
+.store-lines{ display:flex; flex-direction:column; gap:8px; max-height:48vh; overflow:auto; }
+.store-line{ display:grid; grid-template-columns:40px 1fr auto auto; gap:8px; align-items:center; padding:6px 8px; border-radius:12px; background:#fffaf5; }
+.store-line img{ width:40px; height:40px; image-rendering:pixelated; }
+.store-line b{ font-size:13px; display:block; } .store-line small{ font-size:11px; opacity:.7; font-weight:700; }
+.store-qty{ display:flex; align-items:center; gap:6px; } .store-qty span{ min-width:16px; text-align:center; font-weight:800; }
+.store-qty button{ width:26px; height:26px; border-radius:50%; border:0; cursor:pointer; background:#eef6f2; color:#3f7f6a; font-weight:800; font-size:15px; line-height:1; }
+.store-sum{ font-size:13px; min-width:70px; text-align:right; }
+.store-empty{ text-align:center; opacity:.7; font-weight:700; padding:18px 0; }
+.store-totalrow{ display:flex; justify-content:space-between; align-items:center; padding:12px 4px 2px; font-weight:800; font-size:16px; }
+.pill-btn.store-ghost{ background:#eef0f2; color:#6a6a7a; box-shadow:none; }

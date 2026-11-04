@@ -411,7 +411,8 @@ var VIEW_PATHS_ = {
   'notes-view': '/personal/notes',
   'goals-view': '/personal/goals',
   'health-view': '/personal/food-gym',
-  'law-view': '/personal/law'
+  'law-view': '/personal/law',
+  'store-view': '/tools/store'
 };
 var routing_ = false; // true while applying a URL (load / Back) — don't push it again
 

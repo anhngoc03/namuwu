@@ -663,7 +663,23 @@ function makePerson(look) {
   if (look.style === 'cap') blockOf(look.cap, 8, 1, 3, 0, 6.5, 5);
   if (look.style === 'long') blockOf(look.hair, 8, 5, 1, 0, -1.5, -4.5);
   if (look.dress) { const sk = sbox(9 * PX, 4 * PX, 5 * PX, look.dress, 0, 12.5 * PX, 0); g.add(sk); }
+  parts.kids = g.children.slice();
   return { g, parts };
+}
+// boy / girl, from the hair: long hair, pigtails and a bun read as a girl
+const isGirl = (look) => look.style === 'long' || look.style === 'twin' || look.style === 'bun';
+function lookAs(look, gender) {
+  if (!look || !gender || (gender === 'f') === isGirl(look)) return look;
+  const to = gender === 'f' ? { short: 'long', cap: 'twin' } : { long: 'short', twin: 'cap', bun: 'short' };
+  return Object.assign({}, look, { style: to[look.style] || (gender === 'f' ? 'long' : 'short'), cap: look.cap || look.shirt });
+}
+// give a villager a new look in place (same spot, same walk), e.g. after their gender is changed
+function reskin(p, look) {
+  const n = makePerson(look);
+  (p.parts.kids || []).forEach((k) => p.g.remove(k));
+  n.parts.kids.forEach((k) => p.g.add(k));
+  const keep = {}; Object.keys(p.parts).forEach((k) => { if (!(k in n.parts)) keep[k] = p.parts[k]; });
+  p.parts = Object.assign(n.parts, keep);
 }
 function makeCat() {
   const g = new THREE.Group(), parts = {};
@@ -781,6 +797,7 @@ function labelSprite(text, color, h) {
   c.width = w; c.height = fs + 36;
   const x = c.getContext('2d');
   x.font = '800 ' + fs + 'px Nunito, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
+  if (color === '#ffffff') { x.shadowColor = 'rgba(40,30,40,.45)'; x.shadowBlur = 6; x.shadowOffsetY = 3; }
   x.fillStyle = color; x.fillText(text, w / 2, c.height / 2);
   const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tx, transparent: true, depthWrite: false, depthTest: false }));
@@ -1794,6 +1811,16 @@ function create(container, opts) {
   const tagLayer = document.createElement('div'); tagLayer.className = 'v3d-names'; container.appendChild(tagLayer);
   let names = null, namesPrivate = false;
   const nameTags = new Map(), tmpN = new THREE.Vector3();
+  function applyGenders() {
+    const gs = (names && names.genders) || {};
+    people.forEach((p) => {
+      if (p.love || p.helper) return;
+      const spec = (opts.houses || [])[p.home]; if (!spec) return;
+      if (!p.baseLook) p.baseLook = p.parts.look;
+      const want = gs[spec.id] ? lookAs(p.baseLook, gs[spec.id]) : p.baseLook;
+      if (want !== p.parts.look) reskin(p, want);
+    });
+  }
   function personName(p) {
     if (!names) return '';
     if (p.love === 'her') return names.her || 'namu';
@@ -2310,10 +2337,22 @@ function create(container, opts) {
 
   /* tapping a house */
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
-  let down = null;
-  renderer.domElement.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
+  // a tap is one finger, down and up quickly in the same place. If a second finger joins at any point
+  // (a pinch / twist), the whole touch is a gesture and never opens a house — counted on window, in the
+  // capture phase, so the two-finger handler above can't hide the second finger from us.
+  let down = null, touchN = 0, multi = false;
+  window.addEventListener('pointerdown', (e) => {
+    if (!e.isTrusted || e.pointerType !== 'touch') return;
+    if (e.isPrimary) { touchN = 0; multi = false; }
+    touchN++; if (touchN > 1) multi = true;
+  }, true);
+  const touchUp = (e) => { if (e.isTrusted && e.pointerType === 'touch') touchN = Math.max(0, touchN - 1); };
+  window.addEventListener('pointerup', touchUp, true); window.addEventListener('pointercancel', touchUp, true);
+  renderer.domElement.addEventListener('pointerdown', (e) => { if (e.isPrimary || e.pointerType !== 'touch') down = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+  renderer.domElement.addEventListener('pointercancel', () => { down = null; });
   renderer.domElement.addEventListener('pointerup', (e) => {
-    if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) { down = null; return; }
+    if (!e.isTrusted || (e.pointerType === 'touch' && (multi || touchN > 0))) { down = null; return; }
+    if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8 || performance.now() - down.t > 600) { down = null; return; }
     down = null;
     const r = renderer.domElement.getBoundingClientRect();
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
@@ -2396,7 +2435,9 @@ function create(container, opts) {
     enterHouse,
     exitHouse,
     drive: startDrive,
-    setNames(n, priv) { names = n || null; namesPrivate = !!priv; refreshNames(); },
+    setNames(n, priv) { names = n || null; namesPrivate = !!priv; applyGenders(); refreshNames(); },
+    // 'm' or 'f' for the one who lives in house `id` (what they look like now)
+    genderOf(id) { const p = people.find((q) => !q.love && !q.helper && (opts.houses || [])[q.home] && opts.houses[q.home].id === id); return p ? (isGirl(p.parts.look) ? 'f' : 'm') : ''; },
     resize,
     recenter: fitCamera,
     layout: layoutKey,
@@ -2787,6 +2828,51 @@ const ROOMS = {
       rPlant(g, 3.9, 2.4);
       R.windowX = 2.4;
     }, corners: { main: [0.2, 2.9, 5.8, 0.1, 1.2, -2.3] } },
+  // the corner shop: a cashier behind the till, shelves of snacks behind her, a drinks fridge on the side
+  store: { first: 'main', build(g, R) {
+      const C1 = 0x9ad6c0, C2 = 0xffffff;
+      // the counter, with a mint front and a white top, and the till on it
+      g.add(box(2.6, 1.0, 0.7, C1, -0.2, 0.5, -1.15));
+      g.add(box(2.7, 0.06, 0.8, C2, -0.2, 1.03, -1.15));
+      for (let k = 0; k < 5; k++) g.add(box(0.3, 0.6, 0.02, 0x7fc2aa, -1.2 + k * 0.5, 0.5, -0.79));
+      const till = new THREE.Group(); till.position.set(0.55, 1.06, -1.2); g.add(till);
+      till.add(box(0.5, 0.14, 0.4, 0x55505e, 0, 0.07, 0));
+      const scr = box(0.4, 0.28, 0.04, 0x55505e, 0, 0.32, -0.12); scr.rotation.x = -0.3; till.add(scr);
+      const glow = box(0.34, 0.22, 0.02, 0, 0, 0.32, -0.095, new THREE.MeshBasicMaterial({ color: 0xbff2d8 })); glow.rotation.x = -0.3; till.add(glow);
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) till.add(box(0.07, 0.02, 0.06, 0xeae6f0, -0.1 + c * 0.1, 0.15, 0.04 + r * 0.06));
+      // a few things waiting on the counter, and a little sign
+      const it1 = foodModel('onigiri', {}, 0.26); it1.position.set(-0.9, 1.06, -1.1); g.add(it1);
+      const it2 = foodModel('cup', { drink: '#d9b08a', boba: true }, 0.3); it2.position.set(-0.55, 1.06, -1.05); g.add(it2);
+      const it3 = foodModel('bun', { bun: '#fff8ee' }, 0.26); it3.position.set(-1.25, 1.06, -1.15); g.add(it3);
+      // shelves of snacks along the back wall
+      const goods = [['cup', { drink: '#ff8fb0', cream: true }], ['cookie', {}], ['donut', {}], ['onigiri', {}], ['mochi', {}], ['cup', { drink: '#8a5a3a', ice: true }], ['kimbap', {}], ['flan', {}]];
+      [-2.6, 2.2].forEach((sx, si) => {
+        const sh = new THREE.Group(); sh.position.set(sx, 0, -3.15); g.add(sh);
+        sh.add(box(1.9, 2.3, 0.5, 0xf2ede6, 0, 1.15, 0));
+        for (let r = 0; r < 4; r++) {
+          sh.add(box(1.8, 0.05, 0.46, 0xd8cfc4, 0, 0.32 + r * 0.52, 0.04));
+          for (let k = 0; k < 5; k++) {
+            const [tp, o] = goods[(k + r * 2 + si * 3) % goods.length], m = foodModel(tp, o, 0.3);
+            m.position.set(-0.72 + k * 0.36, 0.35 + r * 0.52, 0.06); sh.add(m);
+          }
+        }
+        sh.add(box(1.9, 0.18, 0.52, si ? 0xf6a9bd : 0xffd36b, 0, 2.2, 0.02));
+      });
+      // the drinks fridge
+      const fr = new THREE.Group(); fr.position.set(4.0, 0, -0.6); fr.rotation.y = -Math.PI / 2; g.add(fr);
+      fr.add(box(1.6, 2.3, 0.7, 0xe8f2f8, 0, 1.15, 0));
+      fr.add(box(1.44, 2.0, 0.02, 0, 0, 1.15, 0.36, new THREE.MeshBasicMaterial({ color: 0xdff4ff, transparent: true, opacity: 0.35 })));
+      for (let r = 0; r < 4; r++) for (let k = 0; k < 5; k++) {
+        const c = [0xff8f7a, 0x9ad690, 0xffd36b, 0x9fcfff, 0xff9fbf][(k + r) % 5];
+        fr.add(box(0.14, 0.32, 0.14, c, -0.56 + k * 0.28, 0.36 + r * 0.48, 0.12));
+        fr.add(box(0.1, 0.06, 0.1, 0xffffff, -0.56 + k * 0.28, 0.55 + r * 0.48, 0.12));
+      }
+      fr.add(box(1.6, 0.2, 0.72, 0x9ad6c0, 0, 2.2, 0));
+      rPlant(g, -4.0, 2.4);
+      // the cashier stands behind the till, facing you
+      R.seat = { x: -0.1, z: -1.85, ry: 0, y: 0, stand: true };
+      R.windowX = -3.2;
+    }, corners: { main: [0.1, 1.9, 5.0, -0.1, 1.45, -2.2] } },
   other: { first: 'main', build(g, R) {
       const d = rDesk(g, -1, -2.3); rLaptop(d, 0, 0); rChair(g, -0.8, -1.45, Math.PI); R.seat = { x: -0.8, z: -1.5, ry: Math.PI, y: 0.54 };
       rShelf(g, 4.25, -0.6, -Math.PI / 2); rPlant(g, -3.9, -3);
@@ -2847,6 +2933,7 @@ function createRoom(container, opts) {
   const looks = opts.looks || (opts.look ? [opts.look] : []);
   const sitters = seats.slice(0, looks.length).map((st, k) => {
     const w = makePerson(looks[k]); g.add(w.g);
+    if (st.stand) { w.g.position.set(st.x, 0, st.z); w.g.rotation.y = st.ry; w.standing = true; return w; }
     w.g.position.set(st.x, st.y - HIP, st.z); w.g.rotation.y = st.ry;
     w.parts.legL.rotation.x = w.parts.legR.rotation.x = -1.45;
     return w;
@@ -2858,14 +2945,46 @@ function createRoom(container, opts) {
   if (R.couple) sitters.forEach((w, k) => {
     w.g.userData.pick = 'couple';
     const nm = (opts.names && (k === 0 ? opts.names.her : opts.names.him)) || (k === 0 ? 'namu' : 'hunf');
-    const n = labelSprite(nm, k === 0 ? '#d4618c' : '#4f7fb8', 0.19); g.add(n); names.push(n);
+    const n = labelSprite(nm, '#ffffff', 0.19); g.add(n); names.push(n);
   });
   const kissHeart = (() => { const hm = heart(0xff7f9e); hm.scale.setScalar(0.16); hm.visible = false; g.add(hm); return hm; })();
   let kissT = -1;
   // ground floor or the bedroom (the album lives upstairs)
   let floor = '', floorPicked = false, zoomed = false;
   const floorCorner = () => (floor === 'bed' ? 'bed' : (coupleMode === 'lunch' || coupleMode === 'dinner') ? 'meal' : spec.corners[opts.corner] ? opts.corner : spec.first);
-  function goFloor(f, jump) { floor = f; setCorner(floorCorner(), jump); }
+  // changing floors: walk to the stairs, climb (or go down) them while the view fades, come out at the
+  // other end of the stairs and walk into the room — instead of sliding sideways through the wall
+  let trip = null;
+  const fadeEl = document.createElement('div');
+  fadeEl.style.cssText = 'position:absolute;inset:0;background:#fff6ee;opacity:0;pointer-events:none;transition:opacity .45s ease;z-index:2';
+  if (getComputedStyle(container).position === 'static') container.style.position = 'relative';
+  container.appendChild(fadeEl);
+  const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  const TRIPS = {
+    up: { legs: [[V3(-0.5, 1.7, 0.6), V3(-3.2, 3.0, -2.95), 0.9], [V3(-2.7, 3.7, -2.0), V3(-5.4, 5.6, -2.95), 0.9, true]],
+      out: [V3(10.7, 1.7, 2.9), V3(12.8, 1.2, -1.2)] },
+    down: { legs: [[V3(11.2, 1.75, 2.4), V3(10.25, 0.1, 0.9), 0.8], [V3(10.6, 1.05, 1.5), V3(10.2, -0.8, 0.2), 0.7, true]],
+      out: [V3(-3.7, 4.3, -2.1), V3(-0.6, 1.6, -2.95)] }
+  };
+  function goFloor(f, jump) {
+    const changed = floor && f !== floor;
+    floor = f;
+    if (jump || !changed) { trip = null; fadeEl.style.opacity = 0; setCorner(floorCorner(), jump); return; }
+    trip = { def: TRIPS[f === 'bed' ? 'up' : 'down'], leg: 0, t: 0, p0: camP.clone(), t0: camT.clone() };
+  }
+  function stepTrip(dt) {
+    const L = trip.def.legs[trip.leg];
+    trip.t += dt / L[2];
+    if (L[3] && fadeEl.style.opacity !== '1') fadeEl.style.opacity = 1;
+    const k = Math.min(1, trip.t), e = k * k * (3 - 2 * k);
+    camP.lerpVectors(trip.p0, L[0], e); camT.lerpVectors(trip.t0, L[1], e);
+    goP.copy(camP); goT.copy(camT);
+    if (k < 1) return;
+    if (++trip.leg < trip.def.legs.length) { trip.t = 0; trip.p0 = camP.clone(); trip.t0 = camT.clone(); return; }
+    camP.copy(trip.def.out[0]); camT.copy(trip.def.out[1]);       // the other end of the stairs
+    trip = null; setCorner(floorCorner(), false);
+    setTimeout(() => { fadeEl.style.opacity = 0; }, 120);
+  }
   const zzz = textSprite('z Z z', '#7a6a9a', 0.9, 0.45); g.add(zzz);
   // tapping things in the room: the album, the frame, the stairs, the two of them
   if (opts.onPick) {
@@ -2962,7 +3081,8 @@ function createRoom(container, opts) {
     requestAnimationFrame(loop);
     if (document.hidden) return;
     const dt = Math.min(0.1, clock.getDelta()), t = clock.elapsedTime;
-    camP.lerp(goP, Math.min(1, dt * 1.6)); camT.lerp(goT, Math.min(1, dt * 1.6));
+    if (trip) stepTrip(dt);
+    else { camP.lerp(goP, Math.min(1, dt * 1.6)); camT.lerp(goT, Math.min(1, dt * 1.6)); }
     camera.position.copy(camP); camera.lookAt(camT);
     stepArrows(t);
     if (R.couple) {                                   // by the real clock: sofa · sleeping heads together · bún chả
@@ -3029,7 +3149,13 @@ function createRoom(container, opts) {
       gamer.parts.armL.rotation.x = gamer.parts.armR.rotation.x = -1.1 + Math.sin(t * 14) * 0.05;
       gamer.parts.head.rotation.x = -0.05; gamer.parts.head.rotation.y = Math.sin(t * 0.5) * 0.08;
     }
-    if (who) {                                       // typing away
+    if (who && who.standing) {                       // the cashier: a little sway, now and then a wave
+      const wave = (t % 9) < 1.4;
+      who.parts.armL.rotation.x = -0.35 + Math.sin(t * 1.3) * 0.05;
+      who.parts.armR.rotation.x = wave ? -2.6 : -0.35 + Math.sin(t * 1.3 + 1) * 0.05;
+      who.parts.armR.rotation.z = wave ? -0.3 + Math.sin(t * 14) * 0.25 : 0;
+      who.parts.head.rotation.y = Math.sin(t * 0.4) * 0.2; who.parts.head.rotation.x = 0;
+    } else if (who) {                                       // typing away
       who.parts.armL.rotation.x = -1.2 + Math.sin(t * 9) * 0.12;
       who.parts.armR.rotation.x = -1.2 + Math.sin(t * 9 + 1.8) * 0.12;
       who.parts.head.rotation.x = 0.15 + Math.sin(t * 0.6) * 0.05;
@@ -3117,9 +3243,9 @@ function createRoom(container, opts) {
       running = false;
       window.removeEventListener('resize', onResize);
       scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
-      renderer.dispose(); renderer.domElement.remove();
+      renderer.dispose(); renderer.domElement.remove(); fadeEl.remove();
     }
   };
 }
 
-window.Village3D = { create, room: createRoom, LOOKS, LOVE: LOVE_LOOKS, ROOF: COL.roof };
+window.Village3D = { create, room: createRoom, LOOKS, LOVE: LOVE_LOOKS, ROOF: COL.roof, lookAs };
