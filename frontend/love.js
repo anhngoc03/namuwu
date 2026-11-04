@@ -72,15 +72,16 @@ function lbPageHtml(k) {
     '<button type="button" class="pill-btn" data-lb="add">+ Memory</button></div>';
   if (!m) return '<div class="lb-blank"></div>';
   var d = new Date(m.day + 'T00:00:00'), ph = m.photos || [];
-  var shown = ph.slice(0, 6), more = ph.length - shown.length;
+  var shown = ph.slice(0, 9), more = ph.length - shown.length;
+  // small square photos, all the same size; tap one to see it big
   var collage = !ph.length ? '<div class="lb-col lb-none">♡<small>no photos</small></div>' :
-    '<div class="lb-col n' + shown.length + '">' + shown.map(function (p, j) {
-      return '<button type="button" class="lb-cell" data-lb="photo" data-p="' + k + '" data-k="' + j + '"><img src="' + lovePhotoUrl(p.driveId, shown.length === 1 ? 1000 : 600) + '" alt="" loading="lazy">' +
+    '<div class="lb-col lb-grid">' + shown.map(function (p, j) {
+      return '<button type="button" class="lb-cell" data-lb="photo" data-p="' + k + '" data-k="' + j + '"><img src="' + lovePhotoUrl(p.driveId, 360) + '" alt="" loading="lazy">' +
         (j === shown.length - 1 && more > 0 ? '<span class="lb-more">+' + more + '</span>' : '') + '</button>';
     }).join('') + '</div>';
   return '<div class="lb-pg">' +
     '<div class="lb-head"><div class="lb-date">' + m.day.slice(8, 10) + '<small>' + LOVE_MONTHS[d.getMonth()] + ' ' + d.getFullYear() + '</small></div>' +
-    '<div class="lb-meta">' + (m.province ? '<div class="lb-prov">📍 ' + loveEsc(m.province) + '</div>' : '') +
+    '<div class="lb-meta">' + (m.province ? '<div class="lb-prov">' + loveEsc(m.province) + '</div>' : '') +
     (m.note ? '<div class="lb-note">' + loveEsc(m.note) + '</div>' : '') +
     ((m.tags || []).length ? '<div class="love-tags">' + m.tags.map(function (t) { return '<span>#' + loveEsc(t) + '</span>'; }).join('') + '</div>' : '') + '</div>' +
     '<button type="button" class="lb-edit" data-lb="edit" data-p="' + k + '">✎</button></div>' + collage +
@@ -204,57 +205,75 @@ function loveBubble(at) {
 }
 function loveBubbleClose() { document.getElementById('love-bubble').classList.remove('on'); }
 
-/* ---------- order food: what's on their table at mealtimes (up to 4 dishes) ---------- */
-var loveFood = { picked: [], results: [] };
+/* ---------- the menu book: what's on their table at mealtimes (up to 4 dishes) ----------
+   Two pages open at once, turned left to right like the album; a bookmark for each kind of food.
+   The dishes are little pixel drawings (foodart.js) — nothing is downloaded, no AI. */
+var mb = { pages: [], i: 0, picked: [], busy: false };
+function mbBuild() {
+  var F = window.FoodArt, pages = [{ type: 'title' }];
+  F.cats.forEach(function (c) {
+    var items = F.list.filter(function (d) { return d.cat === c.id; });
+    for (var k = 0; k < items.length; k += 6) pages.push({ type: 'cat', cat: c, items: items.slice(k, k + 6), first: k === 0 });
+  });
+  mb.pages = pages;
+}
+function mbPage(k) {
+  var pg = mb.pages[k];
+  if (!pg) return '<div class="lb-blank"></div>';
+  if (pg.type === 'title') return '<div class="mb-pg mb-title"><b>Menu</b><span>pick up to 4 dishes for their table</span><em>' + mb.picked.length + ' / 4 chosen</em><small>' + (k + 1) + '</small></div>';
+  return '<div class="mb-pg"><div class="mb-head" style="background:' + pg.cat.color + '">' + loveEsc(pg.cat.name) + '</div><div class="mb-grid">' + pg.items.map(function (d) {
+    var on = mb.picked.some(function (x) { return x.key === d.key; });
+    return '<button type="button" class="mb-dish' + (on ? ' on' : '') + '" data-dish="' + d.key + '"><img src="' + FoodArt.url(d.key, 4) + '" alt=""><span>' + loveEsc(d.name) + '</span></button>';
+  }).join('') + '</div><small class="mb-pno">' + (k + 1) + '</small></div>';
+}
+function mbSpreads() { return Math.ceil(mb.pages.length / 2); }
+function mbShow() {
+  document.getElementById('mb-right').innerHTML = mbPage(mb.i * 2);
+  document.getElementById('mb-left').innerHTML = mbPage(mb.i * 2 + 1);
+  document.getElementById('mb-count').textContent = (mb.i + 1) + ' / ' + mbSpreads();
+  document.getElementById('mb-prev').disabled = mb.i === 0;
+  document.getElementById('mb-next').disabled = mb.i >= mbSpreads() - 1;
+  // which bookmark is open
+  var here = [mb.pages[mb.i * 2], mb.pages[mb.i * 2 + 1]].filter(Boolean).map(function (p) { return p.cat && p.cat.id; });
+  document.querySelectorAll('#mb-tabs [data-tab]').forEach(function (t) { t.classList.toggle('on', here.indexOf(t.dataset.tab) >= 0); });
+  var tray = document.getElementById('mb-picked');
+  tray.innerHTML = mb.picked.length ? mb.picked.map(function (d, i) { return '<span class="mb-chip"><img src="' + FoodArt.url(d.key, 3) + '" alt="">' + loveEsc(d.name) + '<button type="button" data-unpick="' + i + '">✕</button></span>'; }).join('')
+    : '<span class="mb-none">Nothing chosen yet — today’s table has bún chả</span>';
+}
+function mbTurn(dir, toSpread) {
+  if (mb.busy) return;
+  var to = toSpread != null ? toSpread : mb.i + dir;
+  if (to < 0 || to >= mbSpreads() || to === mb.i) return;
+  dir = to > mb.i ? 1 : -1;
+  mb.busy = true;
+  var leaf = document.getElementById('mb-leaf'), front = document.getElementById('mb-front'), back = document.getElementById('mb-back');
+  var L = document.getElementById('mb-left'), Rt = document.getElementById('mb-right'), s0 = mb.i;
+  if (dir > 0) { front.innerHTML = mbPage(s0 * 2 + 1); back.innerHTML = mbPage(to * 2); L.innerHTML = mbPage(to * 2 + 1); leaf.className = 'lb-leaf on-left go-next'; }
+  else { front.innerHTML = mbPage(s0 * 2); back.innerHTML = mbPage(to * 2 + 1); Rt.innerHTML = mbPage(to * 2); leaf.className = 'lb-leaf on-right go-prev'; }
+  setTimeout(function () { mb.i = to; mbShow(); leaf.className = 'lb-leaf'; mb.busy = false; }, 800);
+}
+function mbFit() {
+  var s2 = Math.min((innerWidth - 56) / 600, (innerHeight - 230) / 420, 1.3);
+  document.getElementById('mb-stage').style.setProperty('--lbs', Math.max(0.3, s2).toFixed(3));
+  document.getElementById('mb-book').style.setProperty('--lbs', Math.max(0.3, s2).toFixed(3));
+}
 function loveFoodOpen() {
-  loveFood.picked = (loveData.food || []).slice(0, 4);
-  loveFood.results = [];
-  document.getElementById('love-food-q').value = '';
-  document.getElementById('love-food-results').innerHTML = '';
-  loveFoodPicked();
-  document.getElementById('love-food-modal').classList.add('active');
-  setTimeout(function () { document.getElementById('love-food-q').focus(); }, 200);
+  if (!window.FoodArt) { toast('The menu is still loading'); return; }
+  mbBuild();
+  mb.picked = (loveData.food || []).filter(function (f) { return f.key && FoodArt.byKey(f.key); }).map(function (f) { return FoodArt.byKey(f.key); }).slice(0, 4);
+  mb.i = 0;
+  document.getElementById('mb-tabs').innerHTML = FoodArt.cats.map(function (c) { return '<button type="button" data-tab="' + c.id + '" style="background:' + c.color + '">' + loveEsc(c.name) + '</button>'; }).join('');
+  mbFit(); mbShow();
+  var w = document.getElementById('menu-book'); w.classList.add('on'); requestAnimationFrame(function () { w.classList.add('in'); });
 }
-function loveFoodPicked() {
-  var el = document.getElementById('love-food-picked');
-  document.getElementById('love-food-n').textContent = loveFood.picked.length;
-  el.innerHTML = loveFood.picked.length ? loveFood.picked.map(function (f, i) {
-    return '<div class="lf-chip"><i' + (f.img ? ' style="background-image:url(\'' + f.img.replace(/'/g, '%27') + '\')">' : '>🍲') + '</i>' + loveEsc(f.name) +
-      '<button type="button" data-lfx="' + i + '" aria-label="Remove">✕</button></div>';
-  }).join('') : '<div class="lf-empty">Nothing yet — find a dish and tap its picture</div>';
-}
-function loveFoodTiles() {
-  var box = document.getElementById('love-food-results'), q = loveFood.q || '';
-  var ai = loveFood.ai;
-  var html = '<button type="button" class="lf-pic lf-ai' + (ai && ai.img ? '' : ' busy') + '" data-lfp="ai"' + (ai && ai.img ? '' : ' disabled') + '>' +
-    (ai && ai.img ? '<img src="' + ai.img + '" alt="">' : '<i class="lf-spin">✨</i>') +
-    '<span>' + (ai && ai.err ? loveEsc(ai.err) : ai && ai.img ? '✨ drawn for you' : 'Drawing…') + '</span></button>';
-  html += (loveFood.results || []).map(function (x, i) {
-    return '<button type="button" class="lf-pic" data-lfp="' + i + '"><img src="' + loveEsc(x.img) + '" alt="" loading="lazy" referrerpolicy="no-referrer"><span>' + loveEsc(x.alt || q) + '</span></button>';
-  }).join('');
-  if (loveFood.searching) html += '<div class="lf-wait">Looking for photos of “' + loveEsc(q) + '”…</div>';
-  box.innerHTML = html;
-}
-// Find: Claude draws the dish (always works, any dish), and real photos come from Wikipedia alongside
-function loveFoodSearch(q) {
-  q = String(q || '').trim(); if (!q) return;
-  var run = (loveFood.run || 0) + 1;
-  loveFood.run = run; loveFood.q = q; loveFood.ai = null; loveFood.results = []; loveFood.searching = true;
-  loveFoodTiles();
-  lovePromise('drawLoveFood', q).then(function (r) { if (loveFood.run === run) { loveFood.ai = { img: r.img }; loveFoodTiles(); } })
-    .catch(function (e) { if (loveFood.run === run) { loveFood.ai = { err: (e && e.message) || 'Could not draw it' }; loveFoodTiles(); } });
-  lovePromise('findLoveFoodImages', q).then(function (r) {
-    if (loveFood.run !== run) return;
-    loveFood.results = ((r && r.images) || []).map(function (x) { return { title: q, img: x.img, alt: x.title }; });
-  }).catch(function () {}).then(function () { if (loveFood.run === run) { loveFood.searching = false; loveFoodTiles(); } });
-}
+function loveFoodClose() { var w = document.getElementById('menu-book'); w.classList.remove('in'); setTimeout(function () { w.classList.remove('on'); }, 320); }
 function loveFoodSave() {
-  var btn = document.getElementById('love-food-save'); btn.disabled = true;
-  lovePromise('saveLoveFood', loveFood.picked).then(function (r) {
+  var btn = document.getElementById('mb-order'); btn.disabled = true;
+  lovePromise('saveLoveFood', mb.picked.map(function (d) { return { name: d.name, key: d.key }; })).then(function (r) {
     loveData.food = (r && r.food) || [];
     if (typeof villageRoomFood === 'function') villageRoomFood(loveData.food);
-    document.getElementById('love-food-modal').classList.remove('active');
-    toast(loveData.food.length ? 'Ordered ♡ it’s on the table' : 'Back to bún chả ♡');
+    loveFoodClose();
+    toast(loveData.food.length ? 'Ordered — it’s on the table' : 'Back to bún chả');
   }).catch(function (e) { toast((e && e.message) || 'Could not order'); }).then(function () { btn.disabled = false; });
 }
 function loveFoodWire() {
@@ -265,22 +284,34 @@ function loveFoodWire() {
     else loveFoodOpen();
   });
   document.addEventListener('pointerdown', function (e) { if (!e.target.closest('#love-bubble')) loveBubbleClose(); }, true);
-  document.getElementById('love-food-close').onclick = function () { document.getElementById('love-food-modal').classList.remove('active'); };
-  document.getElementById('love-food-form').onsubmit = function (e) { e.preventDefault(); loveFoodSearch(document.getElementById('love-food-q').value); };
-  document.getElementById('love-food-results').addEventListener('click', function (e) {
-    var b = e.target.closest('[data-lfp]'); if (!b) return;
-    if (loveFood.picked.length >= 4) { toast('Up to 4 dishes ♡ remove one first'); return; }
-    var x = b.dataset.lfp === 'ai' ? { title: loveFood.q, img: loveFood.ai && loveFood.ai.img } : loveFood.results[Number(b.dataset.lfp)];
-    if (!x || !x.img) return;
-    loveFood.picked.push({ name: x.title, img: x.img });
-    loveFoodPicked();
+  document.getElementById('mb-spread').addEventListener('click', function (e) {
+    if (mb.busy) return;
+    var d = e.target.closest('[data-dish]');
+    if (d) {
+      var k = d.dataset.dish, at = mb.picked.findIndex(function (x) { return x.key === k; });
+      if (at >= 0) mb.picked.splice(at, 1);
+      else if (mb.picked.length >= 4) { toast('Up to 4 dishes — take one off first'); return; }
+      else mb.picked.push(FoodArt.byKey(k));
+      mbShow(); return;
+    }
+    var pg = e.target.closest('.lb-page'); if (pg) mbTurn(pg.id === 'mb-left' ? 1 : -1);    // tap the paper to turn it
   });
-  document.getElementById('love-food-picked').addEventListener('click', function (e) {
-    var b = e.target.closest('[data-lfx]'); if (!b) return;
-    loveFood.picked.splice(Number(b.dataset.lfx), 1); loveFoodPicked();
+  document.getElementById('mb-tabs').addEventListener('click', function (e) {
+    var t = e.target.closest('[data-tab]'); if (!t) return;
+    var at = mb.pages.findIndex(function (p) { return p.cat && p.cat.id === t.dataset.tab; });
+    if (at >= 0) mbTurn(0, Math.floor(at / 2));
   });
-  document.getElementById('love-food-clear').onclick = function () { loveFood.picked = []; loveFoodPicked(); };
-  document.getElementById('love-food-save').onclick = loveFoodSave;
+  document.getElementById('mb-picked').addEventListener('click', function (e) { var b = e.target.closest('[data-unpick]'); if (!b) return; mb.picked.splice(Number(b.dataset.unpick), 1); mbShow(); });
+  document.getElementById('mb-prev').onclick = function () { mbTurn(-1); };
+  document.getElementById('mb-next').onclick = function () { mbTurn(1); };
+  document.getElementById('mb-close').onclick = loveFoodClose;
+  document.getElementById('mb-clear').onclick = function () { mb.picked = []; mbShow(); };
+  document.getElementById('mb-order').onclick = loveFoodSave;
+  document.getElementById('menu-book').addEventListener('click', function (e) { if (e.target === this) loveFoodClose(); });
+  var sx = 0, st = document.getElementById('mb-stage');
+  st.addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; }, { passive: true });
+  st.addEventListener('touchend', function (e) { var dx = e.changedTouches[0].clientX - sx; if (Math.abs(dx) > 40) mbTurn(dx > 0 ? 1 : -1); });
+  window.addEventListener('resize', function () { if (document.getElementById('menu-book').classList.contains('on')) mbFit(); });
 }
 function loveSetFrame(file) {
   if (!file) return;
@@ -311,7 +342,7 @@ function loveViewerShow() {
   document.getElementById('love-view-next').style.visibility = v.list.length > 1 ? '' : 'hidden';
   document.getElementById('love-view-meta').innerHTML =
     '<div class="love-card-top"><span class="love-date">' + loveFmtDay(m.day) + '</span>' +
-    (m.province || m.place ? '<span class="love-place">📍 ' + loveEsc([m.place, m.province].filter(Boolean).join(', ')) + '</span>' : '') + '</div>' +
+    (m.province || m.place ? '<span class="love-place">' + loveEsc([m.place, m.province].filter(Boolean).join(', ')) + '</span>' : '') + '</div>' +
     (m.note ? '<div class="love-note full">' + loveEsc(m.note) + '</div>' : '') +
     ((m.tags || []).length ? '<div class="love-tags">' + m.tags.map(function (t) { return '<span>#' + loveEsc(t) + '</span>'; }).join('') + '</div>' : '') +
     (p ? '<div class="love-file">' + loveEsc(p.name) + '</div>' : '');

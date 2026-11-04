@@ -2623,3 +2623,63 @@ i.e{ background:#f6a9bd; } i.m{ background:#a6d8e8; }
   .study-head .pill-btn{ padding-left:12px; padding-right:12px; font-size:13px; flex:none; }
   .st-long{ display:none; }
 }
+
+/* names over the villagers' heads: small, plain text */
+.v3d-names{ position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:2; font-family:'Nunito', sans-serif; font-weight:800; }
+.v3d-names span{ position:absolute; left:0; top:0; white-space:nowrap; color:#5a4252; line-height:1; letter-spacing:.2px; }
+.v3d-names.night span{ color:#fff3e2; }
+
+/* ⚙︎ → Names */
+.nm-row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:8px 0; border-bottom:1px dashed #f0dfe6; }
+.nm-row small{ display:block; font-size:11px; font-weight:800; color:#9a7a8a; margin-bottom:3px; }
+.nm-row input{ width:100%; box-sizing:border-box; font-size:14px; padding:8px 10px; }
+.nm-who.two{ display:grid; grid-template-columns:1fr 1fr; gap:4px; } .nm-who.two small{ grid-column:1 / -1; }
+.nm-none{ display:block; font-size:12.5px; color:#b89aaa; padding:9px 2px; font-weight:700; }
+
+/* the album pages: one font (Nunito) throughout — only colour, bold and italic change */
+.lb-pg, .lb-pg *{ font-family:'Nunito', sans-serif; }
+.lb-date{ font-size:30px !important; font-weight:800; line-height:1 !important; color:#e88fb0; }
+.lb-date small{ font-style:italic; font-weight:700 !important; color:#a08a96 !important; }
+.lb-prov{ font-weight:800; color:#6b4a5a; }
+.lb-note{ font-style:italic; color:#7a6a72; }
+.lb-col.lb-grid{ flex:none; display:grid; grid-template-columns:repeat(3, 1fr); grid-auto-rows:auto; gap:6px; align-content:start; }
+.lb-grid .lb-cell{ aspect-ratio:1; padding:3px; transform:none !important; }
+.lb-grid .lb-cell img{ width:100%; height:100%; object-fit:cover; }
+.lb-end, .lb-end *{ font-family:'Nunito', sans-serif; }
+
+/* ===== Love › the menu book ===== */
+.mb-wrap{ z-index:48; }
+.mb-pg{ position:relative; height:100%; display:flex; flex-direction:column; padding:14px 14px 22px 16px; box-sizing:border-box; background:linear-gradient(#fffaf5, #fff4ec); font-family:'Nunito', sans-serif; color:#6b4a3a; }
+.mb-head{ align-self:flex-start; font-weight:800; font-size:14px; padding:5px 12px; border-radius:99px; color:#6b4a3a; margin-bottom:10px; }
+.mb-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; flex:1; align-content:start; }
+.mb-dish{ position:relative; border:2px solid transparent; border-radius:14px; background:#fff; padding:6px 4px 6px; display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; font:inherit; box-shadow:0 2px 6px rgba(120,80,60,.12); }
+.mb-dish img{ width:64px; height:64px; image-rendering:pixelated; }
+.mb-dish span{ font-size:12px; font-weight:800; color:#6b4a3a; text-align:center; line-height:1.15; min-height:2.3em; display:flex; align-items:center; }
+.mb-dish.on{ border-color:#f48fb1; background:#fff0f5; }
+.mb-dish.on::after{ content:'✓'; position:absolute; top:4px; right:6px; width:18px; height:18px; border-radius:50%; background:#f48fb1; color:#fff; font-size:11px; font-weight:900; display:flex; align-items:center; justify-content:center; }
+.mb-pno{ position:absolute; bottom:6px; right:12px; font-size:11px; font-weight:800; color:#b89aaa; }
+.mb-title{ align-items:center; justify-content:center; text-align:center; gap:6px; background:linear-gradient(#fff4ec, #ffe9ef); }
+.mb-title b{ font-size:44px; font-weight:800; color:#e88fb0; letter-spacing:1px; }
+.mb-title span{ font-size:13px; font-weight:700; color:#8a6a5a; }
+.mb-title em{ font-style:italic; font-size:12px; color:#b89aaa; margin-top:10px; }
+.mb-title small{ position:absolute; bottom:6px; right:12px; font-size:11px; font-weight:800; color:#b89aaa; }
+/* bookmarks sticking out of the right edge */
+.mb-tabs{ position:absolute; top:22px; right:-34px; display:flex; flex-direction:column; gap:6px; z-index:1; }
+.mb-tabs button{ width:40px; height:44px; border:0; border-radius:0 10px 10px 0; padding:0 4px 0 10px; font:inherit; font-size:9px; font-weight:800; line-height:1.05; color:#6b4a3a; cursor:pointer; text-align:left; box-shadow:2px 2px 4px rgba(120,80,60,.15); overflow:hidden; }
+.mb-tabs button.on{ width:48px; margin-right:-8px; }
+.mb-tray{ display:flex; flex-direction:column; gap:8px; align-items:center; width:min(600px, calc(100vw - 24px)); }
+.mb-picked{ display:flex; gap:6px; flex-wrap:wrap; justify-content:center; min-height:34px; }
+.mb-chip{ display:flex; align-items:center; gap:4px; background:#fffaf5; border-radius:99px; padding:3px 6px 3px 4px; font:800 12px 'Nunito', sans-serif; color:#6b4a3a; }
+.mb-chip img{ width:24px; height:24px; image-rendering:pixelated; }
+.mb-chip button{ border:0; background:#f6c1cf; color:#fff; width:18px; height:18px; border-radius:50%; font-size:10px; padding:0; cursor:pointer; }
+.mb-none{ font:700 12.5px 'Nunito', sans-serif; color:#fffaf5; opacity:.85; }
+.mb-acts{ display:flex; gap:8px; }
+.st-dots{ display:flex; gap:6px; font-style:normal; animation:none !important; }
+.st-dots b{ width:9px; height:9px; border-radius:2px; background:#f6a9bd; animation:stDot 1s ease-in-out infinite; }
+.st-dots b:nth-child(2){ animation-delay:.15s; background:#a6d8e8; } .st-dots b:nth-child(3){ animation-delay:.3s; background:#f5d888; }
+@keyframes stDot{ 0%,100%{ transform:translateY(0); opacity:.5; } 50%{ transform:translateY(-6px); opacity:1; } }
+.st-goal b{ color:#d0668c; margin-right:4px; }
+.st-ex i{ font-style:normal; font-weight:800; }
+.hs-pin{ font-size:10px; font-weight:800; font-style:normal; color:#d0668c; background:#ffe6ee; padding:2px 7px; border-radius:99px; }
+.hs-dot{ display:inline-block; width:10px; height:10px; border-radius:2px; }
+.hs-dot.meal{ background:#f6a9bd; } .hs-dot.workout{ background:#a6d8e8; } .hs-dot.weight{ background:#d9c9f0; } .hs-dot.water{ background:#9fdcef; }

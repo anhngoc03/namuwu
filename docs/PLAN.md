@@ -144,3 +144,11 @@ Nguyên tắc: **dữ liệu cũ giữ nguyên**, nhà mới dùng lại bảng 
 - Languages/Skills → 📄 Import: bài giảng, bài tập, test + đáp án lưu thẳng vào Supabase, không gọi AI.
 - Chấm không cần AI: trắc nghiệm + trả lời ngắn so khớp (`answer` / `accept`), câu viết tự so với đáp án mẫu (✓ / ✗).
 - ↺ Do it again (làm lại bài), 🔁 Review mistakes lấy lại các câu đã sai.
+
+## 5k. Blocky world, names, menu book
+- Đồ hoạ khối (src/voxel.js): 1 khối = 1 m, texture pixel tự vẽ (pastel), lưới khối chỉ vẽ mặt lộ ra.
+  Đảo, đồi, núi, sông, hồ, đường, cây, hoa cỏ, đảo nhỏ, mây đều là khối; nhà mái ngói bậc thang.
+- Dân làng: Work, Calendar, Law (nam), Money, Notes (nữ) làm ở Town Hall (đồng phục tím + huy hiệu),
+  người phụ giúp đi ra từ Hall cùng đồng phục. ⚙︎ → Names: đặt tên nhà và người; tên nhỏ trên đầu (zoom gần).
+- Love: cầu thang dọc tường sau (thấy trên điện thoại), album 1 font + ảnh vuông bằng nhau,
+  sổ menu 2 trang (foodart.js — món pixel tự vẽ, có dấu trang theo nhóm), tối đa 4 món lên bàn. Không gọi AI.

@@ -16,7 +16,6 @@
  * ------------------------------------------------------------------
  */
 
-import { drawFood } from '../lib/food.js';
 import * as study from '../lib/study.js';
 import * as hai from '../lib/houses.js';
 import { agentChat as runAgentChat } from '../lib/agent.js';
@@ -67,6 +66,7 @@ function isPersonalAction_(action) {
   if (/Work/.test(action)) return action !== 'getWorkHomeSummary';   // Home chỉ được xem con số
   if (/Post|Calendar/.test(action)) return true;
   if (action === 'saveHomeProfile') return true;
+  if (action === 'saveVillageNames') return true;      // anyone sees the names, only you change them
   if (/^agent/.test(action)) return true;              // Town Hall AI agent (village.js → lib/agent.js)
   if (/Digest/.test(action)) return true;               // the AI summary
   if (/Push|Reminder/.test(action)) return action !== 'runReminders';
@@ -1368,6 +1368,19 @@ async function deleteCalendarNote(env, [id, year]) {
   return getCalendarNotes(env, [year]);
 }
 
+/* ---- Village names: what each house is called and who lives there (app_settings 'village_names') ---- */
+async function getVillageNames(env) {
+  const rows = await sb(env, 'app_settings?key=eq.village_names&select=value').catch(() => []);
+  return (rows[0] && rows[0].value) || { houses: {}, people: {}, her: 'namu', him: 'hunf' };
+}
+async function saveVillageNames(env, [n]) {
+  n = n || {};
+  const clean = (o) => { const out = {}; Object.keys(o || {}).slice(0, 60).forEach((k) => { if (/^[a-z]{2,12}$/.test(k)) { const v = String(o[k] || '').trim().slice(0, 24); if (v) out[k] = v; } }); return out; };
+  const value = { houses: clean(n.houses), people: clean(n.people), her: String(n.her || 'namu').trim().slice(0, 24) || 'namu', him: String(n.him || 'hunf').trim().slice(0, 24) || 'hunf' };
+  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'village_names', value }]), prefer: 'resolution=merge-duplicates,return=minimal' });
+  return value;
+}
+
 /* ---- Home profile (photo + name) — one copy for every device, in app_settings ---- */
 async function getHomeProfile(env) {
   let rows;
@@ -1389,6 +1402,8 @@ async function saveHomeProfile(env, [name, photo]) {
 const ACTIONS = {
   personalLogin,
   getHomeProfile,
+  getVillageNames,
+  saveVillageNames,
   saveHomeProfile,
   getPostsData,
   savePost,
@@ -1482,8 +1497,7 @@ const ACTIONS = {
   startLoveFrameUpload,
   setLoveFrame,
   saveLoveFood,
-  findLoveFoodImages,
-  drawLoveFood,
+
   getStudyData,
   getStudyPlan,
   createStudyPlan,
@@ -1630,16 +1644,16 @@ async function reminderItems_(env, day, cfg, includeLate) {
     let rows = [];
     try { rows = await sb(env, 'study_lessons?done=eq.false&day=lte.' + day + '&select=title,day,study_plans!inner(subject,status)&study_plans.status=eq.active&order=day.asc&limit=20'); } catch (e) { rows = []; }
     rows.forEach((r) => {
-      if (r.day === day) items.push({ text: '📖 ' + r.title });
-      else if (includeLate) items.push({ text: '📖 ' + r.title, late: r.day });
+      if (r.day === day) items.push({ text: r.title });
+      else if (includeLate) items.push({ text: r.title, late: r.day });
     });
   }
   if (cfg.sources.goals) {
     let rows = [];
     try { rows = await sb(env, 'goals?status=eq.active&select=title,deadline,steps'); } catch (e) { rows = []; }
     rows.forEach((g) => {
-      if (g.deadline === day) items.push({ text: '🎯 ' + g.title });
-      (g.steps || []).forEach((x) => { if (!x.done && x.due === day) items.push({ text: '🎯 ' + x.text }); });
+      if (g.deadline === day) items.push({ text: g.title });
+      (g.steps || []).forEach((x) => { if (!x.done && x.due === day) items.push({ text: x.text }); });
     });
   }
   if (cfg.sources.todo) {
@@ -1685,11 +1699,11 @@ async function runReminders(env) {
   const nowM = mins(now.time);
   const jobs = [];
   const due = (slot) => slot.on && nowM >= mins(slot.time) && nowM - mins(slot.time) < 90;   // within 1.5 h of the set time
-  if (due(cfg.morning)) jobs.push({ key: 'morning:' + now.date, day: now.date, late: true, title: '☀ Today', what: 'today', tag: 'morning' });
-  if (due(cfg.evening)) jobs.push({ key: 'evening:' + now.date, day: vnAddDays_(now.date, 1), late: false, title: '☾ Tomorrow', what: 'tomorrow', tag: 'evening' });
+  if (due(cfg.morning)) jobs.push({ key: 'morning:' + now.date, day: now.date, late: true, title: 'Today', what: 'today', tag: 'morning' });
+  if (due(cfg.evening)) jobs.push({ key: 'evening:' + now.date, day: vnAddDays_(now.date, 1), late: false, title: 'Tomorrow', what: 'tomorrow', tag: 'evening' });
   if (due(cfg.before)) {
     const day = vnAddDays_(now.date, cfg.before.days);
-    jobs.push({ key: 'before:' + now.date, day, late: false, title: '⏳ In ' + cfg.before.days + ' day' + (cfg.before.days === 1 ? '' : 's') + ' · ' + day.slice(8, 10) + '/' + day.slice(5, 7), what: 'coming up', tag: 'before' });
+    jobs.push({ key: 'before:' + now.date, day, late: false, title: 'In ' + cfg.before.days + ' day' + (cfg.before.days === 1 ? '' : 's') + ' · ' + day.slice(8, 10) + '/' + day.slice(5, 7), what: 'coming up', tag: 'before' });
   }
   const done = [];
   // the AI summary: every day, or on Sunday evenings
@@ -2192,6 +2206,7 @@ async function deleteLawDoc(env, [id]) { await sb(env, 'law_docs?id=eq.' + Numbe
 async function saveLoveFood(env, [items]) {
   const clean = (Array.isArray(items) ? items : []).slice(0, 4).map((it) => ({
     name: String((it && it.name) || '').trim().slice(0, 60),
+    key: /^[a-z0-9-]{2,30}$/.test(String((it && it.key) || '')) ? String(it.key) : '',      // a dish from the menu book (pixel art)
     img: loveFoodImgOk_(String((it && it.img) || '')) ? String(it.img) : ''
   })).filter((it) => it.name);
   await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'love_food', value: { items: clean } }]), prefer: 'resolution=merge-duplicates,return=minimal' });
@@ -2199,30 +2214,6 @@ async function saveLoveFood(env, [items]) {
 }
 function loveFoodImgOk_(u) {
   return /^https:\/\/upload\.wikimedia\.org\/[^\s"'<>]+$/.test(u) || (/^data:image\/svg\+xml;base64,[A-Za-z0-9+\/=]+$/.test(u) && u.length < 60000);
-}
-// Claude draws the dish (a small cute SVG) — lib/food.js
-async function drawLoveFood(env, [name]) { return drawFood(env, name); }
-// pictures for a dish name, from Wikipedia (vi, en) and Wikimedia Commons — free photos, CORS-friendly
-async function findLoveFoodImages(env, [query]) {
-  const q = String(query || '').trim().slice(0, 60);
-  if (!q) return { images: [] };
-  const UA = { 'User-Agent': 'namuwu-village/1.0 (personal site; food pictures)' };
-  const get = (url) => fetch(url, { headers: UA }).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
-  const wiki = (lang) => get('https://' + lang + '.wikipedia.org/w/api.php?action=query&format=json&generator=search&gsrlimit=6&prop=pageimages&piprop=thumbnail&pithumbsize=360&gsrsearch=' + encodeURIComponent(q));
-  const commons = get('https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit=10&prop=imageinfo&iiprop=url|mime&iiurlwidth=360&gsrsearch=' + encodeURIComponent(q + ' food'));
-  const [vi, en, cm] = await Promise.all([wiki('vi'), wiki('en'), commons]);
-  const out = [], seen = new Set();
-  const add = (title, url) => {
-    if (!url || seen.has(url) || !/^https:\/\/upload\.wikimedia\.org\//.test(url) || /\.svg/i.test(url)) return;
-    seen.add(url); out.push({ title: String(title || q).replace(/^File:/, '').replace(/\.[a-z]+$/i, ''), img: url });
-  };
-  [vi, en].forEach((j) => Object.values((j.query && j.query.pages) || {}).sort((a, b) => (a.index || 0) - (b.index || 0))
-    .forEach((pg) => pg.thumbnail && add(pg.title, pg.thumbnail.source)));
-  Object.values((cm.query && cm.query.pages) || {}).sort((a, b) => (a.index || 0) - (b.index || 0)).forEach((pg) => {
-    const ii = pg.imageinfo && pg.imageinfo[0];
-    if (ii && /^image\/(jpeg|png|webp)/.test(ii.mime || '')) add(pg.title, ii.thumburl);
-  });
-  return { images: out.slice(0, 9) };
 }
 async function saveLoveMemory(env, [m]) {
   m = m || {};

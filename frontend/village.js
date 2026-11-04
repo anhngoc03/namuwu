@@ -42,7 +42,7 @@
   // Game Center: one building, three games inside
   window.openGameCenter = function () { document.getElementById('game-center-modal').classList.add('active'); };
   // the corner shop is where the villagers eat and shop (nothing to open)
-  window.openStore = function () { toast('🍙 The villagers come here for lunch and snacks'); };
+  window.openStore = function () { toast('The villagers come here for lunch and snacks'); };
 
   var root, stage, labelsEl, starBtn, clockEl;
   var scene3d = null, loading = false, shown = false, built = false;
@@ -59,7 +59,7 @@
     if (loading) return;
     loading = true;
     var sc = document.createElement('script');
-    sc.src = '/village3d.js?v=20';
+    sc.src = '/village3d.js?v=21';
     sc.onload = function () { loading = false; var w = loadWaiters; loadWaiters = []; w.forEach(function (f) { f(); }); };
     sc.onerror = function () { loading = false; loadWaiters = []; toast("Couldn't load the village ʕ´-ก̀ʔᐝ"); };
     document.head.appendChild(sc);
@@ -80,6 +80,7 @@
       return;
     }
     scene3d.onFrame(placeTags);
+    loadNames();
     scene3d.setUrgent(urgent.length);
     pushBusy();
     scene3d.show(shown);
@@ -113,7 +114,15 @@
   setInterval(function () { if (shown) tickClock(); }, 5000);
 
   /* ---------------- name tags (only after the password), follow the 3D houses ---------------- */
+  // names you give the houses and the people who live there (⚙︎ → Names); anyone sees them
+  var villageNames = { houses: {}, people: {}, her: 'namu', him: 'hunf' };
+  window.villageNames = function () { return villageNames; };
+  function labelOf(h) { return (villageNames.houses && villageNames.houses[h.id]) || h.label; }
+  function loadNames() {
+    call('getVillageNames').then(function (n) { if (n) villageNames = n; renderLabels(); }).catch(function () {});
+  }
   function renderLabels() {
+    if (scene3d && scene3d.setNames) scene3d.setNames(villageNames, unlocked());
     if (!labelsEl) return;
     root.classList.toggle('village-unlocked', unlocked());
     tagEls = {};
@@ -121,9 +130,9 @@
     // locked: only the houses anyone may use show their names (Tools & Games)
     HOUSES.forEach(function (h) {
       if (!open && !h.pub) return;
-      html += '<button type="button" class="village-tag' + (h.open ? '' : ' soon') + (h.pub ? ' pub' : '') + '" data-house="' + h.id + '">' + h.label + '</button>';
+      html += '<button type="button" class="village-tag' + (h.open ? '' : ' soon') + (h.pub ? ' pub' : '') + '" data-house="' + h.id + '">' + icdEscape(labelOf(h)) + '</button>';
     });
-    if (open) html += '<button type="button" class="village-tag hall' + (urgent.length ? ' alert' : '') + '" data-house="hall">Town Hall' +
+    if (open) html += '<button type="button" class="village-tag hall' + (urgent.length ? ' alert' : '') + '" data-house="hall">' + icdEscape((villageNames.houses && villageNames.houses.hall) || 'Town Hall') +
       (urgent.length ? ' <b>' + urgent.length + '</b>' : '') + '</button>';
     labelsEl.innerHTML = html;
     labelsEl.querySelectorAll('[data-house]').forEach(function (b) { tagEls[b.dataset.house] = b; });
@@ -243,7 +252,7 @@
         room = Village3D.room(el, {
           house: house, kind: spec.kind, roof: Village3D.ROOF[spec.roof], look: Village3D.LOOKS[idx],
           looks: house === 'love' ? [Village3D.LOVE.her, Village3D.LOVE.him] : null,
-          corner: currentCorner(house), timeMode: timeMode(), walkIn: walkingIn,
+          corner: currentCorner(house), timeMode: timeMode(), walkIn: walkingIn, names: { her: villageNames.her || 'namu', him: villageNames.him || 'hunf' },
           onPick: house === 'love' ? function (what, at) { if (typeof loveRoomPick === 'function') loveRoomPick(what, at); } : null
         });
         if (house === 'love' && roomFrame) room.setPhotos([roomFrame]);
@@ -570,6 +579,28 @@
     try { if (t === 'auto') localStorage.removeItem('henlo_theme'); else localStorage.setItem('henlo_theme', t); } catch (e) {}
     if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
   }
+  function openNames() {
+    var list = document.getElementById('names-list');
+    var row = function (id, label, owner) {
+      return '<div class="nm-row"><div class="nm-house"><small>' + icdEscape(label) + '</small><input type="text" maxlength="24" data-nh="' + id + '" placeholder="' + icdEscape(label) + '" value="' + icdEscape((villageNames.houses || {})[id] || '') + '"></div>' + owner + '</div>';
+    };
+    var who = function (id) { return '<div class="nm-who"><small>Lives here</small><input type="text" maxlength="24" data-np="' + id + '" placeholder="Name" value="' + icdEscape((villageNames.people || {})[id] || '') + '"></div>'; };
+    var html = row('hall', 'Town Hall', '<div class="nm-who"><small>&nbsp;</small><span class="nm-none">the Hall team</span></div>');
+    HOUSES.forEach(function (h) {
+      html += row(h.id, h.label, h.id === 'love'
+        ? '<div class="nm-who two"><small>Live here</small><input type="text" maxlength="24" id="nm-her" placeholder="her" value="' + icdEscape(villageNames.her || 'namu') + '"><input type="text" maxlength="24" id="nm-him" placeholder="him" value="' + icdEscape(villageNames.him || 'hunf') + '"></div>'
+        : who(h.id));
+    });
+    list.innerHTML = html;
+    document.getElementById('names-modal').classList.add('active');
+  }
+  function saveNames() {
+    var n = { houses: {}, people: {}, her: document.getElementById('nm-her').value, him: document.getElementById('nm-him').value };
+    document.querySelectorAll('#names-list [data-nh]').forEach(function (i) { if (i.value.trim()) n.houses[i.dataset.nh] = i.value.trim(); });
+    document.querySelectorAll('#names-list [data-np]').forEach(function (i) { if (i.value.trim()) n.people[i.dataset.np] = i.value.trim(); });
+    call('saveVillageNames', n).then(function (v) { villageNames = v; renderLabels(); document.getElementById('names-modal').classList.remove('active'); toast('Names saved ✿'); })
+      .catch(function (e) { toast((e && e.message) || 'Could not save'); });
+  }
   function openSettings() {
     if (!unlocked()) return;
     var th = pageTheme();
@@ -581,6 +612,9 @@
   }
   function wireSettings() {
     document.getElementById('village-gear').onclick = openSettings;
+    document.getElementById('set-names').onclick = function () { document.getElementById('village-settings-modal').classList.remove('active'); openNames(); };
+    document.getElementById('names-close').onclick = function () { document.getElementById('names-modal').classList.remove('active'); };
+    document.getElementById('names-save').onclick = saveNames;
     document.getElementById('village-theme').onclick = cycleTimeMode;
     document.getElementById('set-close').onclick = function () { document.getElementById('village-settings-modal').classList.remove('active'); };
     document.getElementById('set-save').onclick = function () {

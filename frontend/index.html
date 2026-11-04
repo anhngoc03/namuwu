@@ -386,7 +386,7 @@
             <button class="pill-btn" id="love-add-btn">+ Memory</button>
           </div>
         </div>
-        <div class="love-hint" id="love-hint">Tap the stairs ⬆ to the bedroom · the album is on the bedside table ♡ · tap them for a kiss, hold (or double-click) for more</div>
+        <div class="love-hint" id="love-hint">Tap the stairs to go up to the bedroom · the album is on the bedside table · tap the two of them for a kiss, hold (or double-click) for more</div>
         <input type="file" id="love-frame-file" accept="image/*" hidden>
       </div>
 
@@ -394,8 +394,8 @@
         <div class="study-head">
           <button type="button" class="st-backbtn" id="study-back" hidden aria-label="All roadmaps">‹</button>
           <h2 class="page-title" id="study-title">Languages</h2>
-          <button class="pill-btn secondary" id="study-import-btn">📄 Import</button>
-          <button class="pill-btn" id="study-new-btn">✨ New<span class="st-long"> roadmap</span></button>
+          <button class="pill-btn secondary" id="study-import-btn">Import</button>
+          <button class="pill-btn" id="study-new-btn">New<span class="st-long"> roadmap</span></button>
           <input type="file" id="study-import-file" accept=".json,application/json,.txt,.md" hidden>
         </div>
         <div class="study-main" id="study-main"></div>
@@ -421,8 +421,8 @@
       <div id="law-view" class="app-view" style="display:none;">
         <div class="study-head"><h2 class="page-title">Law</h2></div>
         <div class="st-card hs-lawbar">
-          <div class="hs-lawrow"><select id="law-scope" aria-label="What to look for"><option value="health">🏥 Health (y tế)</option><option value="law">⚖️ Laws &amp; codes</option><option value="all">Everything important</option></select>
-            <button type="button" class="pill-btn" id="law-check">✨ Check for new documents</button></div>
+          <div class="hs-lawrow"><select id="law-scope" aria-label="What to look for"><option value="health">Health (y tế)</option><option value="law">Laws &amp; codes</option><option value="all">Everything important</option></select>
+            <button type="button" class="pill-btn" id="law-check">Check for new documents</button></div>
           <small id="law-last"></small><small>From vbpl.vn · baochinhphu.vn · thuvienphapluat.vn — only the info and a short summary are kept.</small>
         </div>
         <input type="search" class="hs-search" id="law-q" placeholder="Search number, title…" autocomplete="off">
@@ -916,34 +916,32 @@
   <!-- ================= MODAL: Home profile (photo + name, saved on this device) ================= -->
   <!-- ===== Love › the little chat bubble over the couple (hold / double-click them) ===== -->
   <div class="love-bubble" id="love-bubble" role="menu">
-    <button type="button" data-lv="drive">🚗 Go for a drive</button>
-    <button type="button" data-lv="food">🍜 Order food</button>
+    <button type="button" data-lv="drive">Go for a drive</button>
+    <button type="button" data-lv="food">Order food</button>
   </div>
-  <!-- ===== Love › order food: type a dish, pick a picture, up to 4 dishes ===== -->
-  <div id="love-food-modal" class="modal-overlay">
-    <div class="modal-box love-food-box">
-      <div class="modal-header">
-        <h3>Order food ♡</h3>
-        <button id="love-food-close" class="modal-close">✕</button>
-      </div>
-      <form class="love-food-search" id="love-food-form">
-        <input type="text" id="love-food-q" maxlength="60" placeholder="Type a dish… e.g. phở, sushi, pizza" autocomplete="off">
-        <button type="submit" class="pill-btn">Find</button>
-      </form>
-      <div class="love-food-results" id="love-food-results"></div>
-      <div class="expense-field-caption">On the table <span id="love-food-n">0</span>/4</div>
-      <div class="love-food-picked" id="love-food-picked"></div>
-      <div class="modal-actions">
-        <button class="pill-btn secondary" id="love-food-clear">Clear</button>
-        <button class="pill-btn" id="love-food-save">Order</button>
+  <!-- ===== Love › the menu book: two pages, turned left to right, bookmarks by kind; up to 4 dishes ===== -->
+  <div class="lb-wrap mb-wrap" id="menu-book">
+    <div class="lb-stage" id="mb-stage">
+      <div class="lb-book open" id="mb-book">
+        <div class="lb-spread" id="mb-spread">
+          <div class="lb-page lb-left" id="mb-left"></div>
+          <div class="lb-page lb-right" id="mb-right"></div>
+          <div class="lb-leaf" id="mb-leaf"><div class="lb-face lb-front" id="mb-front"></div><div class="lb-face lb-back" id="mb-back"></div></div>
+        </div>
+        <div class="mb-tabs" id="mb-tabs"></div>
       </div>
     </div>
+    <div class="mb-tray" id="mb-tray">
+      <div class="mb-picked" id="mb-picked"></div>
+      <div class="mb-acts"><button type="button" class="pill-btn secondary" id="mb-close">Close</button><button type="button" class="pill-btn secondary" id="mb-clear">Clear</button><button type="button" class="pill-btn" id="mb-order">Order</button></div>
+    </div>
+    <div class="lb-nav"><button type="button" id="mb-prev">‹</button><span id="mb-count"></span><button type="button" id="mb-next">›</button></div>
   </div>
 
   <!-- ===== Study › a new roadmap ===== -->
   <div id="study-new-modal" class="modal-overlay">
     <div class="modal-box study-box">
-      <div class="modal-header"><h3>✨ New roadmap</h3><button id="st-new-close" class="modal-close">✕</button></div>
+      <div class="modal-header"><h3>New roadmap</h3><button id="st-new-close" class="modal-close">✕</button></div>
       <div class="st-form">
         <div class="expense-field-caption">What do you want to learn?</div>
         <input type="text" id="st-new-subject" maxlength="120" autocomplete="off">
@@ -964,7 +962,7 @@
       </div>
       <div class="modal-actions">
         <button class="pill-btn secondary" id="st-new-cancel">Cancel</button>
-        <button class="pill-btn" id="st-new-save">✨ Make my roadmap</button>
+        <button class="pill-btn" id="st-new-save">Make my roadmap</button>
       </div>
     </div>
   </div>
@@ -974,9 +972,9 @@
       <div class="modal-header"><h3 id="st-lesson-title"></h3><button id="st-lesson-close" class="modal-close">✕</button></div>
       <div class="st-body" id="st-lesson-body"></div>
       <div class="modal-actions">
-        <button class="pill-btn secondary" id="st-lesson-speak">🔊 Listen</button>
+        <button class="pill-btn secondary" id="st-lesson-speak">Listen</button>
         <button class="pill-btn secondary" id="st-lesson-done">Mark done</button>
-        <button class="pill-btn" id="st-lesson-ex">✍️ Exercise</button>
+        <button class="pill-btn" id="st-lesson-ex">Exercise</button>
       </div>
     </div>
   </div>
@@ -995,7 +993,7 @@
       <div class="modal-header"><h3 id="note-head">Note</h3><button id="note-close" class="modal-close">✕</button></div>
       <div class="st-body" id="note-read"></div>
       <div class="st-form hs-noteform" id="note-form">
-        <div class="hs-row2"><input type="text" id="note-field" list="note-fields-list" maxlength="60" placeholder="Field (e.g. Work, Japanese, Recipes)" autocomplete="off"><label class="hs-pinlbl"><input type="checkbox" id="note-pin"> 📌</label></div>
+        <div class="hs-row2"><input type="text" id="note-field" list="note-fields-list" maxlength="60" placeholder="Field (e.g. Work, Japanese, Recipes)" autocomplete="off"><label class="hs-pinlbl"><input type="checkbox" id="note-pin"> Pin</label></div>
         <datalist id="note-fields-list"></datalist>
         <input type="text" id="note-title" maxlength="200" placeholder="Title" autocomplete="off">
         <textarea id="note-body" rows="12" placeholder="Write anything… (## heading, - list, **bold**)"></textarea>
@@ -1003,7 +1001,7 @@
       <div class="modal-actions">
         <button class="pill-btn secondary" id="note-del">Delete</button>
         <button class="pill-btn secondary" id="note-undo" hidden>↶ Undo tidy</button>
-        <button class="pill-btn secondary" id="note-tidy">✨ Tidy up</button>
+        <button class="pill-btn secondary" id="note-tidy">Tidy up</button>
         <button class="pill-btn" id="note-edit">✎ Edit</button>
         <button class="pill-btn" id="note-save">Save</button>
       </div>
@@ -1020,7 +1018,7 @@
         <input type="text" id="goal-why" maxlength="1000" placeholder="Why does it matter? (optional)" autocomplete="off">
         <div class="st-row"><label><span>Deadline</span><input type="date" id="goal-deadline"></label></div>
         <div class="st-row"><label><span>Cost (₫)</span><input type="text" inputmode="numeric" id="goal-target" placeholder="0"></label><label><span>Saved / spent (₫)</span><input type="text" inputmode="numeric" id="goal-saved" placeholder="0"></label></div>
-        <div class="st-week-h hs-steps-h"><b>Steps</b><span></span><button type="button" class="st-chip" id="goal-ai">✨ Break it down</button></div>
+        <div class="st-week-h hs-steps-h"><b>Steps</b><span></span><button type="button" class="st-chip" id="goal-ai">Break it down</button></div>
         <div id="goal-steps"></div>
         <button type="button" class="st-chip hs-addstep" id="goal-add-step">+ Step</button>
       </div>
@@ -1035,7 +1033,7 @@
         <div id="hl-title-wrap"><input type="text" id="hl-title" maxlength="200" autocomplete="off"></div>
         <div class="st-row">
           <label id="hl-min-wrap"><span>Minutes</span><input type="number" id="hl-min" min="0" max="1440" inputmode="numeric"></label>
-          <label id="hl-kcal-wrap"><span>kcal</span><span class="hs-est"><input type="number" id="hl-kcal" min="0" max="9999" inputmode="numeric"><button type="button" class="st-chip" id="hl-est">✨ Estimate</button></span></label>
+          <label id="hl-kcal-wrap"><span>kcal</span><span class="hs-est"><input type="number" id="hl-kcal" min="0" max="9999" inputmode="numeric"><button type="button" class="st-chip" id="hl-est">Estimate</button></span></label>
           <label id="hl-val-wrap"><span>kg</span><input type="number" id="hl-val" step="0.1" min="0" inputmode="decimal"></label>
         </div>
         <small class="st-hint" id="hl-note"></small>
@@ -1401,18 +1399,29 @@
       </div>
       <div class="gc-list">
         <button type="button" class="gc-game" data-game="openMemory"><span class="gc-ico">🃏</span><b>Memory Match</b><small>flip and find the pairs</small></button>
-        <button type="button" class="gc-game" data-game="openMinesweeper"><span class="gc-ico">💣</span><b>Minesweeper</b><small>easy · normal · hard</small></button>
-        <button type="button" class="gc-game" data-game="openMochi"><span class="gc-ico">🍡</span><b>Mochi Fly</b><small>tap to fly</small></button>
+        <button type="button" class="gc-game" data-game="openMinesweeper"><b>Minesweeper</b><small>easy · normal · hard</small></button>
+        <button type="button" class="gc-game" data-game="openMochi"><b>Mochi Fly</b><small>tap to fly</small></button>
       </div>
     </div>
   </div>
 
   <!-- ================= MODAL: Village › settings (⚙, after the password) ================= -->
+  <div id="names-modal" class="modal-overlay">
+    <div class="modal-box study-box study-read">
+      <div class="modal-header"><h3>Names</h3><button id="names-close" class="modal-close">✕</button></div>
+      <div class="st-body" id="names-list"></div>
+      <div class="modal-actions"><button class="pill-btn" id="names-save">Save</button></div>
+    </div>
+  </div>
   <div id="village-settings-modal" class="modal-overlay">
     <div class="modal-box set-box">
       <div class="modal-header">
         <h3>Settings</h3>
         <button id="set-close" class="modal-close">✕</button>
+      </div>
+      <div class="set-section">
+        <div class="set-title">Village</div>
+        <div class="set-push"><span class="set-push-status">Names of the houses and the people who live there</span><button type="button" class="pill-btn" id="set-names">Names</button></div>
       </div>
       <div class="set-section">
         <div class="set-title">Notifications on this device</div>
@@ -1812,6 +1821,7 @@
   <script src="/work.js"></script>
   <script src="/posts.js"></script>
   <script src="/calendar.js"></script>
+  <script src="/foodart.js"></script>
   <script src="/love.js"></script>
   <script src="/study.js"></script>
   <script src="/houses.js"></script>

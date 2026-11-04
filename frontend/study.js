@@ -9,8 +9,8 @@
 var studyHouse = 'language';
 var studyState = { plans: [], plan: null, lessons: [], tests: [], today: '', test: null, busy: false };
 var STUDY_HOUSES = {
-  language: { title: 'Languages', icon: '🗾', hint: 'Japanese, English… e.g. “JLPT N3 in 3 months”', sample: 'Tiếng Nhật JLPT N3' },
-  skills: { title: 'Skills', icon: '🛠', hint: 'Anything: Excel, drawing, public speaking, coding…', sample: 'Excel nâng cao cho công việc' }
+  language: { title: 'Languages', hint: 'Japanese, English… e.g. “JLPT N3 in 3 months”', sample: 'Tiếng Nhật JLPT N3' },
+  skills: { title: 'Skills', hint: 'Anything: Excel, drawing, public speaking, coding…', sample: 'Excel nâng cao cho công việc' }
 };
 
 function studyCall(name) {
@@ -36,7 +36,7 @@ function studyMd(text) {
   if (list) out.push('</ul>');
   return out.join('');
 }
-function studyWait(el, msg) { el.innerHTML = '<div class="st-wait"><i>✨</i><span>' + studyEsc(msg) + '</span></div>'; }
+function studyWait(el, msg) { el.innerHTML = '<div class="st-wait"><i class="st-dots"><b></b><b></b><b></b></i><span>' + studyEsc(msg) + '</span></div>'; }
 
 /* ---------- open a house ---------- */
 function openStudy(house) {
@@ -63,8 +63,8 @@ function studyList() {
 function studyRenderList() {
   var box = document.getElementById('study-main'), h = STUDY_HOUSES[studyHouse];
   if (!studyState.plans.length) {
-    box.innerHTML = '<div class="st-empty"><div class="st-big">' + h.icon + '</div><b>No roadmap yet</b><span>Tell the AI what you want to learn — it plans the lessons week by week, writes each lesson, gives you exercises and tests, and marks them.</span>' +
-      '<button type="button" class="pill-btn" data-st="new">✨ Make a roadmap</button></div>';
+    box.innerHTML = '<div class="st-empty"><b>No roadmap yet</b><span>Tell the AI what you want to learn — it plans the lessons week by week, writes each lesson, gives you exercises and tests, and marks them.</span>' +
+      '<button type="button" class="pill-btn" data-st="new">Make a roadmap</button></div>';
     return;
   }
   box.innerHTML = studyState.plans.map(function (p) {
@@ -102,24 +102,24 @@ function studyRenderPlan() {
     '<div class="st-bar big"><i style="width:' + pc + '%"></i></div>' +
     '<div class="st-plan-meta"><span>' + p.done + ' / ' + p.total + ' lessons · ' + pc + '%</span>' + (late ? '<span class="st-late">' + late + ' behind</span>' : '<span>on track ♡</span>') + '</div>' +
     (next ? '<button type="button" class="st-today" data-st="lesson" data-id="' + next.id + '"><small>' + (next.day && next.day <= today ? 'Today' : 'Next up') + '</small><b>' + studyEsc(next.title) + '</b><span>' + studyEsc(next.goal) + '</span></button>' : '<div class="st-today done"><b>Roadmap finished ✿</b><span>Take the final test or review your mistakes</span></div>') +
-    '<div class="st-acts">' + (p.fromFile ? '<span class="st-file">📄 from a file · no AI needed</span>' : '<button type="button" class="pill-btn" data-st="test-all">📝 Test</button>') + '<button type="button" class="pill-btn secondary" data-st="review">🔁 Review mistakes</button></div>' +
+    '<div class="st-acts">' + (p.fromFile ? '<span class="st-file">From a file · no AI needed</span>' : '<button type="button" class="pill-btn" data-st="test-all">Test</button>') + '<button type="button" class="pill-btn secondary" data-st="review">Review mistakes</button></div>' +
     '</div>';
   Object.keys(weeks).sort(function (a, b) { return a - b; }).forEach(function (w) {
     var ls = weeks[w], dn = ls.filter(function (l) { return l.done; }).length;
     var wt = p.fromFile ? studyState.tests.filter(function (t) { return t.kind === 'test' && t.title.indexOf('Week ' + w + ' · ') === 0; }).slice(-1)[0] : null;
-    var chip = p.fromFile ? (wt ? '<button type="button" class="st-chip" data-st="open-test" data-id="' + wt.id + '">📝 Week test</button>' : '') : '<button type="button" class="st-chip" data-st="test-week" data-w="' + w + '">📝 Week test</button>';
+    var chip = p.fromFile ? (wt ? '<button type="button" class="st-chip" data-st="open-test" data-id="' + wt.id + '">Week test</button>' : '') : '<button type="button" class="st-chip" data-st="test-week" data-w="' + w + '">Week test</button>';
     html += '<div class="st-card st-week"><div class="st-week-h"><b>Week ' + w + '</b><span>' + dn + '/' + ls.length + '</span>' + chip + '</div>' +
       ls.map(function (l) {
         var cls = l.done ? ' done' : (l.day && l.day < today ? ' late' : (l.day === today ? ' today' : ''));
         return '<div class="st-lesson' + cls + '"><button type="button" class="st-check" data-st="done" data-id="' + l.id + '" aria-label="Done">' + (l.done ? '✓' : '') + '</button>' +
-          '<button type="button" class="st-l" data-st="lesson" data-id="' + l.id + '"><b>' + l.seq + '. ' + studyEsc(l.title) + '</b><small>' + studyEsc(studyFmtDay(l.day)) + (l.hasContent ? '' : ' · ✨ not written yet') + '</small></button></div>';
+          '<button type="button" class="st-l" data-st="lesson" data-id="' + l.id + '"><b>' + l.seq + '. ' + studyEsc(l.title) + '</b><small>' + studyEsc(studyFmtDay(l.day)) + (l.hasContent ? '' : ' · not written yet') + '</small></button></div>';
       }).join('') + '</div>';
   });
   var tests = studyState.tests;
   html += '<div class="st-card"><div class="st-week-h"><b>Tests & exercises</b><span>' + tests.length + '</span></div>' + (tests.length ? tests.map(function (t) {
     var pend = t.submittedAt && (t.results || []).some(function (r) { return r && r.correct === null; });
     var sc = t.submittedAt ? '<em class="' + (pend ? 'ok' : t.max && t.score / t.max >= 0.8 ? 'good' : t.max && t.score / t.max >= 0.5 ? 'ok' : 'low') + '">' + t.score + ' / ' + t.max + (pend ? ' · check ✎' : '') + '</em>' : '<em class="todo">not done</em>';
-    return '<button type="button" class="st-test" data-st="open-test" data-id="' + t.id + '"><span>' + ({ exercise: '✍️', test: '📝', review: '🔁' }[t.kind] || '📝') + ' ' + studyEsc(t.title) + '</span>' + sc + '</button>';
+    return '<button type="button" class="st-test" data-st="open-test" data-id="' + t.id + '"><span>' + studyEsc(t.title) + '</span>' + sc + '</button>';
   }).join('') : '<div class="st-none">Nothing yet — open a lesson and try its exercise ✿</div>') + '</div>';
   box.innerHTML = html;
 }
@@ -138,7 +138,7 @@ function studyOpenLesson(id) {
     if (m.dataset.id !== String(id)) return;
     l.hasContent = true;
     studyState.lessonText = r.content || '';
-    body.innerHTML = '<div class="st-goal">🎯 ' + studyEsc(l.goal) + '</div>' + studyMd(r.content);
+    body.innerHTML = '<div class="st-goal"><b>Goal</b> ' + studyEsc(l.goal) + '</div>' + studyMd(r.content);
   }).catch(function (e) { body.innerHTML = '<div class="st-empty">' + studyEsc(e.message) + '</div>'; });
 }
 function studySetDone(id, done) {
@@ -148,7 +148,7 @@ function studySetDone(id, done) {
 }
 
 /* ---------- 🔊 read a lesson aloud: Japanese, English and Vietnamese bits each in their own voice ---------- */
-function studySpeakStop() { try { speechSynthesis.cancel(); } catch (e) {} var b = document.getElementById('st-lesson-speak'); if (b) b.textContent = '🔊 Listen'; }
+function studySpeakStop() { try { speechSynthesis.cancel(); } catch (e) {} var b = document.getElementById('st-lesson-speak'); if (b) b.textContent = 'Listen'; }
 function studySpeak(text) {
   if (!('speechSynthesis' in window)) { toast('This browser can’t read aloud'); return; }
   if (speechSynthesis.speaking) { studySpeakStop(); return; }
@@ -164,12 +164,12 @@ function studySpeak(text) {
     });
   });
   if (!parts.length) return;
-  var btn = document.getElementById('st-lesson-speak'); btn.textContent = '⏹ Stop';
+  var btn = document.getElementById('st-lesson-speak'); btn.textContent = 'Stop';
   parts.forEach(function (p, i) {
     var u = new SpeechSynthesisUtterance(p.text.replace(/[()（）]/g, ' '));
     u.lang = p.lang; u.rate = p.lang === 'ja-JP' ? 0.85 : 0.95;
     var v = voices.filter(function (x) { return x.lang && x.lang.replace('_', '-').indexOf(p.lang.slice(0, 2)) === 0; })[0]; if (v) u.voice = v;
-    if (i === parts.length - 1) u.onend = function () { btn.textContent = '🔊 Listen'; };
+    if (i === parts.length - 1) u.onend = function () { btn.textContent = 'Listen'; };
     speechSynthesis.speak(u);
   });
 }
@@ -217,13 +217,13 @@ function studyShowTest(t) {
     var after = '';
     if (done && res && res.correct === null) {          // written answer: compare with the model answer, mark it yourself
       after = '<div class="st-res self"><b>Check yourself</b><span><i>Model answer:</i> ' + studyEsc(q.answer).replace(/\n/g, '<br>') + '</span>' +
-        (q.explain ? '<span class="st-ex">💡 ' + studyEsc(q.explain) + '</span>' : '') +
+        (q.explain ? '<span class="st-ex"><i>Why:</i> ' + studyEsc(q.explain) + '</span>' : '') +
         '<span class="st-self"><button type="button" data-sm="1" data-i="' + i + '">✓ I got it</button><button type="button" data-sm="0" data-i="' + i + '">✗ Not yet</button></span></div>';
     } else if (done && res) {
       after = '<div class="st-res ' + (res.correct ? 'right' : 'wrong') + '"><b>' + (res.correct ? '✓ Correct' : '✗ ' + res.score + ' / ' + q.points) + '</b>' +
         (res.comment ? '<span>' + studyEsc(res.comment) + '</span>' : '') +
         (q.type !== 'mcq' && !res.correct ? '<span><i>Answer:</i> ' + studyEsc(q.answer) + '</span>' : '') +
-        (q.explain ? '<span class="st-ex">💡 ' + studyEsc(q.explain) + '</span>' : '') + '</div>';
+        (q.explain ? '<span class="st-ex"><i>Why:</i> ' + studyEsc(q.explain) + '</span>' : '') + '</div>';
     }
     return '<div class="st-q">' + head + inp + after + '</div>';
   }).join('');
@@ -278,7 +278,7 @@ function studyNewSave() {
     document.getElementById('study-back').hidden = false;
     studyShowPlan(d);
     toast('Your roadmap is ready ✿');
-  }).catch(function (e) { toast(e.message); }).then(function () { btn.disabled = false; btn.textContent = '✨ Make my roadmap'; });
+  }).catch(function (e) { toast(e.message); }).then(function () { btn.disabled = false; btn.textContent = 'Make my roadmap'; });
 }
 function studyMenu() {
   var p = studyState.plan; if (!p) return;
