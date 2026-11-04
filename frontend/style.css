@@ -2716,3 +2716,13 @@ body.store-room #store-view .store-head, body.store-room #store-view .store-shel
 .lib-sec h4{ margin:0 0 4px; font-size:14px; color:#c0587a; }
 .lib-sec p{ margin:0; font-size:14px; line-height:1.55; }
 .lib-sec.here{ background:#fff6dc; border-radius:10px; }
+
+/* village: a villager's chat bubble when you tap them */
+.v3d-bubbles{ position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:3; }
+.v3d-bubble{ position:absolute; left:0; top:0; padding:5px 10px; border-radius:12px; background:#fff; color:#4a3a44; font:800 13px 'Nunito', sans-serif;
+  white-space:nowrap; box-shadow:0 3px 8px rgba(60,40,60,.22); animation:v3dPop .25s cubic-bezier(.34,1.5,.64,1); }
+.v3d-bubble::after{ content:''; position:absolute; left:50%; bottom:-6px; margin-left:-6px; border:6px solid transparent; border-bottom:0; border-top-color:#fff; }
+.v3d-bubble.loud{ background:#ffe36e; color:#7a3a10; font-size:14px; letter-spacing:.5px; }
+.v3d-bubble.loud::after{ border-top-color:#ffe36e; }
+@keyframes v3dPop{ from{ scale:.6; } to{ scale:1; } }
+body.love-room .room-bg canvas{ touch-action:none; }

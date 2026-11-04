@@ -667,6 +667,12 @@ function makePerson(look) {
   if (look.style === 'cap') blockOf(look.cap, 8, 1, 3, 0, 6.5, 5);
   if (look.style === 'long') blockOf(look.hair, 8, 5, 1, 0, -1.5, -4.5);
   if (look.dress) { const sk = sbox(9 * PX, 4 * PX, 5 * PX, look.dress, 0, 12.5 * PX, 0); g.add(sk); }
+  // a rolled-up scroll (like a royal decree) in the right hand — shown while there's work waiting
+  { const sc = new THREE.Group(); sc.position.set(0, -11 * PX, 1.2 * PX); sc.visible = false;
+    sc.add(sbox(9 * PX, 2.2 * PX, 2.2 * PX, 0xf5dc86, 0, 0, 0));
+    sc.add(sbox(1.2 * PX, 2.8 * PX, 2.8 * PX, 0xb5463a, -4.9 * PX, 0, 0)); sc.add(sbox(1.2 * PX, 2.8 * PX, 2.8 * PX, 0xb5463a, 4.9 * PX, 0, 0));
+    sc.add(sbox(6 * PX, 3.5 * PX, 0.3 * PX, 0xfbeab0, 0.5 * PX, -2.6 * PX, 0.4 * PX));          // a little of it unrolled
+    parts.armR.add(sc); parts.scroll = sc; }
   parts.kids = g.children.slice();
   return { g, parts };
 }
@@ -1893,6 +1899,25 @@ function create(container, opts) {
       el.textContent = t;
     });
   }
+  // chat bubbles over a villager's head ("Hi!", "Work!!!"), a couple of seconds each
+  const bubbleLayer = document.createElement('div'); bubbleLayer.className = 'v3d-bubbles'; container.appendChild(bubbleLayer);
+  const bubbles = [];
+  function say(p, text, loud) {
+    bubbles.filter((b) => b.p === p).forEach((b) => { b.t = 0; });
+    const el = document.createElement('div'); el.className = 'v3d-bubble' + (loud ? ' loud' : ''); el.textContent = text; bubbleLayer.appendChild(el);
+    bubbles.push({ p, el, t: 2.4 });
+  }
+  const tmpB = new THREE.Vector3();
+  function placeBubbles(dt) {
+    const W = container.clientWidth || innerWidth, H = container.clientHeight || innerHeight;
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i]; b.t -= dt;
+      if (b.t <= 0 || !b.p.g.visible || b.p.inside) { b.el.remove(); bubbles.splice(i, 1); continue; }
+      b.p.g.getWorldPosition(tmpB); tmpB.y += 2.5; tmpB.project(camera);
+      b.el.style.transform = 'translate(' + Math.round((tmpB.x + 1) / 2 * W) + 'px,' + Math.round((1 - tmpB.y) / 2 * H) + 'px) translate(-50%,-100%)';
+      b.el.style.opacity = Math.min(1, b.t * 3);
+    }
+  }
   function placeNames() {
     const dist = camera.position.distanceTo(controls.target), on = dist < 175 && nameTags.size > 0;
     tagLayer.style.display = on ? '' : 'none';
@@ -1996,8 +2021,9 @@ function create(container, opts) {
   }
   function animate(dt, time) {
     people.slice().forEach((p) => {
+      if (p.wave > 0 && !p.inside && p.g.visible) { p.v = 0; }
       if (p.pair && people.indexOf(p.pair) < 0) { world.remove(p.g); people.splice(people.indexOf(p), 1); return; }
-      const moving = p.love === 'him' ? followHer(p, dt) : p.pair ? follow(p.pair, p, dt) : step(p, dt);
+      const moving = p.wave > 0 ? false : p.love === 'him' ? followHer(p, dt) : p.pair ? follow(p.pair, p, dt) : step(p, dt);
       if (p.inside || !p.g.visible) return;
       if (p.sitting && swing) {                     // on the swing, swinging together
         const side = p.love === 'her' ? -0.4 : 0.4;
@@ -2009,6 +2035,16 @@ function create(container, opts) {
         p.parts.head.rotation.set(0, 0, 0);
         return;
       }
+      if (p.parts.scroll) p.parts.scroll.visible = !!urgent && p.goal === 'hall';
+      if (p.wave > 0) {                               // tapped: stop, turn to you and wave
+        p.wave -= dt;
+        const cx = camera.position.x - world.position.x - p.g.position.x, cz = camera.position.z - world.position.z - p.g.position.z;
+        let d = Math.atan2(cx, cz) - p.g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); p.g.rotation.y += d * Math.min(1, dt * 8);
+        p.parts.legL.rotation.x = p.parts.legR.rotation.x = 0; p.parts.armL.rotation.x = 0;
+        p.parts.armR.rotation.x = -2.9; p.parts.armR.rotation.z = Math.sin(time * 13) * 0.45;
+        if (p.wave <= 0) p.parts.armR.rotation.z = 0;
+        return;
+      }
       const pace = Math.min(1, (p.v || 0) / p.speed);
       p.t += dt * (moving ? 3 + 7 * pace : 2);
       const sw = moving ? Math.sin(p.t) * 0.75 * pace : 0;
@@ -2018,10 +2054,10 @@ function create(container, opts) {
       const gy = groundY(p.g.position.x, p.g.position.z);
       p.g.position.y = gy + (moving ? Math.abs(Math.sin(p.t)) * 0.06 : 0);
       if (!moving && !p.path.length) {
-        if (p.goal === 'hall') {                         // waiting at the hall: face it, little hops
+        if (p.goal === 'hall') {                         // waiting at the hall with the work to hand in: face it, scroll held out
           let d = Math.PI - p.g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); p.g.rotation.y += d * Math.min(1, dt * 6);
-          p.g.position.y = gy + Math.max(0, Math.sin(time * 4 + p.i)) * 0.1;
-          p.parts.armR.rotation.x = -2.6 + Math.sin(time * 6 + p.i) * 0.3;
+          p.g.position.y = gy + Math.max(0, Math.sin(time * 2.2 + p.i)) * 0.04;
+          p.parts.armR.rotation.x = -1.35 + Math.sin(time * 1.6 + p.i) * 0.08;
         } else if (p.goal === 'work') {                  // busy at the door: face the house, hands going
           let d = Math.PI - p.g.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); p.g.rotation.y += d * Math.min(1, dt * 6);
           p.parts.armR.rotation.x = -1.3 + Math.sin(time * 9 + p.i) * 0.55;
@@ -2439,6 +2475,16 @@ function create(container, opts) {
       return;
     }
     if (lot.car && !drive && opts.onCar && ray.intersectObject(lot.car, true)[0]) { opts.onCar(); return; }
+    const folk = people.filter((q) => !q.love && !q.inside && q.g.visible);
+    const hitF = ray.intersectObjects(folk.map((q) => q.g), true)[0];
+    if (hitF) {
+      let o = hitF.object; const who = folk.find((q) => { let x = o; while (x) { if (x === q.g) return true; x = x.parent; } return false; });
+      if (who) {
+        if (urgent && who.goal === 'hall') say(who, 'Work!!!', true);
+        else { who.wave = 2.2; say(who, 'Hi!'); }
+        return;
+      }
+    }
     const pet = ray.intersectObjects([cat.g, dog.g], true)[0];
     if (pet) {
       const m = cat.g.getObjectById(pet.object.id) ? cat : dog;
@@ -2478,6 +2524,7 @@ function create(container, opts) {
     renderer.render(scene, camera);
     frameFns.forEach((fn) => fn());
     placeNames();
+    placeBubbles(dt);
   }
   function start() { if (running) return; running = true; clock.getDelta(); requestAnimationFrame(loop); }
   const onVis = () => { if (!document.hidden && shown) { applyTime(); start(); } };
@@ -2488,7 +2535,7 @@ function create(container, opts) {
   applyTime();
   fitCamera();
   start();
-  if (/[?&]debug3d/.test(location.search)) window.__v3d = { SOURCE, POND, drive: (f, o) => startDrive(f, o), driveFF: (n) => { for (let k = 0; k < n && drive; k++) driveStep(0.1); return drive ? drive.i + '/' + drive.pts.length + (drive.wait ? ' wait' : '') : 'home'; }, get car() { return lot.car; }, renderer, people, couple, get swing() { return swing; }, graph, cat, dog, routine, realHour, camera, controls, water, food, get urgent() { return urgent; } };
+  if (/[?&]debug3d/.test(location.search)) window.__v3d = { SOURCE, POND, drive: (f, o) => startDrive(f, o), driveFF: (n) => { for (let k = 0; k < n && drive; k++) driveStep(0.1); return drive ? drive.i + '/' + drive.pts.length + (drive.wait ? ' wait' : '') : 'home'; }, get car() { return lot.car; }, renderer, people, couple, get swing() { return swing; }, graph, cat, dog, routine, realHour, camera, controls, water, food, get urgent() { return urgent; }, set urgent(n) { urgent = n; }, say };
 
   return {
     setUrgent(n) {
@@ -2753,7 +2800,7 @@ const ROOMS = {
         if (k % 3 === 0) stairs.add(box(0.06, 0.8, 0.06, 0xffffff, x, hgt + 0.4, -2.45));
       }
       { const L = Math.hypot(3.2, 4.4), rail = box(L, 0.08, 0.08, 0xffffff, -1.35 - 1.6 + 0.16, 2.2 + 0.8 + 0.22, -2.45); rail.rotation.z = -Math.atan2(4.4, 3.2); stairs.add(rail); }
-      const up = arrowSprite(Math.PI / 2, 0.8); up.position.set(-1.85, 1.75, -2.35); stairs.add(up);   // up the stairs, to the left
+      const up = arrowSprite(Math.PI / 2, 0.42); up.position.set(-1.85, 1.75, -2.35); stairs.add(up);   // up the stairs, to the left
       // the dining table (bún chả at lunchtime)
       const dt = new THREE.Group(); dt.position.set(1.3, 0, 1.25); g.add(dt);
       dt.add(box(1.5, 0.06, 0.95, 0xe2c39e, 0, 0.76, 0));
@@ -2977,8 +3024,19 @@ function createRoom(container, opts) {
   [-1, 1].forEach((sx) => { const w = box(0.12, ROOM_H, LEN, wall2, sx * ROOM_W / 2, ROOM_H / 2, MID); w.castShadow = false; w.receiveShadow = true; g.add(w); });
   // ceiling: soft and light (it only gets light from below, so it glows a little instead of going dark)
   const ceilCol = tint(opts.roof || 0xf6a9bd, 0.9);
-  const ceil = box(ROOM_W, 0.12, LEN, 0, 0, ROOM_H + 0.06, MID, new THREE.MeshLambertMaterial({ color: ceilCol, emissive: ceilCol, emissiveIntensity: 0.3 }));
-  ceil.castShadow = false; g.add(ceil);
+  const ceilMat = new THREE.MeshLambertMaterial({ color: ceilCol, emissive: ceilCol, emissiveIntensity: 0.3 });
+  if (opts.house === 'love') {
+    // the stairs climb to the left along the back wall: leave an opening in the ceiling over their top,
+    // with a short shaft and a warm light above, so they lead up to the bedroom and not into the ceiling
+    const HX = -2.25, HZ = -2.3, z0 = MID - LEN / 2, z1 = MID + LEN / 2;
+    [[HX, ROOM_W / 2, z0, z1], [-ROOM_W / 2, HX, HZ, z1]].forEach(([xa, xb, za, zb]) => {
+      const c = box(xb - xa, 0.12, zb - za, 0, (xa + xb) / 2, ROOM_H + 0.06, (za + zb) / 2, ceilMat); c.castShadow = false; g.add(c);
+    });
+    const hw = HX + ROOM_W / 2, hd = HZ - z0, shaft = tint(opts.roof || 0xf6a9bd, 0.8);
+    [[-ROOM_W / 2 + hw / 2, z0 + 0.06, hw, 0.12], [-ROOM_W / 2 + hw / 2, HZ, hw, 0.12], [HX, z0 + hd / 2, 0.12, hd]].forEach(([x, z, w, d]) => g.add(box(w, 2.2, d, shaft, x, ROOM_H + 1.1, z)));
+    g.add(box(hw, 0.1, hd, 0, -ROOM_W / 2 + hw / 2, ROOM_H + 2.2, z0 + hd / 2, new THREE.MeshBasicMaterial({ color: 0xfff1d6 })));
+    g.add(box(hw, 0.06, hd * 0.9, 0xd9b48f, -ROOM_W / 2 + hw / 2 - 0.2, ROOM_H + 0.9, z0 + hd / 2));        // the landing upstairs
+  } else { const ceil = box(ROOM_W, 0.12, LEN, 0, 0, ROOM_H + 0.06, MID, ceilMat); ceil.castShadow = false; g.add(ceil); }
   // cornice + skirting (trim only: they don't throw shadows, which drew thin lines across the room)
   const trim = (m) => { m.castShadow = false; g.add(m); };
   trim(box(ROOM_W, 0.16, 0.12, 0xffffff, 0, ROOM_H - 0.08, -ROOM_D / 2 + 0.1));
@@ -3051,12 +3109,21 @@ function createRoom(container, opts) {
   container.appendChild(fadeEl);
   const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
   const TRIPS = {
-    up: { legs: [[V3(-0.5, 1.7, 0.6), V3(-3.2, 3.0, -2.95), 0.9], [V3(-2.7, 3.7, -2.0), V3(-5.4, 5.6, -2.95), 0.9, true]],
+    up: { legs: [[V3(-0.4, 1.8, 0.8), V3(-3.4, 3.4, -2.95), 0.9], [V3(-2.2, 3.2, -2.6), V3(-4.2, 5.4, -2.9), 0.8], [V3(-3.4, 5.0, -2.9), V3(-4.4, 5.8, -2.9), 0.6, true]],
       out: [V3(10.7, 1.7, 2.9), V3(12.8, 1.2, -1.2)] },
     down: { legs: [[V3(11.2, 1.75, 2.4), V3(10.25, 0.1, 0.9), 0.8], [V3(10.6, 1.05, 1.5), V3(10.2, -0.8, 0.2), 0.7, true]],
       out: [V3(-3.7, 4.3, -2.1), V3(-0.6, 1.6, -2.95)] }
   };
+  // drag to look around the room (phones: one finger left / right)
+  const look = { yaw: 0, want: 0, x0: 0, w0: 0, on: false }, lookV = new THREE.Vector3();
+  { const el = renderer.domElement;
+    el.addEventListener('pointerdown', (e) => { look.on = true; look.x0 = e.clientX; look.w0 = look.want; });
+    el.addEventListener('pointermove', (e) => { if (!look.on) return; look.want = Math.max(-0.55, Math.min(0.55, look.w0 + (e.clientX - look.x0) * 0.004)); });
+    const off = () => { look.on = false; };
+    el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('pointerleave', off);
+  }
   function goFloor(f, jump) {
+    look.want = 0;
     const changed = floor && f !== floor;
     floor = f;
     if (jump || !changed) { trip = null; fadeEl.style.opacity = 0; setCorner(floorCorner(), jump); return; }
@@ -3157,7 +3224,10 @@ function createRoom(container, opts) {
     const dt = Math.min(0.1, clock.getDelta()), t = clock.elapsedTime;
     if (trip) stepTrip(dt);
     else { camP.lerp(goP, Math.min(1, dt * 1.6)); camT.lerp(goT, Math.min(1, dt * 1.6)); }
-    camera.position.copy(camP); camera.lookAt(camT);
+    // a finger (or the mouse) dragged sideways turns the view a little around what it's looking at
+    look.yaw += ((trip || zoomed ? 0 : look.want) - look.yaw) * Math.min(1, dt * 8);
+    lookV.copy(camT).sub(camP).applyAxisAngle(THREE.Object3D.DEFAULT_UP, look.yaw);       // turn the head, stay where you are
+    camera.position.copy(camP); camera.lookAt(lookV.add(camP));
     stepArrows(t);
     if (R.couple) {                                   // by the real clock: sofa · sleeping heads together · bún chả
       const d = new Date(), hr = d.getHours() + d.getMinutes() / 60;
