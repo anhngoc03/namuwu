@@ -2133,6 +2133,7 @@ body.personal-view #flower-field{ display:none; }
   top:calc(10px + env(safe-area-inset-top)); left:calc(10px + env(safe-area-inset-left));
 }
 .personal-bar .village-btn{ background:var(--surface); color:var(--ink); box-shadow:var(--shadow-sm); }
+#personal-back{ width:44px; height:44px; padding:0; border-radius:50%; font-size:26px; line-height:1; font-weight:700; letter-spacing:0; display:flex; align-items:center; justify-content:center; padding-bottom:3px; }
 body.personal-view .personal-bar{ display:flex; }
 body.personal-view :is(#desktop-dock, #mobile-nav-toggle){ display:none !important; }
 @media (min-width:761px){ body.personal-view #app-screen{ padding-top:44px; } }
@@ -2407,11 +2408,12 @@ body.love-room #love-view .love-head, body.love-room #love-view .love-hint{ poin
 /* Game Center chooser */
 .gc-box{ max-width:420px; }
 .gc-list{ display:flex; flex-direction:column; gap:10px; }
-.gc-game{ display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left;
+.gc-game{ display:grid; grid-template-columns:48px 1fr; grid-template-areas:'ico name' 'ico sub'; column-gap:12px; row-gap:2px; align-items:center; text-align:left;
   border:0; border-radius:var(--r-lg); padding:12px 14px; cursor:pointer; font:inherit; color:var(--ink-on-pastel);
   background:linear-gradient(135deg, #ffd6df, #e8dcff); box-shadow:var(--shadow-sm); transition:transform var(--dur-component); }
 .gc-game:active{ transform:scale(.97); }
-.gc-game b{ font-size:16px; } .gc-game small{ opacity:.7; font-weight:700; }
+.gc-ico{ grid-area:ico; font-size:30px; line-height:1; text-align:center; }
+.gc-game b{ grid-area:name; font-size:16px; } .gc-game small{ grid-area:sub; opacity:.7; font-weight:700; }
 
 /* first paint: just the village sky, nothing else, until app.js routes */
 html.booting .village{ display:block; }
