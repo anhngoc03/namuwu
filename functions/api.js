@@ -2349,7 +2349,8 @@ async function agentChat(env, args) {
     getExpenseData, addExpenseEntry, deleteExpenseEntry, addExpenseIncomeEntry,
     getCalendarNotes, saveCalendarNote, deleteCalendarNote,
     getHomeData, addHomeItem, toggleHomeCheck,
-    getStudyData, setStudyLessonDone
+    getStudyData, setStudyLessonDone,
+    getNotesData, saveNote, getGoalsData, saveGoal, getHealthData, saveHealthLog, getLawDocs
   });
 }
 
