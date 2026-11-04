@@ -79,7 +79,11 @@ function useLayout(key) {
   { const s0 = RIVER[0];
     let mi = 0, md = 1e9;
     MOUNTAINS.forEach(([x, z], i) => { const d = Math.hypot(x - s0.x, z - s0.z); if (d < md) { md = d; mi = i; } });
-    const m = MOUNTAINS[mi], nx = RIVER[1].x - m[0], nz = RIVER[1].z - m[1], nl = Math.hypot(nx, nz) || 1;
+    let m = MOUNTAINS[mi], nx = RIVER[1].x - m[0], nz = RIVER[1].z - m[1], nl = Math.hypot(nx, nz) || 1;
+    // the waterfall mountain is a big one: wide and tall enough for the falls to come down in steps,
+    // nudged a little inland so all of it stands on the island
+    m = MOUNTAINS[mi] = [m[0] + nx / nl * 1.5, m[1] + nz / nl * 1.5, Math.max(m[2], 8), Math.max(m[3], 18)];
+    nx = RIVER[1].x - m[0]; nz = RIVER[1].z - m[1]; nl = Math.hypot(nx, nz) || 1;
     SOURCE = { i: mi, x: m[0], z: m[1], r: m[2], h: m[3], dx: nx / nl, dz: nz / nl };
     RIVER[0] = { x: m[0] + SOURCE.dx * m[2] * 0.45, z: m[1] + SOURCE.dz * m[2] * 0.45 };   // the waterfall's foot, inside a gorge
     const e = RIVER[RIVER.length - 1];
@@ -1269,7 +1273,7 @@ function create(container, opts) {
     if (top <= 0) {
       const rd = riverDist(cx, cz), rw = riverW(cx, cz);
       if (inPond(cx, cz, 0) || rd < rw / 2) {            // water: the lake is two blocks deep, the river one
-        const deep = inPond(cx, cz, -1.2) ? 2 : 1;
+        const deep = inPond(cx, cz, -2.6) ? 3 : inPond(cx, cz, -1.2) ? 2 : 1;
         for (let k = 1; k <= deep; k++) vg.set(x, -k, z, VX.B.WATER);
         vg.set(x, -deep - 1, z, VX.B.SAND); vg.set(x, -deep - 2, z, VX.B.SAND);
         colTop.set(x + ',' + z, -1);
@@ -1283,7 +1287,7 @@ function create(container, opts) {
   const topAt = (x, z) => { const t = colTop.get(Math.floor(x) + ',' + Math.floor(z)); return t == null ? 0 : t; };
   // the waterfall: a gorge cut into the mountain; at its back a curtain of water falls down the cliff
   const fallAt = [];
-  { const S = SOURCE, px = -S.dz, pz = S.dx, d0 = S.r * 0.45, seen = new Set();
+  { const S = SOURCE, px = -S.dz, pz = S.dx, d0 = S.r * 0.95, seen = new Set();   // the pool starts at the mountain's foot
     for (let d = d0; d < S.r + 2; d += 0.4) for (let w = -1.4; w <= 1.4; w += 0.4) {
       const x = Math.floor(S.x + S.dx * d + px * w), z = Math.floor(S.z + S.dz * d + pz * w), k = x + ',' + z;
       if (seen.has(k) || !colTop.has(k)) continue; seen.add(k);
@@ -1292,13 +1296,32 @@ function create(container, opts) {
       vg.set(x, -1, z, VX.B.WATER); vg.set(x, -2, z, VX.B.WATER); vg.set(x, -3, z, VX.B.SAND);
       colTop.set(k, -1);
     }
-    // the curtain, against the cliff wall at the gorge's back
-    for (let w = -1; w <= 1; w++) {
-      const x = Math.floor(S.x + S.dx * (d0 + 0.3) + px * w), z = Math.floor(S.z + S.dz * (d0 + 0.3) + pz * w);
-      const wallH = Math.round(mtnH(S.x + S.dx * (d0 - 0.8) + px * w, S.z + S.dz * (d0 - 0.8) + pz * w).h - 0.2);
-      for (let y = -1; y < Math.max(2, wallH - 1); y++) vg.set(x, y, z, VX.B.WATER);
-      fallAt.push([x + 0.5, z + 0.5]);
+    // the falls: a channel cut back into the cliff that the water comes down in steps — a block or two
+    // of water on every ledge, spilling over the edge onto the next one, then into the gorge pool
+    const cut = new Map();
+    for (let d = d0; d > -0.6; d -= 0.3) for (let w = -1.2; w <= 1.2; w += 0.35) {
+      const x = Math.floor(S.x + S.dx * d + px * w), z = Math.floor(S.z + S.dz * d + pz * w), k = x + ',' + z;
+      if (seen.has(k) || cut.has(k) || !colTop.has(k)) continue;
+      const t = colTop.get(k), dd = d0 - d;
+      const floor = Math.min(t - 2, Math.floor(dd / 0.95) * 2);                 // a ledge two blocks higher every block back
+      if (floor < 0) continue;
+      cut.set(k, floor);
+      for (let y = floor + 1; y < t; y++) vg.set(x, y, z, VX.B.AIR);
+      vg.set(x, floor, z, VX.B.WATER); vg.set(x, floor - 1, z, VX.B.WATER);
+      vg.set(x, floor - 2, z, VX.B.STONE);
+      colTop.set(k, floor + 1);
+      // mossy, grassy lips along the channel's sides, like the picture
+      [[px, pz], [-px, -pz]].forEach(([ox, oz]) => {
+        const sx = Math.floor(S.x + S.dx * d + px * w + ox * 1.6), sz = Math.floor(S.z + S.dz * d + pz * w + oz * 1.6), sk = sx + ',' + sz;
+        if (cut.has(sk) || seen.has(sk) || !colTop.has(sk)) return;
+        const st = colTop.get(sk), lip = Math.min(st, floor + 3);
+        if (lip < st) { for (let y = lip; y < st; y++) vg.set(sx, y, sz, VX.B.AIR); colTop.set(sk, lip); }
+        vg.set(sx, lip - 1, sz, R() < 0.6 ? VX.B.GRASS : VX.B.MOSSY);
+        if (R() < 0.35) vg.plant(sx + 0.5, lip, sz + 0.5, R() < 0.6 ? VX.T.TUFT : R() < 0.5 ? VX.T.FL_BLUE : VX.T.FL_WHITE, 0.8);
+      });
     }
+    // where it lands: mist and foam at the foot of the falls
+    for (let w = -1; w <= 1; w++) fallAt.push([Math.floor(S.x + S.dx * (d0 + 0.3) + px * w) + 0.5, Math.floor(S.z + S.dz * (d0 + 0.3) + pz * w) + 0.5]);
   }
   // spruce trees on the lower slopes of the mountains
   { const R5 = rng(77);
@@ -1554,6 +1577,8 @@ function create(container, opts) {
   { const a = graph.nodes[graph.doorNodes[2]], b = graph.nodes[graph.doorNodes[graph.doorNodes.length - 1]];
     cat.g.position.set(a.x + 1.5, 0, a.z + 0.6); dog.g.position.set(b.x + 3, 0, b.z + 0.8); }
   world.add(cat.g, dog.g);
+  // fish in the river too: up and down the stream, turning round at the ends
+  const riverFish = [0, 1, 2, 0, 1].map((c, i) => { const f = makeFish(c); f.scale.setScalar(0.8); world.add(f); return { g: f, t: 0.15 + i * 0.16, dir: i % 2 ? 1 : -1, sp: rnd(0.012, 0.022), side: rnd(-0.35, 0.35), ph: rnd(0, 6) }; });
   const fish = [0, 1, 2, 3].map((i) => { const f = makeFish(i); world.add(f); return { g: f, a: rnd(0, 6.28), r: rnd(0.62, 0.92), sp: rnd(0.25, 0.5) * (i % 2 ? 1 : -1), jump: 0, jx: 0, jz: 0 }; });
   function zzzSprite() {
     const c = document.createElement('canvas'); c.width = 128; c.height = 64;
@@ -1582,11 +1607,12 @@ function create(container, opts) {
   }
   const splashes = [];
   function splash(x, z, size) {
-    const r = new THREE.Mesh(new THREE.RingGeometry(0.15, 0.25, 18), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, side: THREE.DoubleSide }));
-    r.rotation.x = -Math.PI / 2; r.position.set(x, -0.105, z); r.userData.size = size; world.add(r); splashes.push(r);
+    const r = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.24, 18), new THREE.MeshBasicMaterial({ color: 0xeaf8ff, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
+    r.rotation.x = -Math.PI / 2; r.position.set(x, -0.09, z); r.renderOrder = 3; r.userData.size = size; world.add(r); splashes.push(r);
   }
-  const ripple = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.45, 20), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide }));
-  ripple.rotation.x = -Math.PI / 2; world.add(ripple);
+  // the little ring on the water where a fish jumps out (or lands back in)
+  const ripple = new THREE.Mesh(new THREE.RingGeometry(0.34, 0.42, 24), new THREE.MeshBasicMaterial({ color: 0xeaf8ff, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }));
+  ripple.rotation.x = -Math.PI / 2; ripple.renderOrder = 3; world.add(ripple);
   const flies = [0xffb6c1, 0xd9c9f0, 0xf9e08a, 0xb0e0e6].map((c, i) => { const b = makeButterfly(c); world.add(b); return { g: b, ph: i * 1.7, cx: rnd(-25, 25), cz: rnd(-15, 15) }; });
   const fireGeo = new THREE.BufferGeometry(), fp = [];
   for (let i = 0; i < 40; i++) fp.push(rnd(-30, 30), rnd(1, 3), rnd(-20, 20));
@@ -2064,6 +2090,14 @@ function create(container, opts) {
       p.life -= dt;
       if (p.life <= 0) { world.remove(p.m); food.splice(i, 1); }
     }
+    riverFish.forEach((f) => {
+      f.t += f.dir * f.sp * dt;
+      if (f.t > 0.93 || f.t < 0.12) { f.dir *= -1; f.t = Math.max(0.12, Math.min(0.93, f.t)); }
+      const p0 = river.curve.getPointAt(f.t), q0 = river.curve.getTangentAt(f.t), wig = f.side + Math.sin(time * 0.7 + f.ph) * 0.2;
+      f.g.position.set(p0.x - q0.z * wig, -0.36, p0.z + q0.x * wig);
+      f.g.rotation.y = Math.atan2(q0.x * f.dir, q0.z * f.dir);
+      f.g.userData.tail.rotation.y = Math.sin(time * 9 + f.ph) * 0.5;
+    });
     fish.forEach((f) => {
       f.a += f.sp * dt;
       let nx = POND.x + Math.cos(f.a) * (POND.rx - 1.6) * f.r, nz = POND.z + Math.sin(f.a) * (POND.rz - 1) * f.r;
@@ -2087,12 +2121,12 @@ function create(container, opts) {
         const h = Math.sin(f.jump * Math.PI) * 1.8;
         f.g.position.set(lerp(f.jx, nx, f.jump), -0.34 + h, lerp(f.jz, nz, f.jump));
         f.g.rotation.x = -Math.cos(f.jump * Math.PI) * 1.1;
-        if (f.jump >= 1) { f.jump = 0; f.g.rotation.x = 0; ripple.position.set(nx, -0.1, nz); ripple.material.opacity = 0.8; ripple.scale.setScalar(1); }
+        if (f.jump >= 1) { f.jump = 0; f.g.rotation.x = 0; ripple.position.set(nx, -0.09, nz); ripple.material.opacity = 0.55; ripple.scale.setScalar(1); }
       } else {
         const dx = nx - f.g.position.x, dz = nz - f.g.position.z;
         f.g.position.set(lerp(f.g.position.x, nx, Math.min(1, dt * 6)), -0.34, lerp(f.g.position.z, nz, Math.min(1, dt * 6)));
         if (dx || dz) f.g.rotation.y = Math.atan2(dx, dz);
-        if (Math.random() < dt * 0.05) { f.jump = 0.001; f.jx = nx; f.jz = nz; ripple.position.set(nx, -0.1, nz); ripple.material.opacity = 0.8; ripple.scale.setScalar(1); }
+        if (Math.random() < dt * 0.05) { f.jump = 0.001; f.jx = nx; f.jz = nz; ripple.position.set(nx, -0.09, nz); ripple.material.opacity = 0.55; ripple.scale.setScalar(1); }
       }
       f.g.userData.tail.rotation.y = Math.sin(time * 8 + f.a) * 0.5;
     });
@@ -2425,7 +2459,7 @@ function create(container, opts) {
   applyTime();
   fitCamera();
   start();
-  if (/[?&]debug3d/.test(location.search)) window.__v3d = { drive: (f) => startDrive(f), get car() { return lot.car; }, renderer, people, couple, get swing() { return swing; }, graph, cat, dog, routine, realHour, camera, controls, water, food, get urgent() { return urgent; } };
+  if (/[?&]debug3d/.test(location.search)) window.__v3d = { SOURCE, POND, drive: (f, o) => startDrive(f, o), driveFF: (n) => { for (let k = 0; k < n && drive; k++) driveStep(0.1); return drive ? drive.i + '/' + drive.pts.length + (drive.wait ? ' wait' : '') : 'home'; }, get car() { return lot.car; }, renderer, people, couple, get swing() { return swing; }, graph, cat, dog, routine, realHour, camera, controls, water, food, get urgent() { return urgent; } };
 
   return {
     setUrgent(n) {

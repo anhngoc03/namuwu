@@ -28,7 +28,7 @@ const DRAW = {
   logSide: (x, R) => { for (let i = 0; i < 16; i++) { const c = i % 4 === 0 ? 0x7d5a40 : 0x9a7052; for (let j = 0; j < 16; j++) { x.fillStyle = shade(c, 0.9 + R() * 0.2); x.fillRect(i, j, 1, 1); } } },
   logTop: (x, R) => { DRAW.noise(0xd9b383, 0.08)(x, R); x.strokeStyle = shade(0xb08a60, 1); x.lineWidth = 1; [6, 3].forEach((r) => { x.strokeRect(8 - r + 0.5, 8 - r + 0.5, r * 2 - 1, r * 2 - 1); }); x.strokeStyle = shade(0x8a6a4c, 1); x.strokeRect(0.5, 0.5, 15, 15); },
   leaves: (base) => (x, R) => { DRAW.noise(base, 0.22)(x, R); for (let k = 0; k < 22; k++) { x.fillStyle = shade(base, 0.72); x.fillRect(R() * 16 | 0, R() * 16 | 0, 1, 1); } for (let k = 0; k < 10; k++) { x.fillStyle = shade(base, 1.12); x.fillRect(R() * 16 | 0, R() * 16 | 0, 1, 1); } },
-  water: (x, R) => { DRAW.noise(0x8fd3ea, 0.08)(x, R); for (let k = 0; k < 7; k++) { x.fillStyle = 'rgba(255,255,255,0.55)'; x.fillRect(R() * 13 | 0, R() * 16 | 0, 2 + (R() * 3 | 0), 1); } },
+  water: (x, R) => { DRAW.noise(0x6aaee8, 0.08)(x, R); for (let k = 0; k < 7; k++) { x.fillStyle = 'rgba(255,255,255,0.55)'; x.fillRect(R() * 13 | 0, R() * 16 | 0, 2 + (R() * 3 | 0), 1); } },
   birch: (x, R) => { DRAW.noise(0xf4f0e6, 0.06)(x, R); for (let k = 0; k < 8; k++) { x.fillStyle = '#5a5050'; x.fillRect(R() * 14 | 0, R() * 16 | 0, 2 + (R() * 2 | 0), 1); } },
   cobble: (x, R) => { DRAW.noise(0xa8a6ae, 0.1)(x, R); x.fillStyle = shade(0x84828c, 1); for (let j = 0; j < 16; j += 4) { x.fillRect(0, j, 16, 1); for (let i = (j / 4 % 2) * 3; i < 16; i += 6) x.fillRect(i, j, 1, 4); } },
   deep: (x, R) => DRAW.noise(0x8e8a98, 0.16)(x, R),
@@ -134,18 +134,28 @@ export class Grid {
         else if (nb && nb !== B.WATER && !(isLeaf(nb) && !isLeaf(b))) return;     // hidden behind another block
         if (isLeaf(b) && isLeaf(nb)) return;
         const out = b === B.WATER ? wa : op, [u0, v0, u1, v1] = uvOf(def[F.s]);
-        const quad = F.v.map(([a, c0, e]) => [x + a, y + (b === B.WATER && c0 === 1 ? wt : c0), z + e]);
+        // water is a little lower at its surface — but not where more water sits on top (a waterfall stays one sheet)
+        const lower = b === B.WATER && this.get(x, y + 1, z) !== B.WATER;
+        const quad = F.v.map(([a, c0, e]) => [x + a, y + (lower && c0 === 1 ? wt : c0), z + e]);
         // a soft MC-like light per side (top bright, bottom dark) so blocks read without strong lights
         const br = F.b * tint;
+        // under water: the deeper, the bluer and darker (so a lake looks full, not like a pane of glass)
+        let cr = br, cg = br, cb = br;
+        if (b !== B.WATER && nb === B.WATER) {
+          let dep = 0; const wx = x + F.d[0], wz = z + F.d[2];
+          for (let yy = y + F.d[1]; this.get(wx, yy, wz) === B.WATER && dep < 6; yy++) dep++;
+          const k = Math.max(0.32, 1 - 0.2 * dep);
+          cr = br * k * 0.62; cg = br * k * 0.82; cb = br * Math.min(1, k * 1.05);
+        }
         const uvq = F.d[1] !== 0 ? [[u0, v0], [u1, v0], [u1, v1], [u0, v1]] : [[u0, v0], [u0, v1], [u1, v1], [u1, v0]];
-        [0, 1, 2, 0, 2, 3].forEach((q) => { out.p.push(...quad[q]); out.n.push(...F.d); out.u.push(...uvq[q]); out.c.push(br, br, br); });
+        [0, 1, 2, 0, 2, 3].forEach((q) => { out.p.push(...quad[q]); out.n.push(...F.d); out.u.push(...uvq[q]); out.c.push(cr, cg, cb); });
       });
     }
     const make = (o) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(o.p, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(o.n, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(o.u, 2)); g.setAttribute('color', new THREE.Float32BufferAttribute(o.c, 3)); return g; };
     const tex = atlas();
     const solid = new THREE.Mesh(make(op), new THREE.MeshLambertMaterial({ map: tex, vertexColors: true }));
     solid.castShadow = true; solid.receiveShadow = true; solid.userData.keepBatch = true;
-    const water = new THREE.Mesh(make(wa), new THREE.MeshLambertMaterial({ map: tex, vertexColors: true, transparent: true, opacity: 0.8, depthWrite: false }));
+    const water = new THREE.Mesh(make(wa), new THREE.MeshLambertMaterial({ map: tex, vertexColors: true, transparent: true, opacity: 0.84, depthWrite: false }));
     water.receiveShadow = true; water.userData.keepBatch = true; water.renderOrder = 1;
     // plants: two crossed quads each (flowers, grass tufts, reeds)
     const pl = { p: [], n: [], u: [], c: [] };

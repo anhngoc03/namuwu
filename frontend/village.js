@@ -58,7 +58,7 @@
     if (loading) return;
     loading = true;
     var sc = document.createElement('script');
-    sc.src = '/village3d.js?v=26';
+    sc.src = '/village3d.js?v=27';
     sc.onload = function () { loading = false; var w = loadWaiters; loadWaiters = []; w.forEach(function (f) { f(); }); };
     sc.onerror = function () { loading = false; loadWaiters = []; toast("Couldn't load the village ʕ´-ก̀ʔᐝ"); };
     document.head.appendChild(sc);
