@@ -11,7 +11,7 @@
   <meta name="theme-color" content="#ffb6c1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Fredoka:wght@400;600;700&family=Baloo+2:wght@500;700&family=Dancing+Script:wght@600;700&family=Henny+Penny&family=Noto+Sans+Warang+Citi&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=29">
+  <link rel="stylesheet" href="/style.css?v=30">
   <script src="/theme.js"></script>
 </head>
 <body>
@@ -1013,7 +1013,7 @@
         <input type="text" id="goal-why" maxlength="1000" placeholder="Why does it matter? (optional)" autocomplete="off">
         <div class="st-row"><label><span>Deadline</span><input type="date" id="goal-deadline"></label></div>
         <div class="st-row"><label><span>Cost (₫)</span><input type="text" inputmode="numeric" id="goal-target" placeholder="0"></label><label><span>Saved / spent (₫)</span><input type="text" inputmode="numeric" id="goal-saved" placeholder="0"></label></div>
-        <div class="st-week-h hs-steps-h"><b>Steps</b><span></span><button type="button" class="st-chip" id="goal-ai">Break it down</button></div>
+        <div class="st-week-h hs-steps-h"><b>Steps</b><span></span></div>
         <div id="goal-steps"></div>
         <button type="button" class="st-chip hs-addstep" id="goal-add-step">+ Step</button>
       </div>
@@ -1028,7 +1028,7 @@
         <div id="hl-title-wrap"><input type="text" id="hl-title" maxlength="200" autocomplete="off"></div>
         <div class="st-row">
           <label id="hl-min-wrap"><span>Minutes</span><input type="number" id="hl-min" min="0" max="1440" inputmode="numeric"></label>
-          <label id="hl-kcal-wrap"><span>kcal</span><span class="hs-est"><input type="number" id="hl-kcal" min="0" max="9999" inputmode="numeric"><button type="button" class="st-chip" id="hl-est">Estimate</button></span></label>
+          <label id="hl-kcal-wrap"><span>kcal</span><span class="hs-est"><input type="number" id="hl-kcal" min="0" max="9999" inputmode="numeric"></span></label>
           <label id="hl-val-wrap"><span>kg</span><input type="number" id="hl-val" step="0.1" min="0" inputmode="decimal"></label>
         </div>
         <small class="st-hint" id="hl-note"></small>
@@ -1330,17 +1330,39 @@
         <button id="village-hall-close" class="modal-close">✕</button>
       </div>
       <div class="hall-due" id="hall-due">
-        <div class="hall-due-head"><span>Due soon</span><button type="button" class="expense-edit-link hall-open-work" id="village-hall-sum">✿ Summary</button><button type="button" class="expense-edit-link hall-open-work" id="village-hall-work">Work →</button></div>
+        <div class="hall-due-head"><span>Due soon</span><button type="button" class="expense-edit-link hall-open-work" id="village-hall-work">Work →</button></div>
         <div id="village-hall-list" class="village-hall-list"></div>
+      </div>
+      <div class="hs-chips hall-tabs" id="hall-tabs"><button type="button" class="hs-chip on" data-htab="chat">Chat</button><button type="button" class="hs-chip" data-htab="find">Search files</button></div>
+      <!-- search inside the imported documents (library.js) — plain database search, no AI, free -->
+      <div class="lib-pane" id="lib-pane" style="display:none">
+        <form class="lib-search" id="lib-form" autocomplete="off">
+          <input type="search" id="lib-q" placeholder="Search your documents… (accents optional)">
+          <button class="pill-btn" type="submit">Search</button>
+        </form>
+        <div class="hs-chips" id="lib-kinds"></div>
+        <div class="lib-results" id="lib-results"></div>
+        <div class="lib-shelf">
+          <div class="lib-shelf-head"><b>Library</b><span id="lib-count"></span><button type="button" class="pill-btn" id="lib-import">Import file</button><input type="file" id="lib-file" accept=".json,application/json" hidden></div>
+          <div id="lib-docs"></div>
+        </div>
       </div>
       <div class="hall-chat" id="hall-chat"></div>
       <div class="hall-files" id="hall-files"></div>
-      <div class="hall-input" data-own-enter>
+      <div class="hall-input" data-own-enter id="hall-input">
         <button type="button" class="hall-attach" id="hall-attach">📎</button>
         <input type="file" id="hall-file" multiple hidden accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,.txt,.md,.csv,.json,.html,text/*">
         <textarea id="hall-text" rows="1" placeholder="Message the village…"></textarea>
         <button type="button" class="pill-btn hall-send" id="hall-send">➤</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: Library › read one document ================= -->
+  <div id="lib-doc-modal" class="modal-overlay">
+    <div class="modal-box study-box study-read">
+      <div class="modal-header"><h3 id="lib-doc-title"></h3><button id="lib-doc-close" class="modal-close">✕</button></div>
+      <div class="st-body lib-doc" id="lib-doc-body"></div>
     </div>
   </div>
 
@@ -1465,9 +1487,6 @@
         <label class="set-row"><input type="checkbox" id="set-evening-on"><span>Evening · tomorrow</span><input type="time" id="set-evening-time"></label>
         <label class="set-row"><input type="checkbox" id="set-before-on"><span>Ahead</span>
           <select id="set-before-days"><option value="1">1 day before</option><option value="2">2 days before</option><option value="3">3 days before</option><option value="5">5 days before</option><option value="7">7 days before</option><option value="14">14 days before</option></select><input type="time" id="set-before-time"></label>
-        <label class="set-row"><input type="checkbox" id="set-digest-on"><span>✿ AI summary</span>
-          <select id="set-digest-weekly"><option value="1">Sundays</option><option value="0">Every day</option></select><input type="time" id="set-digest-time"></label>
-        <div class="set-hint">The summary is written by the Town Hall AI from all your houses (uses a little of the API each time).</div>
       </div>
       <div class="set-section">
         <div class="set-title">From</div>
@@ -1828,16 +1847,17 @@
   <script src="/qrcode.min.js"></script>
   <script src="/gas-bridge.js"></script>
   <script src="/converter.js"></script>
-  <script src="/app.js?v=29"></script>
+  <script src="/app.js?v=30"></script>
   <script src="/work.js"></script>
   <script src="/posts.js"></script>
   <script src="/calendar.js"></script>
-  <script src="/foodart.js?v=29"></script>
-  <script src="/love.js?v=29"></script>
-  <script src="/study.js?v=29"></script>
-  <script src="/houses.js?v=29"></script>
-  <script src="/store.js?v=29"></script>
-  <script src="/village.js?v=29"></script>
+  <script src="/foodart.js?v=30"></script>
+  <script src="/love.js?v=30"></script>
+  <script src="/study.js?v=30"></script>
+  <script src="/houses.js?v=30"></script>
+  <script src="/store.js?v=30"></script>
+  <script src="/library.js?v=30"></script>
+  <script src="/village.js?v=30"></script>
   <script src="/enter-confirm.js"></script>
 </body>
 </html>

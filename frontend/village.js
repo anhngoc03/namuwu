@@ -283,19 +283,7 @@
     };
   });
 
-  // ✿ Summary: today's summary from the Town Hall AI (re-used if it was made today)
-  function hallSummary() {
-    if (chat.busy) return;
-    chat.busy = true; renderChat();
-    var today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
-    call('getDigest').then(function (d) { return d && d.at === today && !d.weekly ? d : call('makeDigestNow', false); })
-      .then(function (d) { chat.view.push({ who: 'bot', text: '✿ ' + ((d && d.text) || 'Nothing to sum up yet') }); })
-      .catch(function (e) { chat.view.push({ who: 'bot', err: true, text: (e && e.message) || 'Could not make the summary' }); })
-      .then(function () { chat.busy = false; renderChat(); });
-  }
   function openHall() {
-    var sb0 = document.getElementById('village-hall-sum');
-    if (sb0 && !sb0.onclick) sb0.onclick = hallSummary;
     renderDue();
     renderChat();
     document.getElementById('village-hall-modal').classList.add('active');
@@ -544,8 +532,6 @@
     sel.value = String(r.before.days);
     $('set-src-work').checked = r.sources.work; $('set-src-calendar').checked = r.sources.calendar; $('set-src-todo').checked = r.sources.todo;
     $('set-src-study').checked = r.sources.study !== false; $('set-src-goals').checked = r.sources.goals !== false;
-    var dg = r.digest || { on: false, time: '21:00', weekly: true };
-    $('set-digest-on').checked = !!dg.on; $('set-digest-time').value = dg.time; $('set-digest-weekly').value = dg.weekly ? '1' : '0';
     $('set-private').checked = !!r.private;
   }
   function readSettings() {
@@ -555,7 +541,6 @@
       evening: { on: $('set-evening-on').checked, time: $('set-evening-time').value },
       before: { on: $('set-before-on').checked, days: Number($('set-before-days').value), time: $('set-before-time').value },
       sources: { work: $('set-src-work').checked, calendar: $('set-src-calendar').checked, todo: $('set-src-todo').checked, study: $('set-src-study').checked, goals: $('set-src-goals').checked },
-      digest: { on: $('set-digest-on').checked, time: $('set-digest-time').value, weekly: $('set-digest-weekly').value === '1' },
       private: $('set-private').checked
     };
   }

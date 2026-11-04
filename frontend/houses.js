@@ -146,7 +146,7 @@ function goalsRender() {
   var sel = document.getElementById('goals-year');
   sel.innerHTML = goalsState.years.map(function (y) { return '<option' + (y === goalsState.year ? ' selected' : '') + '>' + y + '</option>'; }).join('');
   var gs = goalsState.goals, box = document.getElementById('goals-main'), today = goalsState.today;
-  if (!gs.length) { box.innerHTML = '<div class="st-empty"><b>No goals for ' + goalsState.year + ' yet</b><span>Write down what you want this year, how much it costs, and let the AI break it into steps.</span><button type="button" class="pill-btn" data-ng="1">+ Goal</button></div>'; return; }
+  if (!gs.length) { box.innerHTML = '<div class="st-empty"><b>No goals for ' + goalsState.year + ' yet</b><span>Write down what you want this year, how much it costs, and the steps to get there.</span><button type="button" class="pill-btn" data-ng="1">+ Goal</button></div>'; return; }
   var act = gs.filter(function (g) { return g.status === 'active'; }), done = gs.filter(function (g) { return g.status === 'done'; });
   var target = gs.filter(function (g) { return g.status !== 'dropped'; }).reduce(function (s, g) { return s + g.target; }, 0);
   var saved = gs.filter(function (g) { return g.status !== 'dropped'; }).reduce(function (s, g) { return s + Math.min(g.saved, g.target || g.saved); }, 0);
@@ -182,7 +182,7 @@ function goalSteps() {
     return '<div class="hs-step' + (s.done ? ' done' : '') + '"><button type="button" class="st-check" data-gs="tick" data-i="' + i + '">' + (s.done ? '✓' : '') + '</button>' +
       '<input type="text" value="' + studyEsc(s.text) + '" data-gs="text" data-i="' + i + '"><input type="date" value="' + (s.due || '') + '" data-gs="due" data-i="' + i + '">' +
       '<button type="button" class="hs-x" data-gs="del" data-i="' + i + '">✕</button></div>';
-  }).join('') || '<div class="st-none">No steps yet — add one or let the AI break it down</div>';
+  }).join('') || '<div class="st-none">No steps yet — add one</div>';
 }
 function goalRead() {
   var e = goalsState.edit, $ = function (id) { return document.getElementById(id).value; };
@@ -258,14 +258,6 @@ function hlSave() {
   var $ = function (id) { return document.getElementById(id).value; }, kind = document.getElementById('hl-modal').dataset.kind;
   var l = { kind: kind, day: hlState.day, title: $('hl-title'), kcal: $('hl-kcal'), minutes: $('hl-min'), value: $('hl-val') };
   studyCall('saveHealthLog', l, [hlState.from, hlState.to]).then(function (d) { hlSet(d); hsModal('hl-modal', false); }).catch(hsErr());
-}
-function hlEstimate() {
-  var $ = function (id) { return document.getElementById(id); }, kind = $('hl-modal').dataset.kind, btn = $('hl-est');
-  if (!$('hl-title').value.trim()) { toast('Type what it was first'); return; }
-  btn.disabled = true; btn.textContent = '…';
-  studyCall('estimateHealthKcal', kind, $('hl-title').value, Number($('hl-min').value) || 0).then(function (r) {
-    $('hl-kcal').value = r.kcal; $('hl-note').textContent = r.note || '';
-  }).catch(hsErr()).then(function () { btn.disabled = false; btn.textContent = 'Estimate'; });
 }
 
 /* ======================= LAW ======================= */
@@ -351,12 +343,6 @@ function housesWire() {
     if (b.dataset.gs === 'text') s.text = b.value; else if (b.dataset.gs === 'due') s.due = b.value;
   });
   $('goal-add-step').onclick = function () { goalsState.edit.steps.push({ text: '', done: false, due: '' }); goalSteps(); var ins = $('goal-steps').querySelectorAll('input[data-gs="text"]'); if (ins.length) ins[ins.length - 1].focus(); };
-  $('goal-ai').onclick = function () {
-    var g = goalRead(), btn = this; if (!g.title.trim()) { toast('Name the goal first'); return; }
-    btn.disabled = true; btn.textContent = 'Thinking…';
-    studyCall('planGoalSteps', g).then(function (r) { goalsState.edit.steps = goalsState.edit.steps.filter(function (s) { return s.done; }).concat(r.steps || []); goalSteps(); toast('Steps added — Save to keep them'); })
-      .catch(hsErr()).then(function () { btn.disabled = false; btn.textContent = 'Break it down'; });
-  };
   $('goal-save').onclick = function () { studyCall('saveGoal', goalRead()).then(function (d) { goalsState.year = d.year; goalsState.years = d.years; goalsState.goals = d.goals; goalsRender(); hsModal('goal-modal', false); toast('Saved ✿'); }).catch(hsErr()); };
   $('goal-del').onclick = function () { var e = goalsState.edit; if (!e.id || !confirm('Delete this goal?')) return; studyCall('deleteGoal', e.id, goalsState.year).then(function (d) { goalsState.goals = d.goals; goalsRender(); hsModal('goal-modal', false); }).catch(hsErr()); };
   ['goal-target', 'goal-saved'].forEach(function (id) { $(id).addEventListener('input', function () { var n = this.value.replace(/[^\d]/g, ''); this.value = n ? Number(n).toLocaleString('en-US') : ''; }); });
@@ -376,7 +362,7 @@ function housesWire() {
     }
   };
   $('hl-close').onclick = function () { hsModal('hl-modal', false); };
-  $('hl-save').onclick = hlSave; $('hl-est').onclick = hlEstimate;
+  $('hl-save').onclick = hlSave;
   $('hp-close').onclick = function () { hsModal('hp-modal', false); };
   $('hp-save').onclick = function () {
     var v = function (id) { return $(id).value; };

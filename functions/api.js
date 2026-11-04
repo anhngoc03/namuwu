@@ -68,9 +68,9 @@ function isPersonalAction_(action) {
   if (action === 'saveHomeProfile') return true;
   if (action === 'saveVillageNames') return true;      // anyone sees the names, only you change them
   if (/^agent/.test(action)) return true;              // Town Hall AI agent (village.js → lib/agent.js)
-  if (/Digest/.test(action)) return true;               // the AI summary
   if (/Push|Reminder/.test(action)) return action !== 'runReminders';
   if (/Study/.test(action)) return true;
+  if (/Library/.test(action)) return true;            // the documents you imported + searching them
   if (/^(getNotesData|saveNote|deleteNote|tidyNote)$/.test(action) || /Goal|Health|Law/.test(action)) return true;   // Notes, Goals, Food & Gym, Law                // Languages / Skills: roadmaps, lessons, tests
   if (/Love|Drive|google/.test(action)) return true;   // Love album + Google Drive link   // settings + this device; the timer itself is public        // anyone sees the Home photo/name, only you change it
   return /Expense/.test(action) && action !== 'getExpenseTodayTotal';
@@ -1481,8 +1481,6 @@ const ACTIONS = {
   getExpenseTodayTotal,
   agentChat,
   getReminderSettings,
-  getDigest,
-  makeDigestNow,
   saveReminderSettings,
   getPushKey,
   savePushSubscription,
@@ -1517,9 +1515,10 @@ const ACTIONS = {
   markStudyAnswer,
   retakeStudyTest,
   getNotesData, saveNote, deleteNote, tidyNote,
-  getGoalsData, saveGoal, deleteGoal, planGoalSteps, getGoalWishlist, saveGoalWishlist,
-  getHealthData, saveHealthLog, deleteHealthLog, estimateHealthKcal, saveHealthProfile, makeHealthPlan,
+  getGoalsData, saveGoal, deleteGoal, getGoalWishlist, saveGoalWishlist,
+  getHealthData, saveHealthLog, deleteHealthLog, saveHealthProfile, makeHealthPlan,
   getLawDocs, checkLawUpdates, setLawDoc, deleteLawDoc,
+  getLibrary, importLibrary, deleteLibraryDoc, getLibraryDoc, searchLibrary,
   deleteLovePhoto,
   deleteLoveMemory
 };
@@ -1555,7 +1554,6 @@ function reminderClean_(r) {
       study: pick(r.sources, 'study') ?? true, goals: pick(r.sources, 'goals') ?? true
     },
     // an AI summary of your days (off unless turned on: it costs a little each time)
-    digest: { on: pick(r.digest, 'on') ?? false, time: t(r.digest && r.digest.time, '21:00'), weekly: pick(r.digest, 'weekly') ?? true },
     private: typeof r.private === 'boolean' ? r.private : d.private
   };
 }
@@ -1682,21 +1680,6 @@ function reminderBody_(items, cfg, what) {
   if (items.length > 6) lines.push('+' + (items.length - 6) + ' more');
   return lines.join('\n');
 }
-// the summary is written by the Town Hall agent, which can read every house
-async function makeDigest_(env, weekly) {
-  const ask = weekly
-    ? 'Tóm tắt TUẦN này của mình cho thông báo điện thoại (tối đa 6 dòng ngắn, có emoji nhẹ): việc đã xong / còn trễ trong Work, chi tiêu tuần (tổng + mục nhiều nhất), tiến độ học (Languages/Skills), mục tiêu, lịch tuần tới. Kết thúc bằng 1 câu động viên. Chỉ đọc dữ liệu, không thay đổi gì.'
-    : 'Tóm tắt HÔM NAY của mình cho thông báo điện thoại (tối đa 5 dòng ngắn, có emoji nhẹ): đã làm được gì, còn gì trễ, chi tiêu hôm nay, mai có gì. Chỉ đọc dữ liệu, không thay đổi gì.';
-  const r = await agentChat(env, [[], ask, []]);
-  const text = String(r.reply || '').trim();
-  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'digest', value: { at: vnNow_().date, weekly: !!weekly, text } }]), prefer: 'resolution=merge-duplicates,return=minimal' }).catch(() => {});
-  return { text };
-}
-async function getDigest(env) {
-  const rows = await sb(env, 'app_settings?key=eq.digest&select=value').catch(() => []);
-  return (rows[0] && rows[0].value) || null;
-}
-async function makeDigestNow(env, [weekly]) { return makeDigest_(env, !!weekly).then(() => getDigest(env)); }
 async function runReminders(env) {
   const cfg = await getReminderSettings(env);
   const now = vnNow_();                                          // Vietnam time
@@ -1711,16 +1694,6 @@ async function runReminders(env) {
     jobs.push({ key: 'before:' + now.date, day, late: false, title: 'In ' + cfg.before.days + ' day' + (cfg.before.days === 1 ? '' : 's') + ' · ' + day.slice(8, 10) + '/' + day.slice(5, 7), what: 'coming up', tag: 'before' });
   }
   const done = [];
-  // the AI summary: every day, or on Sunday evenings
-  const sunday = new Date(now.date + 'T00:00:00Z').getUTCDay() === 0;
-  if (due(cfg.digest) && (!cfg.digest.weekly || sunday)) {
-    try {
-      await sb(env, 'push_log', { method: 'POST', body: JSON.stringify([{ key: 'digest:' + now.date }]), prefer: 'return=minimal' });
-      const d = await makeDigest_(env, cfg.digest.weekly);
-      const sent = await pushToAll_(env, { title: cfg.digest.weekly ? '✿ Your week' : '✿ Your day', body: cfg.private ? 'Your summary is ready in the Town Hall ✿' : d.text.slice(0, 220), tag: 'digest', url: '/' });
-      done.push({ key: 'digest:' + now.date, sent });
-    } catch (e) { /* already sent today, or the AI failed — try again tomorrow */ }
-  }
   for (const j of jobs) {
     // claim the slot first (primary key) so two runs can't both send it
     try { await sb(env, 'push_log', { method: 'POST', body: JSON.stringify([{ key: j.key }]), prefer: 'return=minimal' }); }
@@ -2137,7 +2110,6 @@ async function saveGoal(env, [g]) {
   return getGoalsData(env, [row.year]);
 }
 async function deleteGoal(env, [id, year]) { await sb(env, 'goals?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' }); return getGoalsData(env, [year]); }
-async function planGoalSteps(env, [g]) { return { steps: await hai.goalSteps(env, goalRow_(g || {}), vnNow_().date) }; }
 
 /* ---- Food & Gym ---- */
 function healthOut_(r) { return { id: r.id, day: r.day, kind: r.kind, title: r.title, kcal: r.kcal, minutes: r.minutes, value: r.value == null ? null : Number(r.value), note: r.note }; }
@@ -2166,10 +2138,6 @@ async function saveHealthLog(env, [l, range]) {
   return getHealthData(env, range || []);
 }
 async function deleteHealthLog(env, [id, range]) { await sb(env, 'health_logs?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' }); return getHealthData(env, range || []); }
-async function estimateHealthKcal(env, [kind, text, minutes]) {
-  if (kind === 'workout') { const p = await healthProfile_(env); return hai.workoutKcal(env, text, minutes, p.weight); }
-  return hai.mealKcal(env, text);
-}
 async function saveHealthProfile(env, [p]) {
   const cur = await healthProfile_(env), n = (v) => (v === '' || v == null || isNaN(Number(v)) ? null : Number(v));
   const value = Object.assign({}, cur, {
@@ -2222,6 +2190,89 @@ async function setLawDoc(env, [id, patch]) {
   return { ok: true };
 }
 async function deleteLawDoc(env, [id]) { await sb(env, 'law_docs?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' }); return getLawDocs(env); }
+
+/* ---- Library: documents handed over as a `namuwu-library/1` file (supabase/library.sql), searched
+   with Postgres full-text — no AI, no cost. Text is kept as written; `plain` is the same text in lower case
+   without Vietnamese accents, character for character, so a match in `plain` points at the same spot in `body`. ---- */
+const noAccent_ = (c) => c.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+function plainOf_(text) { return Array.from(text).map((c) => { const n = noAccent_(c); return n.length === 1 ? n : (n[0] || ' '); }).join(''); }
+function libMissing_(e) {
+  if (/library_|does not exist|42P01/.test(String(e && e.message))) throw new Error('Run supabase/library.sql in Supabase first');
+  throw e;
+}
+// long sections are cut at paragraph breaks into pieces of about 1500 characters (same heading)
+function libPieces_(heading, text) {
+  const out = [], paras = text.split(/\n{2,}|\n(?=\s*[-•*]|\s*\d+[.)])/);
+  let cur = '';
+  paras.forEach((p) => {
+    if (cur && (cur.length + p.length) > 1500) { out.push(cur.trim()); cur = ''; }
+    while (p.length > 2400) { out.push(p.slice(0, 1500).trim()); p = p.slice(1500); }
+    cur += (cur ? '\n\n' : '') + p;
+  });
+  if (cur.trim()) out.push(cur.trim());
+  return out.map((body) => ({ heading, body }));
+}
+async function getLibrary(env) {
+  const docs = await sb(env, 'library_docs?select=id,title,kind,source,meta,sections,created_at&order=created_at.desc&limit=500').catch(libMissing_);
+  return { docs };
+}
+async function importLibrary(env, [file]) {
+  if (!file || file.format !== 'namuwu-library/1' || !Array.isArray(file.docs)) throw new Error('This is not a namuwu-library/1 file');
+  let added = 0, sections = 0, laws = 0;
+  for (const d of file.docs.slice(0, 200)) {
+    const title = str_(d && d.title, 300).trim(); if (!title) continue;
+    const kind = ['law', 'study', 'note', 'other'].includes(d.kind) ? d.kind : 'other';
+    const meta = d.meta && typeof d.meta === 'object' ? d.meta : {};
+    const secs = (Array.isArray(d.sections) ? d.sections : [{ heading: '', text: String(d.text || '') }])
+      .flatMap((x) => libPieces_(str_(x && x.heading, 300).trim(), String((x && x.text) || '').normalize('NFC').trim()))
+      .filter((x) => x.body);
+    if (!secs.length) continue;
+    // the same document again replaces the old copy
+    await sb(env, 'library_docs?title=eq.' + encodeURIComponent(title), { method: 'DELETE', prefer: 'return=minimal' }).catch(libMissing_);
+    const [doc] = await sb(env, 'library_docs', { method: 'POST', body: JSON.stringify([{ title, kind, source: str_(d.source, 300), meta, sections: secs.length }]) });
+    for (let i = 0; i < secs.length; i += 200) {
+      const rows = secs.slice(i, i + 200).map((x, k) => ({ doc_id: doc.id, idx: i + k, heading: x.heading, body: x.body, plain: plainOf_(x.heading + '\n' + x.body) }));
+      await sb(env, 'library_chunks', { method: 'POST', body: JSON.stringify(rows), prefer: 'return=minimal' });
+    }
+    added++; sections += secs.length;
+    // a law also goes on the Law house's list (number, dates, status)
+    if (kind === 'law' && meta.number) {
+      await sb(env, 'law_docs?on_conflict=number', { method: 'POST', prefer: 'resolution=merge-duplicates,return=minimal', body: JSON.stringify([{
+        number: str_(meta.number, 60), title, kind: str_(meta.type, 60), issuer: str_(meta.issuer, 200), issued: day_(meta.issued), effective: day_(meta.effective),
+        status: str_(meta.status, 60), field: ['health', 'law'].includes(meta.field) ? meta.field : 'other', url: str_(meta.url, 500), summary: str_(meta.summary, 2000) }]) }).then(() => laws++).catch(() => {});
+    }
+  }
+  return Object.assign(await getLibrary(env), { added, sections, laws });
+}
+async function deleteLibraryDoc(env, [id]) { await sb(env, 'library_docs?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' }); return getLibrary(env); }
+async function getLibraryDoc(env, [id]) {
+  const [doc] = await sb(env, 'library_docs?id=eq.' + Number(id) + '&select=id,title,kind,source,meta');
+  if (!doc) throw new Error('Not found');
+  doc.sections = await sb(env, 'library_chunks?doc_id=eq.' + doc.id + '&select=idx,heading,body&order=idx.asc&limit=5000');
+  return doc;
+}
+// search: every word must be there (accents and capitals don't matter); best matches first, with a snippet
+async function searchLibrary(env, [q, kind]) {
+  const plain = plainOf_(String(q || '').normalize('NFC')).replace(/[^a-z0-9/.\-\s]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (!plain) return { results: [] };
+  const terms = Array.from(new Set(plain.split(' ').filter(Boolean)));
+  const sel = 'select=id,doc_id,idx,heading,body,plain,library_docs!inner(title,kind)' + (['law', 'study', 'note', 'other'].includes(kind) ? '&library_docs.kind=eq.' + kind : '');
+  let rows = await sb(env, 'library_chunks?' + sel + '&tsv=wfts(simple).' + encodeURIComponent(plain) + '&limit=200').catch(libMissing_);
+  if (!rows.length) {                                   // numbers like 15/2023/QH15, or part of a word: plain text match
+    const like = terms.map((t) => 'plain=ilike.*' + encodeURIComponent(t.replace(/[*%,()]/g, '')) + '*').join('&');
+    rows = await sb(env, 'library_chunks?' + sel + '&' + like + '&limit=200').catch(libMissing_);
+  }
+  const scored = rows.map((r) => {
+    let score = r.plain.includes(plain) ? 10 : 0, first = -1;
+    terms.forEach((t) => { let i = r.plain.indexOf(t), n = 0; if (i >= 0 && (first < 0 || i < first)) first = i; while (i >= 0 && n < 20) { n++; i = r.plain.indexOf(t, i + t.length); } score += n; });
+    if (plainOf_(r.heading).includes(plain)) score += 5;
+    // the snippet: about 300 characters around the first match (the text starts with "heading\n")
+    const text = r.heading + '\n' + r.body, at = Math.max(0, first), a = Math.max(0, at - 120), b = Math.min(text.length, at + 220);
+    return { id: r.id, docId: r.doc_id, idx: r.idx, title: r.library_docs.title, kind: r.library_docs.kind, heading: r.heading, score,
+      snippet: (a > 0 ? '…' : '') + text.slice(a, b).replace(/\s+/g, ' ').trim() + (b < text.length ? '…' : ''), body: r.body };
+  }).sort((x, y) => y.score - x.score).slice(0, 25);
+  return { results: scored, terms };
+}
 
 /* ---- Love: food they "order" — shows on the table at their meals (up to 4 dishes) ---- */
 async function saveLoveFood(env, [items]) {
@@ -2371,7 +2422,7 @@ async function agentChat(env, args) {
     getCalendarNotes, saveCalendarNote, deleteCalendarNote,
     getHomeData, addHomeItem, toggleHomeCheck,
     getStudyData, setStudyLessonDone,
-    getNotesData, saveNote, getGoalsData, saveGoal, getHealthData, saveHealthLog, getLawDocs
+    getNotesData, saveNote, getGoalsData, saveGoal, getHealthData, saveHealthLog, getLawDocs, searchLibrary
   });
 }
 
