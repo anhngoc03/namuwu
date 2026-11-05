@@ -2,10 +2,10 @@
 
 A roadmap file holds everything the Languages / Skills houses need — the plan, every lesson
 already written, the exercises and the tests **with their answers** — so the website only
-stores it and marks your answers itself. **Importing a file never calls the AI** (no API cost).
+stores it and marks your answers itself. The website itself never calls an AI (no API cost).
 
 Make the file in any chat with Claude (send your book / documents, paste the prompt below),
-then in the village: Languages or Skills → **📄 Import** → choose the `.json` file.
+then in the village: Languages or Skills → **Import roadmap** → choose the `.json` file.
 
 ## Shape
 
