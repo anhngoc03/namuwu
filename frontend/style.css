@@ -2726,3 +2726,22 @@ body.store-room #store-view .store-head, body.store-room #store-view .store-shel
 .v3d-bubble.loud::after{ border-top-color:#ffe36e; }
 @keyframes v3dPop{ from{ scale:.6; } to{ scale:1; } }
 body.love-room .room-bg canvas{ touch-action:none; }
+
+/* Money › ᯓ★ yearly budget (yearbudget.js) */
+.yb-btn{ position:fixed; z-index:40; top:calc(10px + env(safe-area-inset-top)); right:calc(10px + env(safe-area-inset-right)); height:44px; min-width:44px; padding:0 12px;
+  border:0; border-radius:22px; background:var(--surface); color:#d0668c; font-size:18px; font-weight:700; cursor:pointer; box-shadow:var(--shadow-sm); }
+.yb-btn[hidden]{ display:none; }
+.yb-btn:active{ transform:scale(.94); }
+.yb-box{ max-width:560px; }
+.yb-table{ display:flex; flex-direction:column; gap:6px; max-height:62vh; overflow:auto; }
+.yb-row{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr) minmax(0,1.05fr) 22px; gap:6px; align-items:center; }
+.yb-row input{ min-width:0; width:100%; box-sizing:border-box; font-size:14px; padding:8px 7px; }
+.yb-month{ text-align:right; }
+.yb-year{ text-align:right; font-weight:800; color:#c0587a; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.yb-head span{ font-size:11.5px; font-weight:800; color:#9a7a8a; text-transform:uppercase; letter-spacing:.3px; }
+.yb-head span:nth-child(2), .yb-head span:nth-child(3), .yb-total b{ text-align:right; }
+.yb-del{ border:0; background:none; cursor:pointer; color:#b8a0aa; font-size:14px; padding:2px; }
+.yb-add{ align-self:flex-start; margin:2px 0 4px; }
+.yb-total{ border-top:2px dashed #f0dfe6; padding-top:8px; font-weight:800; }
+.yb-total b{ font-size:14px; white-space:nowrap; }
+.yb-note{ font-size:13px; opacity:.7; font-weight:600; }

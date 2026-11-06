@@ -1509,7 +1509,7 @@ const ACTIONS = {
   markStudyAnswer,
   retakeStudyTest,
   getNotesData, saveNote, deleteNote,
-  getGoalsData, saveGoal, deleteGoal, getGoalWishlist, saveGoalWishlist,
+  getGoalsData, saveGoal, deleteGoal, getGoalWishlist, saveGoalWishlist, getExpenseYearBudget, saveExpenseYearBudget,
   getHealthData, saveHealthLog, deleteHealthLog, saveHealthProfile,
   getLawDocs, setLawDoc, deleteLawDoc,
   getLibrary, importLibrary, deleteLibraryDoc, getLibraryDoc, searchLibrary,
@@ -2008,6 +2008,20 @@ function goalOut_(r) {
   const steps = Array.isArray(r.steps) ? r.steps : [];
   return { id: r.id, year: r.year, title: r.title, area: r.area, why: r.why, deadline: r.deadline, target: Number(r.target_amount) || 0, saved: Number(r.saved_amount) || 0,
     status: r.status, steps, createdAt: r.created_at };
+}
+/* ---- Expense › yearly budget ("ᯓ★"): what each thing costs a month; the year is ×12 (app_settings 'year_budget') ---- */
+async function getExpenseYearBudget(env) {
+  const rows = await sb(env, 'app_settings?key=eq.year_budget&select=value').catch(() => []);
+  return { items: ((rows[0] && rows[0].value && rows[0].value.items) || []) };
+}
+async function saveExpenseYearBudget(env, [items]) {
+  const clean = (Array.isArray(items) ? items : []).slice(0, 200).map((it, i) => ({
+    id: String((it && it.id) || Date.now().toString(36) + i).slice(0, 24),
+    name: String((it && it.name) || '').trim().slice(0, 120),
+    monthly: Math.max(0, Math.round(Number(it && it.monthly) || 0))
+  })).filter((it) => it.name || it.monthly);
+  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'year_budget', value: { items: clean } }]), prefer: 'resolution=merge-duplicates,return=minimal' });
+  return { items: clean };
 }
 /* ---- Goals › wishlist: things you want and what they cost (app_settings key 'wishlist', no new table) ---- */
 async function getGoalWishlist(env) {
