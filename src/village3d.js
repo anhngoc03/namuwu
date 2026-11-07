@@ -35,14 +35,14 @@ const LAYOUTS = {
              [88,150],[124,150],[16,186],[52,186],[88,186],
              [124,187],[180,152]],
     hall: [134, 38], pond: [264, 206], pondR: [8, 4],
-    hill: { x: 160, y: 46, w: 216, h: 74, r: 12, height: 3 },
-    ramp: { x: 160, from: 83, to: 110.5 },
-    lot: { house: 9, x0: 172, y0: 12, x1: 258, y1: 66, car: [226, 54.4], swing: [186, 40] },
+    // the big mountain behind the village (world units): Love on the summit, Goals half way up,
+    // the Town Hall at its foot; a road winds once round it. The island reaches back to `back`.
+    peak: { x: 0, z: -42, R: 29, Rp: 15, H: 16, lot: [24, 16], house: [-3.5, -1.5], car: [3.5, 4.8], swing: [-8.6, 1.6] },
+    back: -86,
     roads: [[8,110.5,312,110.5],[8,144.5,312,144.5],[8,180.5,206,180.5],[8,214.5,170,214.5],
-            [46,110.5,46,214.5],[160,110.5,160,214.5],
-            [64,70,258,70],[160,70,160,110.5]],
-    river: [[292,30],[296,70],[292,110.5],[288,144.5],[282,175],[272,194]],
-    mountains: [[-22,-32.5,5,11],[-8,-34.5,6,14],[8,-34.5,5.5,12],[22,-32,5,11],[33,-26,4.5,9]]
+            [46,110.5,46,214.5],[160,110.5,160,214.5]],
+    river: [[310,-62],[306,-6],[300,62],[292,110.5],[288,144.5],[282,175],[272,194]],
+    mountains: [[-40,-60,5,11],[-24,-76,6,14],[-4,-80,6,13],[18,-76,5.5,12],[36,-60,5,11]]
   },
   port: {
     W: 200, H: 360,
@@ -51,17 +51,15 @@ const LAYOUTS = {
              [88,134],[120,134],[56,186],[88,186],[120,186],
              [60,239],[116,239]],
     hall: [68, 30], pond: [100, 318], pondR: [6.5, 3.6],
-    hill: { x: 100, y: 52, w: 184, h: 96, r: 12, height: 3 },
-    ramp: { x: 100, from: 100, to: 124.5 },
-    lot: { house: 9, x0: 110, y0: 40, x1: 186, y1: 90, car: [166, 81.6], swing: [122, 66] },
+    peak: { x: 0, z: -50, R: 24, Rp: 13, H: 14, lot: [22, 14], house: [-1.5, -1], car: [5, 4.2], swing: [-7.8, 1] },
+    back: -96,
     roads: [[44.5,124.5,155.5,124.5],[44.5,124.5,44.5,330],[155.5,124.5,155.5,312],
-            [44.5,162.5,155.5,162.5],[44.5,214.5,155.5,214.5],[44.5,274.5,155.5,274.5],
-            [16,94,186,94],[100,94,100,124.5]],
-    river: [[206,24],[210,120],[206,230],[200,300],[170,330],[128,322]],
-    mountains: [[-16,-48.5,4.5,10],[-2,-49.5,5,12],[12,-49,4.5,11],[24,-45.5,4,9]]
+            [44.5,162.5,155.5,162.5],[44.5,214.5,155.5,214.5],[44.5,274.5,155.5,274.5]],
+    river: [[216,-120],[214,-30],[210,120],[206,230],[200,300],[170,330],[128,322]],
+    mountains: [[-22,-80,5,10],[-6,-88,5,12],[10,-88,5,11],[25,-76,4.5,9]]
   }
 };
-let LAY, HOUSE_POS, HALL_POS, POND, ROADS, ISLAND, HILL, RAMP, RIVER, MOUNTAINS, FACE, LOT, SOURCE;
+let LAY, HOUSE_POS, HALL_POS, POND, ROADS, ISLAND, PEAK, RIVER, MOUNTAINS, FACE, LOT, SOURCE;
 function useLayout(key) {
   LAY = LAYOUTS[key];
   const P = (x, y) => [(x - LAY.W / 2) / 4, (y - LAY.H / 2) / 4];
@@ -70,9 +68,6 @@ function useLayout(key) {
   const pc = P(LAY.pond[0], LAY.pond[1]);
   POND = { x: pc[0], z: pc[1], rx: LAY.pondR[0], rz: LAY.pondR[1] };
   ROADS = LAY.roads.map(([x1, y1, x2, y2]) => P(x1, y1).concat(P(x2, y2)));
-  const hc = P(LAY.hill.x, LAY.hill.y);
-  HILL = { x: hc[0], z: hc[1], hw: LAY.hill.w / 8, hd: LAY.hill.h / 8, r: LAY.hill.r / 4, h: LAY.hill.height };
-  RAMP = { x: P(LAY.ramp.x, 0)[0], z0: P(0, LAY.ramp.from)[1], z1: P(0, LAY.ramp.to)[1], hw: 1.1 };
   RIVER = LAY.river.map(([x, y]) => { const q = P(x, y); return { x: q[0], z: q[1] }; });
   MOUNTAINS = LAY.mountains.map((m) => [m[0], m[1], m[2] * 1.25, m[3] * 1.5]);   // big blocky peaks
   // the river is born at the foot of the nearest mountain (a waterfall runs down its face) and ends in the lake
@@ -90,28 +85,103 @@ function useLayout(key) {
     if (Math.hypot(e.x - POND.x, e.z - POND.z) < 22) RIVER.push({ x: POND.x + (e.x - POND.x) * 0.25, z: POND.z + (e.z - POND.z) * 0.25 });
   }
   FACE = HOUSE_POS.map((_, i) => (LAY.faces && LAY.faces[i]) || 0);
-  LOT = null;
-  if (LAY.lot) {
-    const L = LAY.lot, a0 = P(L.x0, L.y0), a1 = P(L.x1, L.y1);
-    LOT = { house: L.house, x0: a0[0], z0: a0[1], x1: a1[0], z1: a1[1], car: P(L.car[0], L.car[1]), swing: P(L.swing[0], L.swing[1]) };
+  makePeak();
+  const a = LAY.W / 8 + 11, front = LAY.H / 8 + 11, back = LAY.back || -front;
+  ISLAND = { a, b: (front - back) / 2, cz: (front + back) / 2, n: 2.6, w: a * 2, d: front - back };
+}
+/* ---- the big mountain ----
+   A round, gently sloping mountain: a flat summit (radius Rp, height H) where the Love house and
+   its garden are, sloping down to nothing at radius R. One road winds down it once: it leaves the
+   summit on the left, goes round the back, passes the Goals house half way down on the right
+   (on a ledge cut into the slope), comes round the front and reaches the bottom on the left, where a
+   straight road runs on to the village. The Town Hall stands at the foot, facing the village.
+   The ground height is worked out once into a grid (groundY reads it). */
+const ROAD_HW = 1.5;                         // half the width of the mountain road
+function makePeak() {
+  const pk = LAY.peak, P = { x: pk.x, z: pk.z, R: pk.R, Rp: pk.Rp, H: pk.H };
+  P.base = (r) => { if (r <= P.Rp) return P.H; if (r >= P.R) return 0; const t = (P.R - r) / (P.R - P.Rp); return P.H * t * t * (3 - 2 * t); };
+  // the road: angle π (left) at the top → round the back (−z) → right → front → left at the bottom
+  const r0 = P.Rp + 2.2, r1 = P.R - 1.5, road = [];
+  const at = (sv) => { const ph = Math.PI + sv * Math.PI * 2, r = r0 + (r1 - r0) * sv; return { x: P.x + Math.cos(ph) * r, z: P.z + Math.sin(ph) * r, y: P.base(r), s: sv }; };
+  const len = Math.PI * 2 * (r0 + r1) / 2, n = Math.ceil(len / 0.5);
+  for (let i = 0; i <= n; i++) road.push(at(i / n));
+  P.spiral = road;
+  P.at = at;
+  // the Love garden on the summit
+  const [lw, ld] = pk.lot;
+  LOT = { house: 9, x0: P.x - lw / 2, z0: P.z - ld / 2, x1: P.x + lw / 2, z1: P.z + ld / 2, car: [P.x + pk.car[0], P.z + pk.car[1]], swing: [P.x + pk.swing[0], P.z + pk.swing[1]] };
+  HOUSE_POS[9] = [P.x + pk.house[0], P.z + pk.house[1]]; FACE[9] = 0;
+  // from the garden gate, a drive across the summit to where the road starts going down
+  const gate = { x: LOT.car[0], z: LOT.z1 + 1.6 }, top = road[0];
+  const drive = [{ x: gate.x, z: gate.z }, { x: gate.x, z: LOT.z1 + 3.2 }, { x: top.x + 0.8, z: LOT.z1 + 3.2 }, { x: top.x, z: top.z }];
+  P.drive = drive.map((q) => ({ x: q.x, z: q.z, y: P.H }));
+  // the Goals house: on a ledge cut into the slope, half way down, on the right, door to the road
+  const g = at(0.5), dx = g.x - P.x, dz = g.z - P.z, dl = Math.hypot(dx, dz);
+  P.ledge = { x: g.x - dx / dl * 5.2, z: g.z - dz / dl * 5.2, y: g.y, r: 4.6 };
+  HOUSE_POS[10] = [P.ledge.x, P.ledge.z]; FACE[10] = Math.atan2(dx, dz);
+  // the Town Hall at the front foot; a straight road from the bottom of the mountain road to the village
+  HALL_POS = [P.x, P.z + P.R + 5];
+  // (straight down to the first village street; if that street ends before, along to its end)
+  const bot = road[road.length - 1];
+  const street = ROADS.filter((r) => r[1] === r[3]).reduce((m, r) => (!m || r[1] < m[1] ? r : m), null);
+  const sx0 = Math.min(street[0], street[2]), sx1 = Math.max(street[0], street[2]);
+  ROADS.push([bot.x, bot.z, bot.x, street[1]]);
+  if (bot.x < sx0 || bot.x > sx1) ROADS.push([bot.x, street[1], bot.x < sx0 ? sx0 : sx1, street[1]]);
+  P.foot = { x: bot.x, z: bot.z };
+  // the height grid (0.5 m)
+  const step = 0.5, ext = P.R + 4, gx0 = P.x - ext, gz0 = P.z - ext, nx = Math.ceil(ext * 2 / step) + 1;
+  const grid = new Float32Array(nx * nx), allRoad = P.drive.concat(road);
+  for (let j = 0; j < nx; j++) for (let i = 0; i < nx; i++) {
+    const x = gx0 + i * step, z = gz0 + j * step, r = Math.hypot(x - P.x, z - P.z);
+    let v = P.base(r);
+    // the Goals ledge: flat, blending into the slope around it
+    const dL = Math.hypot(x - P.ledge.x, z - P.ledge.z);
+    if (dL < P.ledge.r) v = P.ledge.y; else if (dL < P.ledge.r + 2.5) v = mix(P.ledge.y, v, smooth01((dL - P.ledge.r) / 2.5));
+    // the road: level across its width, with a short bank on either side
+    let bd = 1e9, by = 0;
+    for (let k = 1; k < allRoad.length; k++) {
+      const a = allRoad[k - 1], b = allRoad[k], ex = b.x - a.x, ez = b.z - a.z, L = ex * ex + ez * ez;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / (L || 1)));
+      const d = Math.hypot(x - (a.x + ex * t), z - (a.z + ez * t));
+      if (d < bd) { bd = d; by = a.y + (b.y - a.y) * t; }
+    }
+    if (r > P.Rp - 0.5) {
+      if (bd < ROAD_HW + 0.3) v = by; else if (bd < ROAD_HW + 2.3) v = mix(by, v, smooth01((bd - ROAD_HW - 0.3) / 2));
+    }
+    grid[j * nx + i] = v;
   }
-  const a = LAY.W / 8 + 11, b = LAY.H / 8 + 11;
-  ISLAND = { a, b, n: 2.6, w: a * 2, d: b * 2 };
+  P.grid = { x0: gx0, z0: gz0, step, n: nx, v: grid };
+  // distance to the mountain road (for road blocks, lamps, trees, walking)
+  P.roadDist = (x, z) => {
+    let bd = 1e9;
+    for (let k = 1; k < allRoad.length; k++) {
+      const a = allRoad[k - 1], b = allRoad[k];
+      if (Math.abs(x - a.x) > 6 && Math.abs(x - b.x) > 6) continue;
+      if (Math.abs(z - a.z) > 6 && Math.abs(z - b.z) > 6) continue;
+      const ex = b.x - a.x, ez = b.z - a.z, L = ex * ex + ez * ez;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / (L || 1)));
+      bd = Math.min(bd, Math.hypot(x - (a.x + ex * t), z - (a.z + ez * t)));
+    }
+    return bd;
+  };
+  PEAK = P;
 }
-// the hill: a rounded box. Signed distance (< 0 inside)
-function hillSD(x, z) {
-  const H = HILL, qx = Math.abs(x - H.x) - (H.hw - H.r), qz = Math.abs(z - H.z) - (H.hd - H.r);
-  return Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0) - H.r;
-}
-const onRamp = (x, z) => Math.abs(x - RAMP.x) < RAMP.hw && z >= RAMP.z0 - 0.4 && z <= RAMP.z1;
-// height of the ground (hill top, the ramp, or 0)
+const mix = (a, b, t) => a + (b - a) * t;
+function smooth01(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
+const inPeak = (x, z, pad) => Math.hypot(x - PEAK.x, z - PEAK.z) < PEAK.R + (pad || 0);
+const onMtnRoad = (x, z, pad) => inPeak(x, z, 2) && PEAK.roadDist(x, z) < ROAD_HW + (pad || 0);
+const onLedge = (x, z, pad) => Math.hypot(x - PEAK.ledge.x, z - PEAK.ledge.z) < PEAK.ledge.r + (pad || 0);
+// height of the ground: the big mountain (from its grid), or 0
 function groundY(x, z) {
-  if (hillSD(x, z) <= 0) return HILL.h;
-  if (onRamp(x, z)) return HILL.h * Math.max(0, Math.min(1, 1 - (z - RAMP.z0) / (RAMP.z1 - RAMP.z0)));
-  return 0;
+  const G = PEAK && PEAK.grid; if (!G) return 0;
+  const fx = (x - G.x0) / G.step, fz = (z - G.z0) / G.step;
+  if (fx < 0 || fz < 0 || fx >= G.n - 1 || fz >= G.n - 1) return 0;
+  const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, w = fz - j, n = G.n, v = G.v;
+  return (v[j * n + i] * (1 - u) + v[j * n + i + 1] * u) * (1 - w) + (v[(j + 1) * n + i] * (1 - u) + v[(j + 1) * n + i + 1] * u) * w;
 }
-// near the cliff edge (nobody walks there, except up the ramp)
-const nearCliff = (x, z, pad) => { const d = hillSD(x, z); return d > -0.5 - (pad || 0) && d < 0.9 + (pad || 0) && !onRamp(x, z); };
+// the mountain's slopes: off the road, the summit and the Goals ledge nobody walks or builds there
+const nearCliff = (x, z, pad) => inPeak(x, z, pad || 0) && Math.hypot(x - PEAK.x, z - PEAK.z) > PEAK.Rp - 0.5 - (pad || 0) &&
+  !onMtnRoad(x, z, -(pad || 0)) && !onLedge(x, z, -(pad || 0)) && Math.hypot(x - PEAK.x, z - PEAK.z) < PEAK.R - 1 + (pad || 0);
 // distance to the river line
 function riverDist(x, z) {
   let best = 1e9;
@@ -131,7 +201,7 @@ function shoreR(t, scale) {
   const r = Math.pow(Math.pow(c / I.a, I.n) + Math.pow(s / I.b, I.n), -1 / I.n);
   return r * (1 + 0.035 * Math.sin(3 * t + 0.7) + 0.025 * Math.sin(5 * t + 2.1) + 0.015 * Math.sin(8 * t)) * (scale || 1);
 }
-function onIsland(x, z, margin) { return Math.hypot(x, z) < shoreR(Math.atan2(z, x)) - (margin || 0); }
+function onIsland(x, z, margin) { const dz = z - ISLAND.cz; return Math.hypot(x, dz) < shoreR(Math.atan2(dz, x)) - (margin || 0); }
 useLayout('land');
 
 const COL = {
@@ -755,11 +825,17 @@ function makeButterfly(color) {
 // a big old tree in the yard (blocks), the swing hanging from its long branch
 function makeSwing() {
   const g = new THREE.Group(), rope = 0xeadfcb, BY = 3.5;
-  const logM = tmat(VX.T.LOG), leaf = tmat(VX.T.LEAF_P);
-  g.add(box(1, BY + 1.5, 1, 0, -2.0, (BY + 1.5) / 2, -0.2, logM));
-  g.add(box(3.2, 0.5, 0.5, 0, -0.4, BY + 0.05, 0, logM));                              // the branch
-  [[-2, BY + 2.5, -0.3, 4, 2, 3], [-2, BY + 3.5, -0.3, 2, 1, 2], [-0.6, BY + 1.6, -0.6, 2, 1, 2], [-3.4, BY + 1.6, -0.2, 1, 1, 2]]
-    .forEach(([x, y, z, w, h, d]) => g.add(box(w, h, d, 0, x, y, z, leaf)));
+  // a big old cherry tree in full bloom: a thick trunk, a low branch for the swing, a wide pink crown
+  const logM = tmat(VX.T.LOG), leaf = tmat(VX.T.LEAF_P), leaf2 = tmat(VX.T.LEAF_P, 0xffe1ec), TX = -2.2;
+  g.add(box(1.4, BY + 3.4, 1.4, 0, TX, (BY + 3.4) / 2, -0.3, logM));
+  g.add(box(0.9, 0.8, 0.9, 0, TX + 1.1, 0.4, -0.3, logM)); g.add(box(0.9, 0.6, 0.9, 0, TX - 0.9, 0.3, 0.3, logM));   // roots
+  g.add(box(3.4, 0.55, 0.55, 0, -0.5, BY + 0.05, 0, logM));                            // the branch the swing hangs from
+  g.add(box(0.6, 2.2, 0.6, 0, TX - 1.6, BY + 2.4, -0.3, logM)); g.add(box(0.6, 1.8, 0.6, 0, TX + 1.4, BY + 2.6, 0.6, logM));
+  [[TX, BY + 3.6, -0.3, 9, 2, 7, leaf], [TX, BY + 5.4, -0.3, 7, 1.6, 5.4, leaf2], [TX, BY + 6.7, -0.3, 4.4, 1.1, 3.4, leaf2],
+   [TX - 1.2, BY + 2.4, -0.6, 5.6, 0.8, 4.6, leaf], [TX + 3.6, BY + 3.4, 0.4, 2, 1.4, 2.6, leaf], [TX - 4.4, BY + 3.2, -0.8, 1.6, 1.4, 2.8, leaf2]]
+    .forEach(([x, y, z, w, h, d, m]) => g.add(box(w, h, d, 0, x, y, z, m)));
+  // petals on the grass underneath
+  [[-1, 0.4], [1.2, -1.1], [-3.6, 1.6], [0.6, 1.9], [-4.4, -1.4], [2.4, 0.8]].forEach(([x, z]) => g.add(box(0.3, 0.02, 0.3, 0xffc4d6, TX + x + 1.5, 0.02, z)));
   const pivot = new THREE.Group(); pivot.position.set(0, BY - 0.2, 0); g.add(pivot);
   const len = BY - 0.2 - 0.56;
   [-0.72, 0.72].forEach((x) => pivot.add(box(0.06, len, 0.06, rope, x, -len / 2, 0)));
@@ -931,9 +1007,18 @@ function buildGraph(doors) {
       onRoad[i].push([x, z]); onRoad[j].push([x, z]);
     }
   }));
-  // each door → nearest point on a road
+  // the mountain road (and the drive across the summit) as a chain of points every ~2 m
+  const chain = [];
+  if (PEAK) {
+    const pts = PEAK.drive.concat(PEAK.spiral);
+    let last = null;
+    pts.forEach((q, i) => { if (!last || Math.hypot(q.x - last.x, q.z - last.z) >= 2 || i === pts.length - 1) { chain.push(node(q.x, q.z)); last = q; } });
+    for (let k = 1; k < chain.length; k++) link(chain[k - 1], chain[k]);
+  }
+  // each door → nearest point on a road (the mountain road counts too)
   const doorNodes = doors.map((d) => {
-    let best = null;
+    let best = null, bc = null;
+    chain.forEach((ni) => { const dist = Math.hypot(nodes[ni].x - d.x, nodes[ni].z - d.z); if (!bc || dist < bc.dist) bc = { ni, dist }; });
     ROADS.forEach((r, i) => {
       const v = r[0] === r[2];
       const x = v ? r[0] : Math.max(Math.min(r[0], r[2]), Math.min(Math.max(r[0], r[2]), d.x));
@@ -941,8 +1026,9 @@ function buildGraph(doors) {
       const dist = Math.hypot(x - d.x, z - d.z);
       if (!best || dist < best.dist) best = { i, x, z, dist };
     });
-    onRoad[best.i].push([best.x, best.z]);
     const dn = node(d.x, d.z);
+    if (bc && bc.dist < best.dist) { link(dn, bc.ni); return dn; }
+    onRoad[best.i].push([best.x, best.z]);
     link(dn, node(best.x, best.z));
     return dn;
   });
@@ -1109,7 +1195,7 @@ function create(container, opts) {
   }, { capture: true, passive: false });
   function clampTarget() {                       // never lose the island
     const t = controls.target, lx = ISLAND.w / 2, lz = ISLAND.d / 2;
-    const cx = Math.max(-lx, Math.min(lx, t.x)), cz = Math.max(-lz, Math.min(lz, t.z));
+    const cx = Math.max(-lx, Math.min(lx, t.x)), cz = Math.max(ISLAND.cz - lz, Math.min(ISLAND.cz + lz, t.z));
     if (cx !== t.x || cz !== t.z || t.y !== 0) {
       panOffset.set(cx - t.x, -t.y, cz - t.z); t.add(panOffset); camera.position.add(panOffset);
     }
@@ -1163,7 +1249,7 @@ function create(container, opts) {
     const t = i / 11 * Math.PI * 2 + rnd(-0.15, 0.15), r = shoreR(t) + rnd(1, 7), parts = [];
     for (let k = 0; k < 5; k++) { const g0 = new THREE.BoxGeometry(Math.round(rnd(2, 5)), 1, Math.round(rnd(2, 4))); g0.translate(Math.round(k * 2.2 - 4.4), 0, Math.round(rnd(-1, 1))); parts.push(g0); }
     const c = new THREE.Mesh(mergeGeometries(parts, false), lowClouds.mat); parts.forEach((g0) => g0.dispose());
-    c.position.set(Math.cos(t) * r, rnd(-9, -3), -Math.sin(t) * r); c.rotation.y = t + Math.PI / 2; c.scale.setScalar(rnd(0.9, 1.5));
+    c.position.set(Math.cos(t) * r, rnd(-9, -3), ISLAND.cz - Math.sin(t) * r); c.rotation.y = t + Math.PI / 2; c.scale.setScalar(rnd(0.9, 1.5));
     lowClouds.add(c);
   }
   scene.add(lowClouds);
@@ -1193,7 +1279,7 @@ function create(container, opts) {
       sp.deco(vg, R3, (m) => g0.add(m));
       const m = vg.build(); g0.add(m.solid, m.water, m.plants);
       const rr = shoreR(sp.t) + sp.r + sp.gap;
-      g0.position.set(Math.cos(sp.t) * rr, sp.y, -Math.sin(sp.t) * rr);
+      g0.position.set(Math.cos(sp.t) * rr, sp.y, ISLAND.cz - Math.sin(sp.t) * rr);
       g0.userData.y0 = sp.y; g0.userData.ph = i * 1.7;
       scene.add(g0); islets.push(g0);
     });
@@ -1239,10 +1325,10 @@ function create(container, opts) {
      tapering to a point underneath; the hill, mountains, river, lake and roads are all blocks too */
   const world = new THREE.Group(); scene.add(world);
   const R = rng(5), dummy = new THREE.Object3D();
-  const ax = Math.ceil(ISLAND.a) + 2, az = Math.ceil(ISLAND.b) + 2;
-  const vg = new VX.Grid(-ax, -26, -az, ax * 2, 54, az * 2);
+  const ax = Math.ceil(ISLAND.a) + 2, az = Math.ceil(ISLAND.b) + 2, zc = Math.round(ISLAND.cz);
+  const vg = new VX.Grid(-ax, -26, zc - az, ax * 2, 54, az * 2);
   const mainRoad = (r) => (r[0] === r[2] ? Math.abs(r[3] - r[1]) : Math.abs(r[2] - r[0])) >= 40;
-  const roadCell = (x, z) => ROADS.some((r) => {
+  const roadCell = (x, z) => onMtnRoad(x, z, 0) || ROADS.some((r) => {
     const [x1, z1, x2, z2] = r, h = (mainRoad(r) ? ROAD_MAIN : ROAD_SIDE) / 2;
     return x >= Math.min(x1, x2) - h && x <= Math.max(x1, x2) + h && z >= Math.min(z1, z2) - h && z <= Math.max(z1, z2) + h;
   });
@@ -1251,24 +1337,22 @@ function create(container, opts) {
   const lump = (x, z) => Math.sin(x * 0.83 + z * 0.37) * Math.cos(z * 0.71 - x * 0.29) + 0.5 * Math.sin(x * 1.9 - z * 1.3);
   const mtnH = (x, z) => {
     let best = 0, mi = -1;
-    if (hillSD(x, z) < 1) return { h: 0, i: -1 };
+    if (inPeak(x, z, 2)) return { h: 0, i: -1 };          // not on the big green mountain
     MOUNTAINS.forEach(([mx, mz, r, h], i) => { const d = Math.hypot(x - mx, z - mz); if (d < r) { const y = h * Math.pow(1 - d / r, 1.1) * (0.88 + 0.12 * lump(x, z)) + (d / r < 0.9 ? 0.8 * lump(x * 1.7, z * 1.7) : 0); if (y > best) { best = y; mi = i; } } });
     return { h: best, i: mi };
   };
   const riverW = (x, z) => 1.4 + 1.3 * Math.min(1, Math.hypot(x - SOURCE.x, z - SOURCE.z) / 22);
   const colTop = new Map();                           // column → top (the y of its top face)
-  for (let x = -ax; x < ax; x++) for (let z = -az; z < az; z++) {
+  for (let x = -ax; x < ax; x++) for (let z = zc - az; z < zc + az; z++) {
     const cx = x + 0.5, cz = z + 0.5;
     if (!onIsland(cx, cz, 0.2)) continue;
     let top = Math.round(groundY(cx, cz)), kind = 'grass';
     const m = mtnH(cx, cz);
     if (m.h > top + 0.6) { const mh = MOUNTAINS[m.i][3]; top = Math.max(top, Math.round(m.h - 0.2)); kind = top > mh * (0.58 + 0.08 * lump(cx * 2, cz * 2)) ? 'snow' : top > mh * 0.22 ? 'rock' : 'grass'; }
-    const e = Math.max(0, 1 - Math.hypot(cx, cz) / shoreR(Math.atan2(cz, cx)));
+    const e = Math.max(0, 1 - Math.hypot(cx, cz - ISLAND.cz) / shoreR(Math.atan2(cz - ISLAND.cz, cx)));
     const bottom = -1 - Math.round(2 + 17 * Math.pow(e, 0.55) + (R() - 0.5) * 2.4);
     for (let y = bottom; y < top; y++) {
       const ft = top - 1 - y;
-      const hillWall = top >= HILL.h && hillSD(cx, cz) <= 0 && y >= 0 && ft > 0;       // the hill's sides: a stone-brick retaining wall
-      if (hillWall) { vg.set(x, y, z, R() < 0.7 ? VX.B.BRICK : R() < 0.5 ? VX.B.MOSSY : VX.B.COBBLE); continue; }
       let b = ft === 0 ? (kind === 'snow' ? VX.B.SNOW : kind === 'rock' ? (R() < 0.2 ? VX.B.MOSSY : R() < 0.12 ? VX.B.GRAVEL : VX.B.STONE) : VX.B.GRASS)
         : ft < 3 && kind === 'grass' ? VX.B.DIRT : y < bottom + 3 ? (R() < 0.55 ? VX.B.DEEP : VX.B.STONE) : (R() < 0.12 ? VX.B.CLAY : R() < 0.08 ? VX.B.GRAVEL : VX.B.STONE);
       vg.set(x, y, z, b);
@@ -1287,8 +1371,7 @@ function create(container, opts) {
       }
       if ((inPond(cx, cz, 1.2) || rd < rw / 2 + 0.9) && !roadCell(cx, cz)) { vg.set(x, -1, z, VX.B.SAND); vg.set(x, -2, z, VX.B.SAND); continue; }
     }
-    if (onRamp(cx, cz)) vg.set(x, top - 1, z, VX.B.BRICK);                         // stone steps up the hill
-    else if (roadCell(cx, cz) || parkRing(cx, cz)) vg.set(x, top - 1, z, VX.B.PATH);
+    if (roadCell(cx, cz) || parkRing(cx, cz)) vg.set(x, top - 1, z, VX.B.PATH);
   }
   const topAt = (x, z) => { const t = colTop.get(Math.floor(x) + ',' + Math.floor(z)); return t == null ? 0 : t; };
   // the waterfall: a gorge cut into the mountain; at its back a curtain of water falls down the cliff
@@ -1365,7 +1448,7 @@ function create(container, opts) {
   // what may grow here (not on roads, water, the yard, in front of houses…)
   const farms = [];
   const inFarm = (x, z) => farms.some((f) => x > f.x0 - 1 && x < f.x1 + 1 && z > f.z0 - 1 && z < f.z1 + 1);
-  const free = (x, z) => !inFarm(x, z) && onIsland(x, z, 2.2) && !inPond(x, z, 1.5) && !inLot(x, z, 0.8) && !nearCliff(x, z, 0.6) && riverDist(x, z) > 2.4 && !inPark(x, z) && !onRamp(x, z) &&
+  const free = (x, z) => !inFarm(x, z) && onIsland(x, z, 2.2) && !inPond(x, z, 1.5) && !inLot(x, z, 0.8) && !nearCliff(x, z, 0.6) && riverDist(x, z) > 2.4 && !inPark(x, z) && !onMtnRoad(x, z, 1.2) &&
     !ROADS.some(([x1, z1, x2, z2]) => x >= Math.min(x1, x2) - RH - 0.3 && x <= Math.max(x1, x2) + RH + 0.3 && z >= Math.min(z1, z2) - RH - 0.3 && z <= Math.max(z1, z2) + RH + 0.3) &&
     !HOUSE_POS.some(([hx, hz]) => Math.abs(x - hx) < 3.6 && Math.abs(z - hz) < 3.8) &&
     !(Math.abs(x - HALL_POS[0]) < 6 && Math.abs(z - HALL_POS[1]) < 5.4) && mtnH(x, z).h < 0.5;
@@ -1413,12 +1496,39 @@ function create(container, opts) {
       [[x0, z0], [x0 + W, z0], [x0, z0 + D], [x0 + W, z0 + D]].forEach(([x, z]) => { const l = lantern(); l.position.set(x, 1.2, z); world.add(l); });
     }
   }
-  // lanterns on log posts either side of the stone steps up the hill
-  [[RAMP.z1 + 0.4, 0], [RAMP.z0 - 0.6, HILL.h]].forEach(([z, y]) => [-1, 1].forEach((sx) => {
-    const x = RAMP.x + sx * (RAMP.hw + 0.7);
-    world.add(box(0.25, 1.4, 0.25, 0, x, y + 0.7, z, tmat(VX.T.LOG)));
-    const l = lantern(); l.position.set(x, y + 1.6, z); world.add(l);
-  }));
+  // the mountain road: lamps and cherry trees taking turns on both sides, all the way down
+  { const road = PEAK.drive.concat(PEAK.spiral);
+    let acc = 0, k = 0;
+    for (let i = 1; i < road.length; i++) {
+      const a = road[i - 1], b = road[i], ex = b.x - a.x, ez = b.z - a.z, L = Math.hypot(ex, ez);
+      acc += L; if (acc < 5.5) continue; acc = 0; k++;
+      const nx = -ez / L, nz = ex / L;
+      [-1, 1].forEach((side) => {
+        const lamp = (k + (side > 0 ? 1 : 0)) % 2 === 0;
+        const off = lamp ? ROAD_HW + 0.8 : ROAD_HW + 2.6, x = b.x + nx * off * side, z = b.z + nz * off * side;
+        if (!onIsland(x, z, 1) || inLot(x, z, 0.5) || onLedge(x, z, 0.5) || PEAK.roadDist(x, z) < off - 0.4) return;
+        const xi = Math.floor(x), zi = Math.floor(z), t = colTop.get(xi + ',' + zi);
+        if (t == null) return;
+        if (lamp) {
+          const l = makeLamp(); l.position.set(xi + 0.5, t, zi + 0.5); world.add(l);
+          const post = new THREE.Object3D(); post.position.set(xi + 0.5, 0, zi + 0.5); post.userData.post = 0.3; world.add(post);
+        } else if (!vg.get(xi, t, zi)) VX.tree(vg, xi, t, zi, 'cherry', R);
+      });
+    }
+  }
+  // a forest on the mountain's slopes (not on the road, the summit or the Goals ledge)
+  { const R6 = rng(61), P = PEAK, near = [];
+    for (let k = 0; k < 900 && near.length < 70; k++) {
+      const a0 = R6() * Math.PI * 2, rr = P.Rp + 1 + R6() * (P.R - P.Rp), x = P.x + Math.cos(a0) * rr, z = P.z + Math.sin(a0) * rr;
+      if (!onIsland(x, z, 2) || inLot(x, z, 2) || onLedge(x, z, 2.5) || P.roadDist(x, z) < ROAD_HW + 2.4) continue;
+      if (Math.abs(x - HALL_POS[0]) < 7 && Math.abs(z - HALL_POS[1]) < 6) continue;
+      const xi = Math.floor(x), zi = Math.floor(z);
+      if (near.some(([a, b]) => Math.hypot(a - xi, b - zi) < 3.4)) continue;
+      const t = colTop.get(xi + ',' + zi); if (t == null || t < 1 || vg.get(xi, t, zi)) continue;
+      VX.tree(vg, xi, t, zi, ['oak', 'oak', 'pine', 'birch', 'mint', 'pine'][R6() * 6 | 0], R6);
+      near.push([xi, zi]);
+    }
+  }
   // trees in clusters along the shore on low grassy humps (one block high), with leaf bushes, flowers and boulders
   const treeAt = [];
   const raise = (x, z) => { const k = x + ',' + z, t = colTop.get(k); if (t == null) return; vg.set(x, t - 1, z, VX.B.DIRT); vg.set(x, t, z, VX.B.GRASS); vg.tint.set(vg.idx(x, t, z), 0.97 + R() * 0.05); colTop.set(k, t + 1); };
@@ -1434,7 +1544,7 @@ function create(container, opts) {
   { const nC = 20;
     for (let i = 0; i < nC; i++) {
       const t = (i + 0.5 + (R() - 0.5) * 0.35) / nC * Math.PI * 2, rr = shoreR(t) - 5.5 - R() * 2;
-      const cx = Math.cos(t) * rr, cz = Math.sin(t) * rr, mr = 2.5 + R() * 1.5;
+      const cx = Math.cos(t) * rr, cz = ISLAND.cz + Math.sin(t) * rr, mr = 2.5 + R() * 1.5;
       if (free(cx, cz) && !loveYard(cx, cz)) {               // the hump
         for (let x = Math.floor(cx - mr); x <= cx + mr; x++) for (let z = Math.floor(cz - mr); z <= cz + mr; z++) {
           if (Math.hypot(x + 0.5 - cx, (z + 0.5 - cz) * 1.2) < mr && free(x + 0.5, z + 0.5) && !loveYard(x + 0.5, z + 0.5)) raise(x, z);
@@ -1490,7 +1600,7 @@ function create(container, opts) {
     const v = x1 === x2, x = lerp(x1, x2, t) + (v ? RH + 0.6 : 0), z = lerp(z1, z2, t) + (v ? 0 : RH + 0.6);
     if (HOUSE_POS.some(([hx, hz]) => Math.abs(x - hx) < 3.6 && Math.abs(z - hz) < 4.2)) return;
     if (Math.abs(x - HALL_POS[0]) < 6.2 && Math.abs(z - HALL_POS[1]) < 6) return;
-    if (inPond(x, z, 1.5) || loveYard(x, z) || !onIsland(x, z, 2) || nearCliff(x, z, 0.5) || riverDist(x, z) < 2 || onRamp(x, z) || inPark(x, z)) return;
+    if (inPond(x, z, 1.5) || loveYard(x, z) || !onIsland(x, z, 2) || nearCliff(x, z, 0.5) || riverDist(x, z) < 2 || onMtnRoad(x, z, 1) || inPark(x, z)) return;
     lampSpots.push([x, z]);
   }));
   lampSpots.slice(0, 7).forEach(([x, z], k) => {
@@ -2331,7 +2441,7 @@ function create(container, opts) {
     const day = h >= 5.5 && h <= 18.6;
     const ang = day ? a : ((h + 12) % 24 - 6) / 12 * Math.PI; // moon arc at night
     const lx = Math.cos(ang) * 70, ly = Math.max(Math.sin(ang), 0.25) * 70;
-    sun.position.set(lx, ly, 40); sun.target.position.set(0, 0, 0);
+    sun.position.set(lx, ly, 40 + ISLAND.cz); sun.target.position.set(0, 0, ISLAND.cz);
     sunDisc.position.set(Math.cos(a) * 200, Math.sin(a) * 160, -120); sunDisc.visible = Math.sin(a) > -0.05;
     const ma = ((h + 12) % 24 - 6) / 12 * Math.PI;
     moonDisc.position.set(Math.cos(ma) * 200, Math.sin(ma) * 160, -120); moonDisc.visible = s.night > 0.3 && Math.sin(ma) > 0;
@@ -2358,8 +2468,8 @@ function create(container, opts) {
   function fitDistance(polar, target) {
     fitCam.fov = camera.fov; fitCam.aspect = camera.aspect; fitCam.near = 0.5; fitCam.far = 1000; fitCam.updateProjectionMatrix();
     const pts = [];
-    for (let i = 0; i < 48; i++) { const t = i / 48 * Math.PI * 2, r = shoreR(t); pts.push(new THREE.Vector3(Math.cos(t) * r, 0, Math.sin(t) * r)); }
-    pts.push(new THREE.Vector3(HALL_POS[0], 9 + HILL.h, HALL_POS[1]));
+    for (let i = 0; i < 48; i++) { const t = i / 48 * Math.PI * 2, r = shoreR(t); pts.push(new THREE.Vector3(Math.cos(t) * r, 0, ISLAND.cz + Math.sin(t) * r)); }
+    pts.push(new THREE.Vector3(HALL_POS[0], 9, HALL_POS[1]), new THREE.Vector3(PEAK.x, PEAK.H + 8, PEAK.z));
     MOUNTAINS.forEach(([x, z, r, h]) => pts.push(new THREE.Vector3(x, h, z)));
     HOUSE_POS.forEach(([x, z]) => pts.push(new THREE.Vector3(x, 6.5, z)));
     const fits = (d) => {
