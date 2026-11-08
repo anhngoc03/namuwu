@@ -1958,7 +1958,8 @@ var expensePendingDate = null;     // date the Add-Expense modal will save to
 var expenseEditingCategoryId = null;
 var expenseEditingCategoryBudgetId = null; // category id being budgeted (new or existing)
 var expenseConfirmAction = null;   // fn to run when the generic confirm modal says "Yah"
-var expenseStatsRange = 'month';   // '7' | '30' | 'month'
+var expenseStatsRange = 'month';   // 'month' (each day of the month on screen) | 'year' (each month of a year)
+var expenseTrendYear = null, expenseTrendYearData = null;   // the year shown in Year mode, and its 12 monthly totals
 var expenseHistoryFilters = { search: '', categoryId: '', walletId: '', amount: '' };
 var expenseEditingIncomeId = null;     // null = adding new income
 var expenseSavingsTxKind = 'deposit';  // 'deposit' | 'spend'
@@ -2096,7 +2097,7 @@ function expenseShiftPeriod(period, delta) {
 /* ---- open / load ---- */
 function openExpense() {
   showView('expense-view');
-  expenseActiveTab = 'overview';
+  expenseActiveTab = 'calendar';
   // Always open on the real current month: a new month = fresh numbers
   // (income/expenses at 0), while savings carry over. Past months stay
   // reachable with the ‹ › arrows.
@@ -2690,17 +2691,26 @@ function expenseDrawTrendChart() {
   var w = rect.width, h = rect.height;
   ctx.clearRect(0, 0, w, h);
 
-  var daysInMonth = expenseLastDay(expensePeriod);
-  var totalsByDay = {};
-  expenseData.entries.forEach(function (e) { totalsByDay[e.date] = (totalsByDay[e.date] || 0) + e.amount; });
-
-  var n = expenseStatsRange === '7' ? 7 : (expenseStatsRange === '30' ? 30 : daysInMonth);
-  n = Math.min(n, daysInMonth);
   var points = [];
-  for (var day = daysInMonth - n + 1; day <= daysInMonth; day++) {
-    if (day < 1) continue;
-    var ds = expensePeriod + '-' + String(day).padStart(2, '0');
-    points.push({ day: day, value: totalsByDay[ds] || 0 });
+  var label = document.getElementById('expense-trend-label');
+  if (expenseStatsRange === 'year') {
+    var yr = expenseTrendYear || Number(expensePeriod.slice(0, 4));
+    if (label) label.textContent = String(yr);
+    if (!expenseTrendYearData || expenseTrendYearData.year !== yr) {
+      google.script.run.withSuccessHandler(function (d) { expenseTrendYearData = d; if (expenseStatsRange === 'year') expenseDrawTrendChart(); })
+        .withFailureHandler(function (err) { toast('Error: ' + err.message); }).getExpenseYearTrend(yr);
+      return;
+    }
+    expenseTrendYearData.months.forEach(function (v, i) { points.push({ day: i + 1, value: v }); });
+  } else {
+    var daysInMonth = expenseLastDay(expensePeriod);
+    if (label) label.textContent = expensePeriodLabel(expensePeriod);
+    var totalsByDay = {};
+    expenseData.entries.forEach(function (e) { totalsByDay[e.date] = (totalsByDay[e.date] || 0) + e.amount; });
+    for (var day = 1; day <= daysInMonth; day++) {
+      var ds = expensePeriod + '-' + String(day).padStart(2, '0');
+      points.push({ day: day, value: totalsByDay[ds] || 0 });
+    }
   }
 
   var max = Math.max.apply(null, points.map(function (p) { return p.value; }).concat([1]));
@@ -3177,6 +3187,13 @@ function expenseWireEvents() {
   document.querySelectorAll('.expense-range-btn').forEach(function (b) {
     b.onclick = function () { expenseSetStatsRange(b.dataset.range); };
   });
+  // ‹ › under Spending trend: the month before / after, or the year before / after
+  var trendStep = function (d) {
+    if (expenseStatsRange === 'year') { expenseTrendYear = (expenseTrendYear || Number(expensePeriod.slice(0, 4))) + d; expenseDrawTrendChart(); }
+    else if (d < 0) expensePrevMonth(); else expenseNextMonth();
+  };
+  document.getElementById('expense-trend-prev').onclick = function () { trendStep(-1); };
+  document.getElementById('expense-trend-next').onclick = function () { trendStep(1); };
   document.querySelectorAll('.expense-quick-amt-btn').forEach(function (b) {
     b.onclick = function () { expenseSetQuickAmount(Number(b.dataset.amount)); };
   });

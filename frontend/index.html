@@ -10,8 +10,8 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#ffb6c1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Fredoka:wght@400;600;700&family=Baloo+2:wght@500;700&family=Dancing+Script:wght@600;700&family=Henny+Penny&family=Noto+Sans+Warang+Citi&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=33">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Fredoka:wght@400;600;700&family=Baloo+2:wght@500;700&family=Dancing+Script:wght@600;700&family=Henny+Penny&family=Noto+Sans+Warang+Citi&family=Pixelify+Sans:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css?v=35">
   <script src="/theme.js"></script>
 </head>
 <body>
@@ -67,6 +67,8 @@
   <div class="village" id="village">
     <div class="village-stage" id="village-stage"></div>
     <div class="village-labels" id="village-labels"></div>
+    <!-- what's left to spend today (anyone sees it): this month's non-repeating budgets ÷ days − spent today -->
+    <div class="village-left" id="village-left" hidden></div>
     <div class="village-corner">
       <div class="village-clock" id="village-clock"></div>
       <button type="button" class="village-btn village-only-open" id="village-theme">◐</button>
@@ -603,11 +605,11 @@
             <div class="expense-trend-head">
               <div class="expense-section-title">Spending trend</div>
               <div class="expense-range-group">
-                <button class="expense-range-btn" data-range="7">7 days</button>
-                <button class="expense-range-btn" data-range="30">30 days</button>
                 <button class="expense-range-btn active" data-range="month">Month</button>
+                <button class="expense-range-btn" data-range="year">Year</button>
               </div>
             </div>
+            <div class="expense-trend-nav"><button type="button" class="expense-month-nav" id="expense-trend-prev">‹</button><span id="expense-trend-label"></span><button type="button" class="expense-month-nav" id="expense-trend-next">›</button></div>
             <canvas id="expense-trend-canvas" class="expense-trend-canvas"></canvas>
           </div>
         </div>
@@ -1819,18 +1821,18 @@
   <script src="/qrcode.min.js"></script>
   <script src="/gas-bridge.js"></script>
   <script src="/converter.js"></script>
-  <script src="/app.js?v=33"></script>
+  <script src="/app.js?v=35"></script>
   <script src="/work.js"></script>
   <script src="/posts.js"></script>
   <script src="/calendar.js"></script>
-  <script src="/foodart.js?v=33"></script>
-  <script src="/love.js?v=33"></script>
-  <script src="/study.js?v=33"></script>
-  <script src="/houses.js?v=33"></script>
-  <script src="/store.js?v=33"></script>
-  <script src="/library.js?v=33"></script>
-  <script src="/yearbudget.js?v=33"></script>
-  <script src="/village.js?v=33"></script>
+  <script src="/foodart.js?v=35"></script>
+  <script src="/love.js?v=35"></script>
+  <script src="/study.js?v=35"></script>
+  <script src="/houses.js?v=35"></script>
+  <script src="/store.js?v=35"></script>
+  <script src="/library.js?v=35"></script>
+  <script src="/yearbudget.js?v=35"></script>
+  <script src="/village.js?v=35"></script>
   <script src="/enter-confirm.js"></script>
 </body>
 </html>

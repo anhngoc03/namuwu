@@ -990,7 +990,16 @@ async function getExpenseTodayTotal(env) {
   var y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7));
   var days = new Date(y, m, 0).getDate(), day = Number(today.slice(8, 10));
   var allowance = pool / days * day - beforeD;
-  return { date: today, total: total, spent: todayD, allowance: allowance };
+  // perDay: this month's budgets without "repeat monthly", spread evenly over the month
+  return { date: today, total: total, spent: todayD, allowance: allowance, perDay: pool / days };
+}
+// Statistics › Spending trend › Year: what was spent in each month of a year
+async function getExpenseYearTrend(env, [year]) {
+  var y = Number(year) || Number(expenseTodayStr_().slice(0, 4));
+  var rows = await sb(env, 'expense_entries?entry_date=gte.' + y + '-01-01&entry_date=lt.' + (y + 1) + '-01-01&select=amount,entry_date&limit=20000');
+  var months = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  rows.forEach(function (r) { months[Number(r.entry_date.slice(5, 7)) - 1] += Number(r.amount) || 0; });
+  return { year: y, months: months };
 }
 
 /* ============================================================
@@ -1509,7 +1518,7 @@ const ACTIONS = {
   markStudyAnswer,
   retakeStudyTest,
   getNotesData, saveNote, deleteNote,
-  getGoalsData, saveGoal, deleteGoal, getGoalWishlist, saveGoalWishlist, getExpenseYearBudget, saveExpenseYearBudget,
+  getGoalsData, saveGoal, deleteGoal, getGoalWishlist, saveGoalWishlist, getExpenseYearBudget, saveExpenseYearBudget, getExpenseYearTrend,
   getHealthData, saveHealthLog, deleteHealthLog, saveHealthProfile,
   getLawDocs, setLawDoc, deleteLawDoc,
   getLibrary, importLibrary, deleteLibraryDoc, getLibraryDoc, searchLibrary,

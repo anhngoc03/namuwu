@@ -2014,18 +2014,24 @@ function create(container, opts) {
   const bubbles = [];
   function say(p, text, loud) {
     bubbles.filter((b) => b.p === p).forEach((b) => { b.t = 0; });
-    const el = document.createElement('div'); el.className = 'v3d-bubble' + (loud ? ' loud' : ''); el.textContent = text; bubbleLayer.appendChild(el);
-    bubbles.push({ p, el, t: 2.4 });
+    // an anchor that sits on the head, and the bubble inside it, which grows up out of the head
+    const el = document.createElement('div'); el.className = 'v3d-bubble-at';
+    const inner = document.createElement('div'); inner.className = 'v3d-bubble' + (loud ? ' loud' : ''); inner.textContent = text; el.appendChild(inner);
+    const b = { p, el, t: 2.4 };
+    bubbles.push(b); placeBubble(b); bubbleLayer.appendChild(el);
+  }
+  function placeBubble(b) {
+    const W = container.clientWidth || innerWidth, H = container.clientHeight || innerHeight;
+    b.p.g.getWorldPosition(tmpB); tmpB.y += 2.2; tmpB.project(camera);
+    b.el.style.transform = 'translate(' + Math.round((tmpB.x + 1) / 2 * W) + 'px,' + Math.round((1 - tmpB.y) / 2 * H) + 'px)';
+    b.el.style.opacity = Math.min(1, b.t * 3);
   }
   const tmpB = new THREE.Vector3();
   function placeBubbles(dt) {
-    const W = container.clientWidth || innerWidth, H = container.clientHeight || innerHeight;
     for (let i = bubbles.length - 1; i >= 0; i--) {
       const b = bubbles[i]; b.t -= dt;
       if (b.t <= 0 || !b.p.g.visible || b.p.inside) { b.el.remove(); bubbles.splice(i, 1); continue; }
-      b.p.g.getWorldPosition(tmpB); tmpB.y += 2.5; tmpB.project(camera);
-      b.el.style.transform = 'translate(' + Math.round((tmpB.x + 1) / 2 * W) + 'px,' + Math.round((1 - tmpB.y) / 2 * H) + 'px) translate(-50%,-100%)';
-      b.el.style.opacity = Math.min(1, b.t * 3);
+      placeBubble(b);
     }
   }
   function placeNames() {

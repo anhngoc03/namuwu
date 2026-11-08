@@ -57,7 +57,7 @@
     if (loading) return;
     loading = true;
     var sc = document.createElement('script');
-    sc.src = '/village3d.js?v=34';
+    sc.src = '/village3d.js?v=35';
     sc.onload = function () { loading = false; var w = loadWaiters; loadWaiters = []; w.forEach(function (f) { f(); }); };
     sc.onerror = function () { loading = false; loadWaiters = []; toast("Couldn't load the village ʕ´-ก̀ʔᐝ"); };
     document.head.appendChild(sc);
@@ -112,6 +112,20 @@
   }
   setInterval(function () { if (shown) tickClock(); }, 5000);
 
+  /* ---------------- under the clock: what's left to spend today (no password needed) ----------------
+     this month's budgets that don't repeat every month, spread over the days of the month,
+     minus what was spent today in those categories. One short word: "110k", "-20k". */
+  function loadLeft() {
+    var el = document.getElementById('village-left'); if (!el) return;
+    call('getExpenseTodayTotal').then(function (r) {
+      if (!r || r.perDay == null) { el.hidden = true; return; }
+      var left = r.perDay - (r.spent || 0), k = Math.round(left / 1000);
+      el.textContent = (Math.abs(left) >= 1e6 ? (Math.round(left / 1e5) / 10).toString().replace('.', ',') + 'M' : k + 'k');
+      el.classList.toggle('over', left < 0); el.hidden = false;
+    }).catch(function () { el.hidden = true; });
+  }
+  setInterval(function () { if (shown) loadLeft(); }, 120000);
+
   /* ---------------- name tags (only after the password), follow the 3D houses ---------------- */
   // names you give the houses and the people who live there (⚙︎ → Names); anyone sees them
   var villageNames = { houses: {}, people: {}, her: 'namu', him: 'hunf' };
@@ -129,10 +143,10 @@
     // locked: only the houses anyone may use show their names (Tools & Games)
     HOUSES.forEach(function (h) {
       if (!open && !h.pub) return;
-      html += '<button type="button" class="village-tag' + (h.open ? '' : ' soon') + (h.pub ? ' pub' : '') + '" data-house="' + h.id + '">' + icdEscape(labelOf(h)) + '</button>';
+      html += '<span class="village-tag' + (h.open ? '' : ' soon') + (h.pub ? ' pub' : '') + '" data-house="' + h.id + '">' + icdEscape(labelOf(h)) + '</span>';
     });
-    if (open) html += '<button type="button" class="village-tag hall' + (urgent.length ? ' alert' : '') + '" data-house="hall">' + icdEscape((villageNames.houses && villageNames.houses.hall) || 'Town Hall') +
-      (urgent.length ? ' <b>' + urgent.length + '</b>' : '') + '</button>';
+    if (open) html += '<span class="village-tag hall' + (urgent.length ? ' alert' : '') + '" data-house="hall">' + icdEscape((villageNames.houses && villageNames.houses.hall) || 'Town Hall') +
+      (urgent.length ? ' <b>' + urgent.length + '</b>' : '') + '</span>';
     labelsEl.innerHTML = html;
     labelsEl.querySelectorAll('[data-house]').forEach(function (b) { tagEls[b.dataset.house] = b; });
     placeTags();
@@ -598,10 +612,6 @@
       openPersonalGate(function () { villageRefresh(); });
     };
     document.getElementById('personal-back').onclick = leaveHouse;
-    labelsEl.addEventListener('click', function (e) {
-      var b = e.target.closest('[data-house]');
-      if (b) openHouse(b.dataset.house);
-    });
     document.getElementById('village-hall-close').onclick = closeHall;
     document.getElementById('village-hall-work').onclick = function () { closeHall(); requirePersonal(openWork); };
     wireSettings();
@@ -650,6 +660,7 @@
     if (!unlocked()) { closeHall(); document.getElementById('village-settings-modal').classList.remove('active'); }
     if (!shown) return;
     tickClock();
+    loadLeft();
     renderLabels();
     if (unlocked()) loadUrgent(); else { setUrgent([]); busyMap = {}; pushBusy(); }
   }
