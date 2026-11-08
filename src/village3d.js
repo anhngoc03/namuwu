@@ -37,13 +37,14 @@ const LAYOUTS = {
     hall: [134, 38], pond: [264, 206], pondR: [8, 4],
     // the big mountain behind the village (world units): Love on the summit, Goals half way up,
     // the Town Hall at its foot; a road winds once round it. The island reaches back to `back`.
-    peak: { x: 0, z: -45, R: 31, Rp: 17, H: 16, lot: [28, 18], house: [-3.5, -1.5], car: [3.5, 4.8], swing: [-8.6, 1.6] },
-    back: -86,
+    peak: { x: 0, z: -51, R: 31, Rp: 17, H: 16, lot: [28, 18], house: [-3.5, -1.5], car: [3.5, 4.8], swing: [-8.6, 1.6] },
+    back: -92,
+    grid: true,                                  // houses in rows on straight streets (the 'roads' below)
     roads: [[8,110.5,312,110.5],[8,144.5,312,144.5],[8,180.5,206,180.5],[8,214.5,170,214.5],
             [46,110.5,46,214.5],[160,110.5,160,214.5]],
-    river: [[318,-66],[306,-6],[300,62],[292,110.5],[288,144.5],[282,175],[272,194]],
+    river: [[318,-72],[306,-10],[300,62],[292,110.5],[288,144.5],[282,175],[272,194]],
     // rocky peaks growing out of the big mountain's back and sides (world: x, z, radius, height)
-    mountains: [[-27,-37,8,13],[-20,-62,8.5,14],[-1,-71,8.5,15],[18,-63,8,14],[30,-48,7,13]],
+    mountains: [[-27,-43,8,13],[-20,-68,8.5,14],[-1,-77,8.5,15],[18,-69,8,14],[30,-54,7,13]],
     // where the houses go (scattered, not in rows) and the winding streets between them (world)
     village: { x0: -44, x1: 26, z0: 4, z1: 37, seed: 11,
       streets: [[[0, 1.5], [-3, 10], [4, 19], [-2, 28], [5, 36]],
@@ -57,12 +58,13 @@ const LAYOUTS = {
              [88,134],[120,134],[56,186],[88,186],[120,186],
              [60,239],[116,239]],
     hall: [68, 30], pond: [100, 318], pondR: [6.5, 3.6],
-    peak: { x: 0, z: -53, R: 26, Rp: 15, H: 14, lot: [25, 16], house: [-1.5, -1], car: [5, 4.2], swing: [-7.8, 1] },
-    back: -96,
+    peak: { x: 0, z: -59, R: 26, Rp: 15, H: 14, lot: [25, 16], house: [-1.5, -1], car: [5, 4.2], swing: [-7.8, 1] },
+    back: -102,
+    grid: true,
     roads: [[44.5,124.5,155.5,124.5],[44.5,124.5,44.5,330],[155.5,124.5,155.5,312],
             [44.5,162.5,155.5,162.5],[44.5,214.5,155.5,214.5],[44.5,274.5,155.5,274.5]],
-    river: [[218,-124],[214,-30],[210,120],[206,230],[200,300],[170,330],[128,322]],
-    mountains: [[-23,-46,7,12],[-15,-72,7.5,13],[0,-79,7.5,14],[15,-72,7,13],[24,-57,6.5,12]],
+    river: [[218,-148],[214,-50],[210,120],[206,230],[200,300],[170,330],[128,322]],
+    mountains: [[-23,-52,7,12],[-15,-78,7.5,13],[0,-85,7.5,14],[15,-78,7,13],[24,-63,6.5,12]],
     village: { x0: -27, x1: 21, z0: -8, z1: 50, seed: 5,
       streets: [[[0, -11], [-3, -2], [3, 8], [-4, 18], [2, 27], [-4, 37]],
                 [[-28, -4], [-14, -8], [0, -3], [12, -7], [26, -3], [36, -5]],
@@ -78,7 +80,7 @@ function useLayout(key) {
   HALL_POS = P(LAY.hall[0], LAY.hall[1]);
   const pc = P(LAY.pond[0], LAY.pond[1]);
   POND = { x: pc[0], z: pc[1], rx: LAY.pondR[0], rz: LAY.pondR[1] };
-  ROADS = [];                                    // (the old grid of straight streets; the village is built in makeVillage)
+  ROADS = LAY.roads.map(([x1, y1, x2, y2]) => P(x1, y1).concat(P(x2, y2)));   // straight streets (grid villages)
   RIVER = LAY.river.map(([x, y]) => { const q = P(x, y); return { x: q[0], z: q[1] }; });
   MOUNTAINS = LAY.mountains.map((m) => [m[0], m[1], m[2] * 1.25, m[3] * 1.5]);   // big blocky peaks
   // the river is born at the foot of the nearest mountain (a waterfall runs down its face) and ends in the lake
@@ -173,7 +175,7 @@ function makePeak() {
   LOT = { house: 9, x0: P.x - lw / 2, z0: P.z - ld / 2, x1: P.x + lw / 2, z1: P.z + ld / 2, car: [P.x + pk.car[0], P.z + pk.car[1]], swing: [P.x + pk.swing[0], P.z + pk.swing[1]] };
   HOUSE_POS[9] = [P.x + pk.house[0], P.z + pk.house[1]]; FACE[9] = 0;
   HALL_POS = [P.x, P.z + P.R + 6];
-  PLAZA = { x: HALL_POS[0], z: HALL_POS[1] + 2.5, rx: 11, rz: 7.5 };
+  PLAZA = { x: HALL_POS[0], z: HALL_POS[1] + 2.5, rx: 17, rz: 8.5 };            // the Town Hall's square: wide
   // the zigzag: long flat bends across the front face, hairpins at the sides
   const N = pk.legs || 4, z0 = LOT.z1 + 3.4, zN = P.z + P.R - 2;
   const legZ = (k) => z0 + (zN - z0) * k / (N - 1);
@@ -210,7 +212,7 @@ function makePeak() {
   P.legY = (L, x) => { const t = Math.max(0, Math.min(1, (x - L.xa) / ((L.xb - L.xa) || 1))); return L.ya + (L.yb - L.ya) * t; };
   P.hw = hw; P.z0 = z0; P.zN = zN;
   // on to the square in front of the Town Hall
-  const toPlaza = curvePts([[foot.x, foot.z], [foot.x + Math.sign(PLAZA.x - foot.x) * 2, foot.z + 3.5], [PLAZA.x - Math.sign(PLAZA.x - foot.x) * (PLAZA.rx - 2), PLAZA.z]], 0.5).map((q) => ({ x: q.x, z: q.z, y: 0 }));
+  const toPlaza = curvePts([[foot.x, foot.z], [foot.x + Math.sign(PLAZA.x - foot.x) * 2, foot.z + 3.5], [PLAZA.x - Math.sign(PLAZA.x - foot.x) * PLAZA.rx * 0.72, PLAZA.z]], 0.5).map((q) => ({ x: q.x, z: q.z, y: 0 }));
   addRoad(pts.concat(toPlaza.slice(1)), 3, 'mtn');
   // the Goals house: on a ledge outside the middle hairpin, door to the road
   const mid = Math.floor((N - 1) / 2), ha = corners[2 + mid * 2], hb = corners[3 + mid * 2] || ha;
@@ -218,7 +220,7 @@ function makePeak() {
   P.ledge = { x: (ha.x + hb.x) / 2 + hs * 6, z: (ha.z + hb.z) / 2, y: hy, r: 4.8 };
   HOUSE_POS[10] = [P.ledge.x, P.ledge.z]; FACE[10] = -hs * Math.PI / 2;
   // the stone stairs: from the left of the garden, down the left flank, to the square
-  const sc = curvePts([[LOT.x0 - 1.2, P.z - 1], [P.x - P.Rp - 1.5, P.z + 1.5], [P.x - P.R * 0.78, P.z + P.R * 0.32], [P.x - P.R * 0.86, P.z + P.R * 0.7], [P.x - P.R * 0.62, P.z + P.R + 1.5], [PLAZA.x - PLAZA.rx + 1.5, PLAZA.z - 1.5]], 0.5);
+  const sc = curvePts([[LOT.x0 - 1.2, P.z - 1], [P.x - P.Rp - 1.5, P.z + 1.5], [P.x - P.R * 0.78, P.z + P.R * 0.32], [P.x - P.R * 0.86, P.z + P.R * 0.7], [P.x - P.R * 0.62, P.z + P.R + 1.5], [PLAZA.x - PLAZA.rx * 0.72, PLAZA.z - 0.6]], 0.5);
   let sl = 0; const sLen = []; sc.forEach((q, i) => { if (i) sl += Math.hypot(q.x - sc[i - 1].x, q.z - sc[i - 1].z); sLen.push(sl); });
   const sEnd = sLen[sLen.length - 1] * 0.86;
   addRoad(sc.map((q, i) => ({ x: q.x, z: q.z, y: P.H * Math.max(0, 1 - sLen[i] / sEnd) })), 2, 'stairs');
@@ -227,7 +229,22 @@ function makePeak() {
 }
 // the village: winding streets, the houses scattered along them (not in rows), a lane to each door
 function makeVillage() {
-  const V = LAY.village, R = rng(V.seed || 7);
+  const V = LAY.village || {}, R = rng(V.seed || 7);
+  if (LAY.grid) {
+    // the village in rows: the straight streets, each a line of points a metre apart
+    ROADS.forEach(([x1, z1, x2, z2]) => {
+      const L = Math.hypot(x2 - x1, z2 - z1), n = Math.max(1, Math.ceil(L));
+      const pts = []; for (let k = 0; k <= n; k++) pts.push({ x: x1 + (x2 - x1) * k / n, z: z1 + (z2 - z1) * k / n });
+      addRoad(pts, L >= 40 ? 3 : 2.1, 'main');
+    });
+    // the square joins the top street straight ahead of the Town Hall
+    const top = ROADS.filter((r) => r[1] === r[3]).reduce((m, r) => (!m || r[1] < m[1] ? r : m), null);
+    if (top) addRoad([{ x: PLAZA.x, z: PLAZA.z + PLAZA.rz * 0.6 }, { x: PLAZA.x, z: top[1] }], 3, 'main');
+    const ring = []; for (let k = 0; k <= 40; k++) { const a = k / 40 * Math.PI * 2; ring.push({ x: PLAZA.x + Math.cos(a) * PLAZA.rx * 0.72, z: PLAZA.z + Math.sin(a) * PLAZA.rz * 0.6 }); }
+    addRoad(ring, 1, 'plaza');
+    indexRoads();
+    return;
+  }
   (V.streets || []).forEach((ctrl) => addRoad(curvePts(ctrl, 1), 3, 'main'));
   // the square in front of the Town Hall: a loop round it joins the mountain road, the stairs and the streets
   { const ring = []; for (let k = 0; k <= 32; k++) { const a = k / 32 * Math.PI * 2; ring.push({ x: PLAZA.x + Math.cos(a) * PLAZA.rx * 0.72, z: PLAZA.z + Math.sin(a) * PLAZA.rz * 0.72 }); }
@@ -268,7 +285,14 @@ function makeVillage() {
 // nearest point on any main street (a slow search, for spots far from every street)
 function nearestOn(x, z) {
   let best = null;
-  ROADPL.forEach((r) => { if (r.kind !== 'main') return; r.pts.forEach((p) => { const d = Math.hypot(p.x - x, p.z - z); if (!best || d < best.d) best = { x: p.x, z: p.z, d }; }); });
+  ROADPL.forEach((r) => {
+    if (r.kind !== 'main') return;
+    for (let k = 1; k < r.pts.length; k++) {
+      const a = r.pts[k - 1], c = r.pts[k], ex = c.x - a.x, ez = c.z - a.z, L = ex * ex + ez * ez;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * ex + (z - a.z) * ez) / (L || 1))), px = a.x + ex * t, pz = a.z + ez * t, d = Math.hypot(px - x, pz - z);
+      if (!best || d < best.d) best = { x: px, z: pz, d };
+    }
+  });
   return best;
 }
 // the height grid for the mountain (0.5 m): the cone, the zigzag's terraces, the ledge, roads and stairs levelled
@@ -1771,7 +1795,18 @@ function create(container, opts) {
       lampSpots.push([x, z]);
     }
   });
-  lampSpots.slice(0, 12).forEach(([x, z], k) => {
+  // the Town Hall's square: lamps round its edge, flower planters, two benches
+  if (PLAZA) {
+    [0.35, 2.79, 3.5, 5.93].forEach((a) => lampSpots.unshift([PLAZA.x + Math.cos(a) * PLAZA.rx * 0.93, PLAZA.z + Math.sin(a) * PLAZA.rz * 0.93]));
+    [-1, 1].forEach((sd) => {
+      const px = PLAZA.x + sd * PLAZA.rx * 0.55, pz = PLAZA.z + PLAZA.rz * 0.75;
+      world.add(box(2.4, 0.5, 0.9, 0, px, 0.25, pz, tmat(VX.T.PLANKS)));
+      [-0.8, -0.25, 0.3, 0.85].forEach((dx, k) => { const f = box(0.35, 0.35, 0.35, [0xffb6c1, 0xf9e08a, 0xd9c9f0, 0xffffff][k], px + dx, 0.68, pz); world.add(f); });
+      const bx = PLAZA.x + sd * PLAZA.rx * 0.82, bz = PLAZA.z - 0.5;
+      world.add(box(0.6, 0.12, 1.8, 0, bx, 0.45, bz, tmat(VX.T.PLANKS))); world.add(box(0.12, 0.5, 1.8, 0, bx + sd * 0.3, 0.75, bz, tmat(VX.T.PLANKS)));
+    });
+  }
+  lampSpots.slice(0, 14).forEach(([x, z], k) => {
     const l = makeLamp(); l.position.set(x, groundY(x, z), z); l.userData.post = 0.3; world.add(l);
     if (k % 2 === 0 && lampLights.length < 3) {
       const pl = new THREE.PointLight(0xffc977, 0, 12, 1.6); pl.position.set(x, groundY(x, z) + 2.7, z); world.add(pl); lampLights.push(pl);
