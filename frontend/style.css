@@ -2121,6 +2121,8 @@ body.personal-view .room-bg.on ~ * .empty-state .empty-icon, body.personal-view.
 body.personal-view.room-on.room-empty .room-cat{ display:block; }
 .room-bg canvas{ display:block; width:100% !important; height:100% !important; }
 .room-bg::after{ content:''; position:absolute; inset:0; pointer-events:none; background:linear-gradient(180deg, rgba(255,250,234,.18), rgba(255,250,234,.4)); }
+/* the Love room and the shop are the page themselves: no veil over them, full colour */
+body.love-room .room-bg::after, body.store-room .room-bg::after{ display:none; }
 body.personal-view #flower-field{ display:none; }
 :root[data-theme="dark"] .room-bg::after{ background:linear-gradient(180deg, rgba(20,22,30,.5), rgba(20,22,30,.7)); }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .room-bg::after{ background:linear-gradient(180deg, rgba(20,22,30,.5), rgba(20,22,30,.7)); } }
