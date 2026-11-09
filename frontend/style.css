@@ -2758,3 +2758,9 @@ body.love-room .room-bg canvas{ touch-action:none; }
 /* Money › Statistics › Spending trend: ‹ month / year › */
 .expense-trend-nav{ display:flex; align-items:center; justify-content:center; gap:12px; margin:2px 0 8px; font-weight:800; font-size:14px; color:#8a6a7a; }
 .expense-trend-nav span{ min-width:120px; text-align:center; }
+
+/* the pixel heart next to the clock (no frame): a little beat, a bigger one on hover */
+.village-heart{ display:flex; align-items:center; padding:2px; background:none; border:0; text-decoration:none; animation:villageHeart 1.8s ease-in-out infinite; filter:drop-shadow(0 1px 1px rgba(40,30,40,.35)); }
+.village-heart svg{ display:block; image-rendering:pixelated; }
+.village-heart:hover, .village-heart:active{ animation-duration:.6s; }
+@keyframes villageHeart{ 0%,100%{ transform:scale(1); } 12%{ transform:scale(1.15); } 24%{ transform:scale(.97); } 36%{ transform:scale(1.08); } }
