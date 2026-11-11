@@ -21,13 +21,20 @@
   function plan() {
     var d = st.data, p = d.period, y = Number(p.slice(0, 4)), m = Number(p.slice(5, 7)), n = new Date(y, m, 0).getDate();
     var spent = {}; d.entries.forEach(function (e) { var k = Number(e.day.slice(8, 10)); spent[k] = (spent[k] || 0) + e.amount; });
-    var pool = d.level + d.carry, before = 0, days = [];
+    // days up to today: what's left ÷ the days left, so a day under/over moves the days after it.
+    // days after today: all the same — what's left after today (today counted at its mark, or more if
+    // already over) shared evenly. A month still to come is the fund ÷ its days.
+    var tp = d.today.slice(0, 7), tk = p < tp ? n : p > tp ? 0 : Number(d.today.slice(8, 10));
+    var pool = d.level + d.carry, before = 0, days = [], even = null, total = 0;
     for (var k = 1; k <= n; k++) {
-      var allow = (pool - before) / (n - k + 1), s = spent[k] || 0;
+      var s = spent[k] || 0, allow;
+      if (k <= tk) allow = (pool - before) / (n - k + 1);
+      else { if (even == null) even = (pool - before) / (n - k + 1); allow = even; }
+      if (k === tk && k < n) before += Math.max(0, allow - s); // today's mark is kept for today
       days.push({ k: k, date: p + '-' + pad(k), allow: allow, spent: s, dow: (new Date(y, m - 1, k).getDay() + 6) % 7 });
-      before += s;
+      before += s; total += s;
     }
-    return { n: n, days: days, pool: pool, spentAll: before };
+    return { n: n, days: days, pool: pool, spentAll: total };
   }
 
   function render() {
@@ -47,11 +54,21 @@
       return '<div class="lf-sum"><small>' + label + '</small><b>' + money(allow) + '</b><span>spent ' + money(spent) + '</span><span class="' + (left < 0 ? 'neg' : 'pos') + '">' + (left < 0 ? 'over ' : 'left ') + money(Math.abs(left)) + '</span></div>';
     };
     $('lf-sums').innerHTML = sum('This week', wAllow, wSpent) + sum('This month', P.pool, P.spentAll);
-    // the calendar
-    var html = ''; for (var i = 0; i < P.days[0].dow; i++) html += '<span class="lf-cell empty"></span>';
+    // the calendar: Mon–Sun, and at the end of each row what that week may spend in all
+    var html = '', row = [];
+    var weekCell = function (ws) {
+      var a = ws.reduce(function (t, x) { return t + x.allow; }, 0), sp = ws.reduce(function (t, x) { return t + x.spent; }, 0);
+      return '<span class="lf-cell lf-wk' + (sp > a + 0.5 ? ' over' : '') + '"><b>' + short(a) + '</b>' + (sp ? '<i>' + short(sp) + '</i>' : '') + '</span>';
+    };
+    for (var i = 0; i < P.days[0].dow; i++) html += '<span class="lf-cell empty"></span>';
     P.days.forEach(function (x) {
       var cls = 'lf-cell' + (x.date === st.sel ? ' sel' : '') + (x.date === today ? ' today' : '') + (x.spent ? (x.spent > x.allow + 0.5 ? ' over' : ' under') : '') + (x.date > today ? ' later' : '');
       html += '<button type="button" class="' + cls + '" data-day="' + x.date + '"><b>' + x.k + '</b><small>' + short(x.allow) + '</small>' + (x.spent ? '<i>' + short(x.spent) + '</i>' : '') + '</button>';
+      row.push(x);
+      if (x.dow === 6 || x.k === P.n) {
+        for (var j = x.dow; j < 6; j++) html += '<span class="lf-cell empty"></span>';
+        html += weekCell(row); row = [];
+      }
     });
     $('lf-grid').innerHTML = html;
     // the chosen day

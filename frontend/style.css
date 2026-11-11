@@ -2785,7 +2785,10 @@ body.love-room .room-bg canvas{ touch-action:none; }
 .lf-body .pos{ color:#3c9a5f; } .lf-body .neg{ color:#d0485a; }
 .lf-split{ display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:16px; align-items:start; }
 @media (max-width:699px){ .lf-split{ grid-template-columns:1fr; } }
-.lf-dow, .lf-grid{ display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); gap:5px; }
+.lf-dow, .lf-grid{ display:grid; grid-template-columns:repeat(7, minmax(0,1fr)) minmax(0,1.15fr); gap:5px; }
+.lf-cell.lf-wk{ cursor:default; justify-content:center; padding:5px 4px; background:var(--surface); border-color:#f3c9d2; border-style:dashed; }
+.lf-cell.lf-wk b{ font-size:12px; color:#c0485f; }
+.lf-cell.lf-wk.over{ background:#fde3e6; }
 .lf-dow{ margin-bottom:5px; font-size:11px; font-weight:800; text-align:center; opacity:.6; }
 .lf-cell{ display:flex; flex-direction:column; align-items:flex-start; gap:1px; min-height:56px; padding:5px 6px; border:1.5px solid var(--line); border-radius:10px; background:var(--surface); font:inherit; font-size:11px; color:var(--ink); cursor:pointer; text-align:left; overflow:hidden; }
 .lf-cell.empty{ border:0; background:none; cursor:default; }
