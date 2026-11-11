@@ -11,7 +11,7 @@
   <meta name="theme-color" content="#ffb6c1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Fredoka:wght@400;600;700&family=Baloo+2:wght@500;700&family=Dancing+Script:wght@600;700&family=Henny+Penny&family=Noto+Sans+Warang+Citi&family=Pixelify+Sans:wght@500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/style.css?v=39">
+  <link rel="stylesheet" href="/style.css?v=40">
   <script src="/theme.js"></script>
 </head>
 <body>
@@ -125,6 +125,24 @@
     <div class="lt-box">
       <div class="lt-head"><span>Timeline</span><select id="lt-year"></select><button type="button" class="lb-x" id="lt-close">✕</button></div>
       <div class="lt-list" id="lt-list"></div>
+    </div>
+  </div>
+  <!-- Love › Fund (lovefund.js): calendar on the left, the chosen day on the right, like Money's calendar -->
+  <div class="lt-wrap lf-wrap" id="love-fund">
+    <div class="lt-box lf-box">
+      <div class="lt-head"><span>Fund</span><button type="button" class="lb-x" id="lf-close">✕</button></div>
+      <div class="lf-body">
+        <div class="lf-month"><button type="button" class="expense-month-nav" id="lf-prev">‹</button><b id="lf-month"></b><button type="button" class="expense-month-nav" id="lf-next">›</button></div>
+        <div class="lf-level" id="lf-level"></div>
+        <div class="lf-sums" id="lf-sums"></div>
+        <div class="lf-split">
+          <div class="lf-cal">
+            <div class="lf-dow"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+            <div class="lf-grid" id="lf-grid"></div>
+          </div>
+          <div class="lf-day" id="lf-day"></div>
+        </div>
+      </div>
     </div>
   </div>
   <div class="love-upload" id="love-upload"><span class="love-upload-text"></span><span class="love-upload-bar"><i></i></span></div>
@@ -395,6 +413,7 @@
           <h2 class="page-title">Love ♡</h2>
           <div class="love-actions">
             <button type="button" class="love-tl-btn" id="love-tl-btn"><i></i>Timeline</button>
+            <button type="button" class="love-tl-btn lf-btn" id="lf-btn"><i></i>Fund</button>
             <button class="pill-btn" id="love-add-btn">+ Memory</button>
           </div>
         </div>
@@ -1829,18 +1848,19 @@
   <script src="/qrcode.min.js"></script>
   <script src="/gas-bridge.js"></script>
   <script src="/converter.js"></script>
-  <script src="/app.js?v=39"></script>
+  <script src="/app.js?v=40"></script>
   <script src="/work.js"></script>
   <script src="/posts.js"></script>
   <script src="/calendar.js"></script>
-  <script src="/foodart.js?v=39"></script>
-  <script src="/love.js?v=39"></script>
-  <script src="/study.js?v=39"></script>
-  <script src="/houses.js?v=39"></script>
-  <script src="/store.js?v=39"></script>
-  <script src="/library.js?v=39"></script>
-  <script src="/yearbudget.js?v=39"></script>
-  <script src="/village.js?v=39"></script>
+  <script src="/foodart.js?v=40"></script>
+  <script src="/love.js?v=40"></script>
+  <script src="/lovefund.js?v=40"></script>
+  <script src="/study.js?v=40"></script>
+  <script src="/houses.js?v=40"></script>
+  <script src="/store.js?v=40"></script>
+  <script src="/library.js?v=40"></script>
+  <script src="/yearbudget.js?v=40"></script>
+  <script src="/village.js?v=40"></script>
   <script src="/enter-confirm.js"></script>
 </body>
 </html>

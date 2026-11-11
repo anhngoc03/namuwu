@@ -1518,7 +1518,8 @@ const ACTIONS = {
   markStudyAnswer,
   retakeStudyTest,
   getNotesData, saveNote, deleteNote,
-  getGoalsData, saveGoal, deleteGoal, getGoalWishlist, saveGoalWishlist, getExpenseYearBudget, saveExpenseYearBudget, getExpenseYearTrend,
+  getGoalsData, saveGoal, deleteGoal, getLoveFund, saveLoveFundLevel, addLoveFundSpend, updateLoveFundSpend, deleteLoveFundSpend,
+  getGoalWishlist, saveGoalWishlist, getExpenseYearBudget, saveExpenseYearBudget, getExpenseYearTrend,
   getHealthData, saveHealthLog, deleteHealthLog, saveHealthProfile,
   getLawDocs, setLawDoc, deleteLawDoc,
   getLibrary, importLibrary, deleteLibraryDoc, getLibraryDoc, searchLibrary,
@@ -2212,6 +2213,54 @@ async function searchLibrary(env, [q, kind]) {
       snippet: (a > 0 ? '…' : '') + text.slice(a, b).replace(/\s+/g, ' ').trim() + (b < text.length ? '…' : ''), body: r.body };
   }).sort((x, y) => y.score - x.score).slice(0, 25);
   return { results: scored, terms };
+}
+
+/* ---- Love › Fund (supabase/love_fund.sql): a monthly amount (kept in app_settings 'love_fund', each
+   change counts from its month on), the spending written down day by day, and what was left over or
+   overspent carried into the next month. The page spreads what's left evenly over the days left. ---- */
+function fundMissing_(e) {
+  if (/love_fund|does not exist|42P01/.test(String(e && e.message))) throw new Error('Run supabase/love_fund.sql in Supabase first');
+  throw e;
+}
+const fundNextP_ = (p) => { let y = Number(p.slice(0, 4)), m = Number(p.slice(5, 7)) + 1; if (m > 12) { m = 1; y++; } return y + '-' + String(m).padStart(2, '0'); };
+async function fundLevels_(env) {
+  const rows = await sb(env, 'app_settings?key=eq.love_fund&select=value').catch(() => []);
+  return ((rows[0] && rows[0].value && rows[0].value.levels) || []).filter((l) => /^\d{4}-\d{2}$/.test(l.from)).sort((a, b) => (a.from < b.from ? -1 : 1));
+}
+const fundLevelAt_ = (levels, p) => levels.reduce((v, l) => (l.from <= p ? Number(l.amount) || 0 : v), 0);
+async function getLoveFund(env, [period]) {
+  const today = vnNow_().date, p = /^\d{4}-\d{2}$/.test(String(period || '')) ? period : today.slice(0, 7);
+  const levels = await fundLevels_(env), start = levels.length ? levels[0].from : null;
+  // left over / overspent in the months before this one (from the month the fund started)
+  let carry = 0;
+  if (start && start < p) {
+    const rows = await sb(env, 'love_fund_spend?day=gte.' + start + '-01&day=lt.' + p + '-01&select=day,amount&limit=50000').catch(fundMissing_);
+    const spent = {}; rows.forEach((r) => { const m = r.day.slice(0, 7); spent[m] = (spent[m] || 0) + Number(r.amount); });
+    for (let m = start; m < p; m = fundNextP_(m)) carry += fundLevelAt_(levels, m) - (spent[m] || 0);
+  }
+  const entries = await sb(env, 'love_fund_spend?day=gte.' + p + '-01&day=lt.' + fundNextP_(p) + '-01&select=id,day,amount&order=day.asc,id.asc').catch(fundMissing_);
+  return { today, period: p, start, level: fundLevelAt_(levels, p), carry, entries: entries.map((e) => ({ id: e.id, day: e.day, amount: Number(e.amount) })) };
+}
+// the monthly amount, from this month on (later changes are replaced by this one)
+async function saveLoveFundLevel(env, [amount, period]) {
+  const p = /^\d{4}-\d{2}$/.test(String(period || '')) ? period : vnNow_().date.slice(0, 7);
+  const levels = (await fundLevels_(env)).filter((l) => l.from < p).concat([{ from: p, amount: Math.max(0, Math.round(Number(amount) || 0)) }]);
+  await sb(env, 'app_settings', { method: 'POST', body: JSON.stringify([{ key: 'love_fund', value: { levels } }]), prefer: 'resolution=merge-duplicates,return=minimal' });
+  return getLoveFund(env, [p]);
+}
+async function addLoveFundSpend(env, [day, amount, period]) {
+  const a = Math.round(Number(amount) || 0); if (a <= 0) throw new Error('Type an amount');
+  await sb(env, 'love_fund_spend', { method: 'POST', body: JSON.stringify([{ day: day_(day) || vnNow_().date, amount: a }]), prefer: 'return=minimal' }).catch(fundMissing_);
+  return getLoveFund(env, [period]);
+}
+async function updateLoveFundSpend(env, [id, amount, period]) {
+  const a = Math.round(Number(amount) || 0); if (a <= 0) throw new Error('Type an amount');
+  await sb(env, 'love_fund_spend?id=eq.' + Number(id), { method: 'PATCH', body: JSON.stringify({ amount: a }), prefer: 'return=minimal' });
+  return getLoveFund(env, [period]);
+}
+async function deleteLoveFundSpend(env, [id, period]) {
+  await sb(env, 'love_fund_spend?id=eq.' + Number(id), { method: 'DELETE', prefer: 'return=minimal' });
+  return getLoveFund(env, [period]);
 }
 
 /* ---- Love: food they "order" — shows on the table at their meals (up to 4 dishes) ---- */
