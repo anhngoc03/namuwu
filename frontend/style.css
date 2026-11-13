@@ -2811,4 +2811,35 @@ body.love-room .room-bg canvas{ touch-action:none; }
 .lf-item button{ border:0; background:none; cursor:pointer; font-size:14px; padding:2px 6px; color:inherit; opacity:.6; }
 .lf-none{ margin:0; font-size:13px; opacity:.6; }
 .lf-add{ display:flex; gap:8px; }
-@media (prefers-color-scheme: dark){ .lf-cell.under{ background:#21402b; border-color:#2f5b3c; } .lf-cell.over{ background:#4a2228; border-color:#6b2f38; } }
+
+/* dark mode: the new panels (Fund, Town Hall library, Store) */
+:root[data-theme="dark"] .lf-cell.under{ background:#21402b; border-color:#2f5b3c; }
+:root[data-theme="dark"] .lf-cell.over, :root[data-theme="dark"] .lf-cell.lf-wk.over{ background:#4a2228; border-color:#7a3542; }
+:root[data-theme="dark"] .lf-cell.lf-wk{ border-color:#6b3d4a; }
+:root[data-theme="dark"] .lf-cell.lf-wk b, :root[data-theme="dark"] .lf-cell.today b{ color:#ff9db2; }
+:root[data-theme="dark"] .lf-item{ background:rgba(255,255,255,.06); }
+:root[data-theme="dark"] .lf-body .pos{ color:#7fd3ae; }
+:root[data-theme="dark"] .lf-body .neg{ color:#ff8a9b; }
+:root[data-theme="dark"] .hall-due{ color:var(--ink); }
+:root[data-theme="dark"] .lib-search input{ background:var(--surface-soft); border-color:#6b3d4a; }
+:root[data-theme="dark"] .lib-hit, :root[data-theme="dark"] .store-line{ background:var(--surface-soft); }
+:root[data-theme="dark"] .lib-hit-doc{ color:#c9a9b6; }
+:root[data-theme="dark"] .lib-sec{ border-bottom-color:var(--line); }
+:root[data-theme="dark"] .lib-sec.here{ background:#3d3420; }
+:root[data-theme="dark"] .lib-hit mark, :root[data-theme="dark"] .lib-doc mark{ background:#7a6220; }
+@media (prefers-color-scheme: dark){
+:root:not([data-theme="light"]) .lf-cell.under{ background:#21402b; border-color:#2f5b3c; }
+:root:not([data-theme="light"]) .lf-cell.over, :root:not([data-theme="light"]) .lf-cell.lf-wk.over{ background:#4a2228; border-color:#7a3542; }
+:root:not([data-theme="light"]) .lf-cell.lf-wk{ border-color:#6b3d4a; }
+:root:not([data-theme="light"]) .lf-cell.lf-wk b, :root:not([data-theme="light"]) .lf-cell.today b{ color:#ff9db2; }
+:root:not([data-theme="light"]) .lf-item{ background:rgba(255,255,255,.06); }
+:root:not([data-theme="light"]) .lf-body .pos{ color:#7fd3ae; }
+:root:not([data-theme="light"]) .lf-body .neg{ color:#ff8a9b; }
+:root:not([data-theme="light"]) .hall-due{ color:var(--ink); }
+:root:not([data-theme="light"]) .lib-search input{ background:var(--surface-soft); border-color:#6b3d4a; }
+:root:not([data-theme="light"]) .lib-hit, :root:not([data-theme="light"]) .store-line{ background:var(--surface-soft); }
+:root:not([data-theme="light"]) .lib-hit-doc{ color:#c9a9b6; }
+:root:not([data-theme="light"]) .lib-sec{ border-bottom-color:var(--line); }
+:root:not([data-theme="light"]) .lib-sec.here{ background:#3d3420; }
+:root:not([data-theme="light"]) .lib-hit mark, :root:not([data-theme="light"]) .lib-doc mark{ background:#7a6220; }
+}
