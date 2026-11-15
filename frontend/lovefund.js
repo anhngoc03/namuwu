@@ -55,20 +55,19 @@
     };
     $('lf-sums').innerHTML = sum('This week', wAllow, wSpent) + sum('This month', P.pool, P.spentAll);
     // the calendar: Mon–Sun, and at the end of each row what that week may spend in all
-    var html = '', row = [];
-    var weekCell = function (ws) {
-      var a = ws.reduce(function (t, x) { return t + x.allow; }, 0), sp = ws.reduce(function (t, x) { return t + x.spent; }, 0);
-      return '<span class="lf-cell lf-wk' + (sp > a + 0.5 ? ' over' : '') + '"><b>' + short(a) + '</b>' + (sp ? '<i>' + short(sp) + '</i>' : '') + '</span>';
-    };
+    // a day over its own mark is still green while its week as a whole stays within the week's mark
+    var weeks = [], cur = [];
+    P.days.forEach(function (x) { cur.push(x); if (x.dow === 6 || x.k === P.n) { weeks.push(cur); cur = []; } });
+    var html = '';
     for (var i = 0; i < P.days[0].dow; i++) html += '<span class="lf-cell empty"></span>';
-    P.days.forEach(function (x) {
-      var cls = 'lf-cell' + (x.date === st.sel ? ' sel' : '') + (x.date === today ? ' today' : '') + (x.spent ? (x.spent > x.allow + 0.5 ? ' over' : ' under') : '') + (x.date > today ? ' later' : '');
-      html += '<button type="button" class="' + cls + '" data-day="' + x.date + '"><b>' + x.k + '</b><small>' + short(x.allow) + '</small>' + (x.spent ? '<i>' + short(x.spent) + '</i>' : '') + '</button>';
-      row.push(x);
-      if (x.dow === 6 || x.k === P.n) {
-        for (var j = x.dow; j < 6; j++) html += '<span class="lf-cell empty"></span>';
-        html += weekCell(row); row = [];
-      }
+    weeks.forEach(function (ws) {
+      var wa = ws.reduce(function (t, x) { return t + x.allow; }, 0), wsp = ws.reduce(function (t, x) { return t + x.spent; }, 0), wOver = wsp > wa + 0.5;
+      ws.forEach(function (x) {
+        var cls = 'lf-cell' + (x.date === st.sel ? ' sel' : '') + (x.date === today ? ' today' : '') + (x.spent ? (wOver && x.spent > x.allow + 0.5 ? ' over' : ' under') : '') + (x.date > today ? ' later' : '');
+        html += '<button type="button" class="' + cls + '" data-day="' + x.date + '"><b>' + x.k + '</b><small>' + short(x.allow) + '</small>' + (x.spent ? '<i>' + short(x.spent) + '</i>' : '') + '</button>';
+      });
+      for (var j = ws[ws.length - 1].dow; j < 6; j++) html += '<span class="lf-cell empty"></span>';
+      html += '<span class="lf-cell lf-wk' + (wsp ? (wOver ? ' over' : ' under') : '') + '"><b>' + short(wa) + '</b>' + (wsp ? '<i>' + short(wsp) + '</i>' : '') + '</span>';
     });
     $('lf-grid').innerHTML = html;
     // the chosen day

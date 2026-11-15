@@ -2843,3 +2843,6 @@ body.love-room .room-bg canvas{ touch-action:none; }
 :root:not([data-theme="light"]) .lib-sec.here{ background:#3d3420; }
 :root:not([data-theme="light"]) .lib-hit mark, :root:not([data-theme="light"]) .lib-doc mark{ background:#7a6220; }
 }
+.lf-cell.lf-wk.under{ background:#e4f6e8; border-color:#9fd3ad; }
+:root[data-theme="dark"] .lf-cell.lf-wk.under{ background:#21402b; border-color:#2f5b3c; }
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .lf-cell.lf-wk.under{ background:#21402b; border-color:#2f5b3c; } }
