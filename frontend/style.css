@@ -1125,7 +1125,7 @@ body.mobile-nav-open .mobile-nav-toggle{
    grid wider than its card and spilling the last (Sunday) column out past
    the rounded corners on narrow phones. minmax(0,1fr) forces the 7 columns
    to actually share the available width instead. */
-.expense-cal-grid{ display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); gap:6px; }
+.expense-cal-grid{ display:grid; grid-template-columns:repeat(7, minmax(0,1fr)) minmax(0,1.15fr); gap:6px; }
 .expense-cal-head{ text-align:center; font-size:11px; font-weight:700; color:var(--exp-muted); padding-bottom:6px; }
 .expense-cal-cell{
   aspect-ratio:1; border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -2846,3 +2846,38 @@ body.love-room .room-bg canvas{ touch-action:none; }
 .lf-cell.lf-wk.under{ background:#e4f6e8; border-color:#9fd3ad; }
 :root[data-theme="dark"] .lf-cell.lf-wk.under{ background:#21402b; border-color:#2f5b3c; }
 @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .lf-cell.lf-wk.under{ background:#21402b; border-color:#2f5b3c; } }
+
+/* Money › Calendar: daily mark, week column, always split (calendar | the chosen day) */
+.expense-cal-layout{ display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:18px; align-items:start; flex-wrap:nowrap; }
+.expense-cal-card, .expense-day-detail{ min-width:0; }
+@media (max-width:760px){ .expense-cal-layout{ grid-template-columns:1fr; } }
+.expense-cal-cell{ aspect-ratio:auto; min-height:58px; align-items:flex-start; justify-content:flex-start; padding:5px 6px; gap:1px; border:1.5px solid transparent; }
+.expense-cal-allow{ font-size:10px; font-weight:600; color:var(--exp-muted); white-space:nowrap; }
+.expense-cal-cell .expense-cal-amt{ font-weight:800; }
+.expense-cal-cell.under{ background:#e4f6e8; border-color:#bfe5c8; color:#2f7a4a; }
+.expense-cal-cell.over{ background:#fde3e6; border-color:#f4bcc4; color:#c0485f; }
+.expense-cal-cell.later{ opacity:.75; }
+.expense-cal-cell.is-today .expense-cal-day{ color:var(--exp-pink-deep); }
+.expense-cal-week{ cursor:default; justify-content:center; background:var(--surface); border:1.5px dashed #f3c9d2; }
+.expense-cal-week .expense-cal-allow{ color:var(--exp-pink-deep); font-weight:800; font-size:11px; }
+.expense-cal-footer{ flex-wrap:wrap; gap:6px 14px; }
+.expense-cal-footer .pos{ color:#3c9a5f; } .expense-cal-footer .neg{ color:#d0485a; }
+.expense-day-nums{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:12px; }
+.expense-day-nums[hidden]{ display:none; }
+.expense-day-nums div{ display:flex; flex-direction:column; font-size:12px; color:var(--exp-muted); font-weight:700; }
+.expense-day-nums b{ font-size:15px; color:var(--exp-ink); }
+.expense-day-nums b.pos{ color:#3c9a5f; } .expense-day-nums b.neg{ color:#d0485a; }
+.expense-day-none{ margin:6px 0 10px; font-size:13px; color:var(--exp-muted); }
+@media (max-width:760px){ .expense-cal-cell{ min-height:50px; padding:4px; } .expense-cal-allow{ font-size:9px; } }
+:root[data-theme="dark"] .expense-cal-cell.under{ background:#21402b; border-color:#2f5b3c; color:#9fe0b6; }
+:root[data-theme="dark"] .expense-cal-cell.over{ background:#4a2228; border-color:#7a3542; color:#ff9db2; }
+:root[data-theme="dark"] .expense-cal-week{ border-color:#6b3d4a; }
+:root[data-theme="dark"] .expense-cal-footer .pos, :root[data-theme="dark"] .expense-day-nums b.pos{ color:#7fd3ae; }
+:root[data-theme="dark"] .expense-cal-footer .neg, :root[data-theme="dark"] .expense-day-nums b.neg{ color:#ff8a9b; }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .expense-cal-cell.under{ background:#21402b; border-color:#2f5b3c; color:#9fe0b6; }
+  :root:not([data-theme="light"]) .expense-cal-cell.over{ background:#4a2228; border-color:#7a3542; color:#ff9db2; }
+  :root:not([data-theme="light"]) .expense-cal-week{ border-color:#6b3d4a; }
+  :root:not([data-theme="light"]) .expense-cal-footer .pos, :root:not([data-theme="light"]) .expense-day-nums b.pos{ color:#7fd3ae; }
+  :root:not([data-theme="light"]) .expense-cal-footer .neg, :root:not([data-theme="light"]) .expense-day-nums b.neg{ color:#ff8a9b; }
+}

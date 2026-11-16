@@ -762,6 +762,9 @@ async function getExpenseData(env, [period]) {
     carryIn: carryIn,
     budgetOverall: budgets.overall,                 // = tổng budget hiệu lực các category
     categoryBudgets: budgets.cats,                  // { categoryId, amount (đặt), carry, effective, repeat }
+    // the daily-spending pool for the Calendar (budgets without Repeat + unbudgeted overspend); null = no budgets
+    dailyPool: budgets.cats.length ? budgets.cats.reduce(function (t, c) { return c.repeat ? t : t + c.effective; }, 0) + budgets.unbudgetedDebt : null,
+    today: expenseTodayStr_(),
     savings: savings,
     prevEntries: prevRows.map(function (r) { return { amount: Number(r.amount), date: r.entry_date }; })
   };
@@ -966,8 +969,8 @@ async function deleteExpenseCategory(env, [id]) {
 // Ô "Spent today" ở Home: đã tiêu hôm nay / được tiêu hôm nay.
 // Quỹ tiêu hằng ngày của tháng = tổng budget hiệu lực các category KHÔNG Repeat
 // (+ phần tiền tiêu ở category không có budget các tháng trước, số âm — xem unbudgetedDebt).
-// Mỗi ngày được quỹ ÷ số ngày; dư hay lố dồn sang các ngày sau → được tiêu hôm nay =
-// quỹ ÷ số ngày × số ngày đã qua (kể cả hôm nay) − đã tiêu từ đầu tháng tới hết hôm qua.
+// Được tiêu hôm nay = (quỹ − đã tiêu từ đầu tháng tới hết hôm qua) ÷ số ngày còn lại (kể cả hôm nay):
+// dư hay lố chia đều cho các ngày sau.
 // "Đã tiêu" = tiêu ở category không Repeat + category chưa có budget (Repeat là khoản cố định).
 // Không có budget nào → allowance = null (chỉ hiện số đã tiêu).
 async function getExpenseTodayTotal(env) {
@@ -989,9 +992,10 @@ async function getExpenseTodayTotal(env) {
   var pool = b.cats.reduce(function (t, c) { return c.repeat ? t : t + c.effective; }, 0) + b.unbudgetedDebt;
   var y = Number(period.slice(0, 4)), m = Number(period.slice(5, 7));
   var days = new Date(y, m, 0).getDate(), day = Number(today.slice(8, 10));
-  var allowance = pool / days * day - beforeD;
-  // perDay: this month's budgets without "repeat monthly", spread evenly over the month
-  return { date: today, total: total, spent: todayD, allowance: allowance, perDay: pool / days };
+  // what's left of the pool, shared evenly over the days left (today included): a day under the mark
+  // gives the days after it a little more, a day over takes a little from each (same as the Money calendar)
+  var allowance = (pool - beforeD) / (days - day + 1);
+  return { date: today, total: total, spent: todayD, allowance: allowance, perDay: allowance };
 }
 // Statistics › Spending trend › Year: what was spent in each month of a year
 async function getExpenseYearTrend(env, [year]) {

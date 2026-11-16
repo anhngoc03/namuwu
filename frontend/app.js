@@ -2563,63 +2563,97 @@ function expenseSaveSavingsTx() {
 }
 
 /* ---- Calendar tab ---- */
+// The daily-spending plan for the month on show. Pool = budgets without Repeat (+ unbudgeted overspend),
+// the same pool as the allowance under the village clock. Spending in Repeat categories (fixed costs) is
+// listed but not counted. Up to today: what's left ÷ the days left, so a day under/over moves the days after;
+// after today every day is the same share of what's left (today kept at its mark, or more if already over).
+function expenseCalPlan() {
+  var p = expensePeriod, n = expenseLastDay(p), y = Number(p.slice(0, 4)), m = Number(p.slice(5, 7));
+  var today = expenseTodayStr(), tp = today.slice(0, 7), tk = p < tp ? n : p > tp ? 0 : Number(today.slice(8, 10));
+  var repeat = {};
+  (expenseData.categoryBudgets || []).forEach(function (c) { if (c.repeat) repeat[c.categoryId] = true; });
+  var counted = {}, all = {}, fixed = {};
+  expenseData.entries.forEach(function (e) {
+    all[e.date] = (all[e.date] || 0) + e.amount;
+    if (repeat[e.categoryId]) fixed[e.date] = (fixed[e.date] || 0) + e.amount;
+    else counted[e.date] = (counted[e.date] || 0) + e.amount;
+  });
+  var pool = expenseData.dailyPool, has = pool != null, before = 0, even = null, days = [];
+  for (var k = 1; k <= n; k++) {
+    var ds = p + '-' + String(k).padStart(2, '0'), sp = counted[ds] || 0, allow = null;
+    if (has) {
+      if (k <= tk) allow = (pool - before) / (n - k + 1);
+      else { if (even == null) even = (pool - before) / (n - k + 1); allow = even; }
+      if (k === tk && k < n) before += Math.max(0, allow - sp);
+    }
+    before += sp;
+    days.push({ k: k, date: ds, allow: allow, spent: sp, all: all[ds] || 0, fixed: fixed[ds] || 0, dow: (new Date(y, m - 1, k).getDay() + 6) % 7 });
+  }
+  return { has: has, pool: pool, n: n, days: days };
+}
+
 function expenseRenderCalendar() {
   document.getElementById('expense-cal-month-label').textContent = expensePeriodLabel(expensePeriod);
+  var today = expenseTodayStr();
+  if (!expenseSelectedDay || expenseSelectedDay.slice(0, 7) !== expensePeriod) expenseSelectedDay = today.slice(0, 7) === expensePeriod ? today : expensePeriod + '-01';
+  var P = expenseCalPlan();
   var grid = document.getElementById('expense-cal-grid');
-  grid.innerHTML = '';
-  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(function (d) {
-    var h = document.createElement('div');
-    h.className = 'expense-cal-head';
-    h.textContent = d;
-    grid.appendChild(h);
+  var html = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun','Week'].map(function (d) { return '<div class="expense-cal-head">' + d + '</div>'; }).join('');
+  for (var i = 0; i < P.days[0].dow; i++) html += '<div class="expense-cal-cell empty"></div>';
+  var weeks = [], cur = [];
+  P.days.forEach(function (x) { cur.push(x); if (x.dow === 6 || x.k === P.n) { weeks.push(cur); cur = []; } });
+  weeks.forEach(function (ws) {
+    ws.forEach(function (x) {
+      var shown = P.has ? x.spent : x.all;
+      var cls = 'expense-cal-cell' + (x.date === expenseSelectedDay ? ' selected' : '') + (x.date === today ? ' is-today' : '') + (x.date > today ? ' later' : '') +
+        (P.has && x.spent ? (x.spent > x.allow + 0.5 ? ' over' : ' under') : (!P.has && x.all ? ' has-spend' : ''));
+      html += '<div class="' + cls + '" data-day="' + x.date + '"><span class="expense-cal-day">' + x.k + '</span>' +
+        (P.has ? '<span class="expense-cal-allow money">' + expenseShort(x.allow) + '</span>' : '') +
+        (shown ? '<span class="expense-cal-amt money">' + expenseShort(shown) + '</span>' : '') + '</div>';
+    });
+    for (var j = ws[ws.length - 1].dow; j < 6; j++) html += '<div class="expense-cal-cell empty"></div>';
+    var wa = ws.reduce(function (t, x) { return t + (x.allow || 0); }, 0), wsp = ws.reduce(function (t, x) { return t + (P.has ? x.spent : x.all); }, 0);
+    html += '<div class="expense-cal-cell expense-cal-week' + (P.has && wsp ? (wsp > wa + 0.5 ? ' over' : ' under') : '') + '">' +
+      (P.has ? '<span class="expense-cal-allow money">' + expenseShort(wa) + '</span>' : '') +
+      (wsp ? '<span class="expense-cal-amt money">' + expenseShort(wsp) + '</span>' : '') + '</div>';
   });
+  grid.innerHTML = html;
 
-  var y = Number(expensePeriod.slice(0, 4)), m = Number(expensePeriod.slice(5, 7));
-  var firstWeekday = (new Date(y, m - 1, 1).getDay() + 6) % 7; // 0=Mon
-  var daysInMonth = expenseLastDay(expensePeriod);
-  var totalsByDay = {};
-  expenseData.entries.forEach(function (e) {
-    totalsByDay[e.date] = (totalsByDay[e.date] || 0) + e.amount;
-  });
+  // under the calendar: the month as a whole
+  var spentAll = P.days.reduce(function (t, x) { return t + x.all; }, 0), counted = P.days.reduce(function (t, x) { return t + x.spent; }, 0);
+  var fixedAll = spentAll - counted, left = P.has ? P.pool - counted : 0;
+  document.getElementById('expense-cal-footer').innerHTML = P.has ?
+    '<span>May spend <b class="money">' + expenseFmt(P.pool) + '</b></span><span>Spent <b class="money">' + expenseFmt(counted) + '</b></span>' +
+    '<span class="' + (left < 0 ? 'neg' : 'pos') + '">' + (left < 0 ? 'Over ' : 'Left ') + '<b class="money">' + expenseFmt(Math.abs(left)) + '</b></span>' +
+    (fixedAll ? '<span>Fixed ↻ <b class="money">' + expenseFmt(fixedAll) + '</b></span>' : '') :
+    '<span>Total this month: <b class="money">' + expenseFmt(spentAll) + '</b></span>';
 
-  for (var i = 0; i < firstWeekday; i++) {
-    var blank = document.createElement('div');
-    blank.className = 'expense-cal-cell empty';
-    grid.appendChild(blank);
-  }
-  for (var day = 1; day <= daysInMonth; day++) {
-    var dateStr = expensePeriod + '-' + String(day).padStart(2, '0');
-    var cell = document.createElement('div');
-    cell.className = 'expense-cal-cell' + (totalsByDay[dateStr] ? ' has-spend' : '') + (dateStr === expenseSelectedDay ? ' selected' : '') + (dateStr === expenseTodayStr() ? ' is-today' : '');
-    cell.innerHTML = '<span class="expense-cal-day">' + day + '</span>' + (totalsByDay[dateStr] ? '<span class="expense-cal-amt">' + expenseShort(totalsByDay[dateStr]) + '</span>' : '');
-    cell.onclick = function (ds) { return function () { expenseOpenDay(ds); }; }(dateStr);
-    grid.appendChild(cell);
-  }
-
-  var monthTotal = expenseEntriesTotal(expenseData.entries);
-  var daysWithSpend = Object.keys(totalsByDay).length;
-  document.getElementById('expense-cal-total').textContent = expenseFmt(monthTotal);
-  document.getElementById('expense-cal-days-count').textContent = daysWithSpend + (daysWithSpend === 1 ? ' day' : ' days') + ' with spending';
-
-  expenseRenderDayDetail();
+  expenseRenderDayDetail(P);
 }
 
 function expenseOpenDay(dateStr) {
-  expenseSelectedDay = (expenseSelectedDay === dateStr) ? null : dateStr;
+  expenseSelectedDay = dateStr;
   expenseRenderCalendar();
 }
 
-function expenseRenderDayDetail() {
-  var panel = document.getElementById('expense-day-detail');
-  if (!expenseSelectedDay) { panel.style.display = 'none'; return; }
-  panel.style.display = '';
-  var dayEntries = expenseData.entries.filter(function (e) { return e.date === expenseSelectedDay; });
-  var d = new Date(expenseSelectedDay + 'T00:00:00');
+function expenseRenderDayDetail(P) {
+  P = P || expenseCalPlan();
+  var x = P.days.filter(function (d) { return d.date === expenseSelectedDay; })[0] || P.days[0];
+  var dayEntries = expenseData.entries.filter(function (e) { return e.date === x.date; });
+  var d = new Date(x.date + 'T00:00:00');
   var weekday = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
-  document.getElementById('expense-day-title').textContent = weekday + ', ' + expenseSelectedDay.slice(8,10) + '/' + expenseSelectedDay.slice(5,7) + '/' + expenseSelectedDay.slice(0,4);
-  document.getElementById('expense-day-total').textContent = expenseFmt(expenseEntriesTotal(dayEntries));
+  document.getElementById('expense-day-title').textContent = weekday + ', ' + x.date.slice(8,10) + '/' + x.date.slice(5,7) + '/' + x.date.slice(0,4);
+  var nums = document.getElementById('expense-day-nums'), left = P.has ? x.allow - x.spent : 0;
+  nums.hidden = !P.has;
+  nums.innerHTML = P.has ? '<div><small>May spend</small><b class="money">' + expenseFmt(x.allow) + '</b></div><div><small>Spent</small><b class="money">' + expenseFmt(x.spent) + '</b></div>' +
+    '<div><small>' + (left < 0 ? 'Over' : 'Left') + '</small><b class="money ' + (left < 0 ? 'neg' : 'pos') + '">' + expenseFmt(Math.abs(left)) + '</b></div>' : '';
+  // with a budget, the "Total spent" row only appears for fixed (Repeat) costs, which aren't counted above
+  var totalRow = document.getElementById('expense-day-total-row');
+  totalRow.style.display = (!P.has || x.fixed) ? '' : 'none';
+  totalRow.firstChild.textContent = P.has ? 'Fixed ↻ (not counted) ' : 'Total spent ';
+  document.getElementById('expense-day-total').textContent = expenseFmt(P.has ? x.fixed : x.all);
   var list = document.getElementById('expense-day-list');
-  list.innerHTML = '';
+  list.innerHTML = dayEntries.length ? '' : '<p class="expense-day-none">Nothing spent this day</p>';
   dayEntries.forEach(function (e) {
     var row = document.createElement('div');
     row.className = 'expense-day-row';
@@ -2631,7 +2665,7 @@ function expenseRenderDayDetail() {
     row.onclick = function (entry) { return function () { expenseOpenEntryModal(entry); }; }(e);
     list.appendChild(row);
   });
-  document.getElementById('expense-day-add-btn').onclick = function () { expenseOpenEntryModal(null, expenseSelectedDay); };
+  document.getElementById('expense-day-add-btn').onclick = function () { expenseOpenEntryModal(null, x.date); };
 }
 
 /* ---- Stats tab ---- */
@@ -3224,7 +3258,7 @@ function expenseWireEvents() {
   document.getElementById('expense-savings-tx-save').onclick = expenseSaveSavingsTx;
   document.getElementById('expense-overview-add-btn').onclick = function () { expenseOpenEntryModal(null); };
   document.getElementById('expense-view-stats-link').onclick = function () { expenseSwitchTab('stats'); };
-  document.getElementById('expense-day-close-btn').onclick = function () { expenseOpenDay(expenseSelectedDay); };
+  document.getElementById('expense-cal-grid').onclick = function (e) { var c = e.target.closest('[data-day]'); if (c) expenseOpenDay(c.dataset.day); };
   document.getElementById('expense-new-category-btn').onclick = function () { expenseOpenCategoryModal(null); };
   document.getElementById('expense-mobile-add-btn').onclick = function () { expenseOpenEntryModal(null); };
 
