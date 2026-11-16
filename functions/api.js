@@ -524,7 +524,8 @@ function expenseNextPeriodStart_(period) {
 // gần nhất đó đang bật repeat (tắt repeat ở tháng nào thì dừng từ đó).
 /* ---- Budget chuyển tháng (rollover) ----
    Từ BUDGET_CARRY_START_ trở đi, MỌI budget category đều mang phần dư (+) / lố (−) của
-   tháng trước sang tháng sau, cộng dồn mãi (có thể ÂM).
+   tháng trước sang tháng sau, cộng dồn (có thể ÂM) — nhưng chỉ trong năm: sang tháng 1 về 0
+   (budget Repeat vẫn theo sang, chỉ phần dư/lố là bỏ).
    - Bật "Repeat every month": budget đặt (amount) tự theo sang các tháng sau.
    - Không bật: sang tháng sau budget đặt về 0 — chỉ còn phần dư/lố mang sang
      (category vẫn hiện nếu phần đó khác 0), cho tới khi đặt budget mới.
@@ -566,6 +567,10 @@ async function expenseBudgetsFor_(env, period) {
   var unbudgetedDebt = 0, cats = [];
   for (var m = BUDGET_CARRY_START_; m <= period; m = expensePeriodAdd_(m, 1)) {
     var inMonth = {};
+    if (m.slice(5) === '01') {                 // a new year: nothing left over or owed is carried into it
+      Object.keys(state).forEach(function (cid) { state[cid].carry = 0; });
+      unbudgetedDebt = 0;
+    }
     Object.keys(byCat).forEach(function (cid) {
       var st = state[cid];
       var actual = byCat[cid].find(function (x) { return x.period === m; });
@@ -2235,12 +2240,13 @@ const fundLevelAt_ = (levels, p) => levels.reduce((v, l) => (l.from <= p ? Numbe
 async function getLoveFund(env, [period]) {
   const today = vnNow_().date, p = /^\d{4}-\d{2}$/.test(String(period || '')) ? period : today.slice(0, 7);
   const levels = await fundLevels_(env), start = levels.length ? levels[0].from : null;
-  // left over / overspent in the months before this one (from the month the fund started)
+  // left over / overspent in the months before this one — this year only: a new year starts from 0
   let carry = 0;
-  if (start && start < p) {
-    const rows = await sb(env, 'love_fund_spend?day=gte.' + start + '-01&day=lt.' + p + '-01&select=day,amount&limit=50000').catch(fundMissing_);
+  const from = start && (start > p.slice(0, 4) + '-01' ? start : p.slice(0, 4) + '-01');
+  if (from && from < p) {
+    const rows = await sb(env, 'love_fund_spend?day=gte.' + from + '-01&day=lt.' + p + '-01&select=day,amount&limit=50000').catch(fundMissing_);
     const spent = {}; rows.forEach((r) => { const m = r.day.slice(0, 7); spent[m] = (spent[m] || 0) + Number(r.amount); });
-    for (let m = start; m < p; m = fundNextP_(m)) carry += fundLevelAt_(levels, m) - (spent[m] || 0);
+    for (let m = from; m < p; m = fundNextP_(m)) carry += fundLevelAt_(levels, m) - (spent[m] || 0);
   }
   const entries = await sb(env, 'love_fund_spend?day=gte.' + p + '-01&day=lt.' + fundNextP_(p) + '-01&select=id,day,amount&order=day.asc,id.asc').catch(fundMissing_);
   return { today, period: p, start, level: fundLevelAt_(levels, p), carry, entries: entries.map((e) => ({ id: e.id, day: e.day, amount: Number(e.amount) })) };
