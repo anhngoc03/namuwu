@@ -762,8 +762,8 @@ async function getExpenseData(env, [period]) {
     carryIn: carryIn,
     budgetOverall: budgets.overall,                 // = tổng budget hiệu lực các category
     categoryBudgets: budgets.cats,                  // { categoryId, amount (đặt), carry, effective, repeat }
-    // the daily-spending pool for the Calendar (budgets without Repeat + unbudgeted overspend); null = no budgets
-    dailyPool: budgets.cats.length ? budgets.cats.reduce(function (t, c) { return c.repeat ? t : t + c.effective; }, 0) + budgets.unbudgetedDebt : null,
+    // the pool the Calendar spreads over the days: the whole budget (every category, with carry); null = no budgets
+    dailyPool: budgets.cats.length ? budgets.overall : null,
     today: expenseTodayStr_(),
     savings: savings,
     prevEntries: prevRows.map(function (r) { return { amount: Number(r.amount), date: r.entry_date }; })
